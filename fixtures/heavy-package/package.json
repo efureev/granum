@@ -1,0 +1,26 @@
+{
+  "name": "@granum-fixtures/heavy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "granum provider fixture with a full design-system foundation (tokens, base, light/dark themes) for token pruning and weight measurement.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/XhCard": "./dist/components/XhCard/index.js",
+    "./components/XhButton": "./dist/components/XhButton/index.js",
+    "./components/XhAlert": "./dist/components/XhAlert/index.js",
+    "./components/XhOverlay": "./dist/components/XhOverlay/index.js",
+    "./components/XhPanel": "./dist/components/XhPanel/index.js",
+    "./components/XhTable": "./dist/components/XhTable/index.js",
+    "./components/XhList": "./dist/components/XhList/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs"
+  }
+}

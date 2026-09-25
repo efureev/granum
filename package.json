@@ -18,19 +18,23 @@
     "test:coverage": "yarn workspace @feugene/granum test:coverage",
     "test:scripts": "vitest run --config vitest.config.mjs",
     "build": "yarn workspace @feugene/granum build",
-    "build:fixtures": "node scripts/run-workspaces.mjs fixtures build",
+    "build:fixtures": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true node scripts/run-workspaces.mjs fixtures build",
     "build:apps": "node scripts/run-workspaces.mjs apps build",
     "build:all": "yarn build && yarn build:fixtures && yarn build:apps",
     "check:boundary": "node scripts/check-dist-boundary.mjs",
     "check:docs": "node scripts/check-docs-parity.mjs",
-    "doctor:fixtures": "node scripts/run-workspaces.mjs fixtures doctor",
     "verify:apps": "node scripts/run-workspaces.mjs apps verify",
     "sizes:check": "node scripts/run-workspaces.mjs apps sizes:check",
-    "test:all": "yarn lint && yarn typecheck && yarn test && yarn test:scripts && yarn check:docs && yarn check:vendor && yarn build:all && yarn check:boundary && yarn doctor:fixtures && yarn verify:apps && yarn sizes:check",
+    "test:all": "yarn lint && yarn typecheck && yarn test && yarn test:scripts && yarn check:docs && yarn check:vendor && yarn build:all && yarn check:boundary && yarn verify:fixtures && yarn check:determinism && yarn verify:apps && yarn sizes:check",
     "vendor:unocss": "node scripts/vendor-unocss.mjs",
-    "check:vendor": "node scripts/vendor-unocss.mjs && git diff --exit-code --stat -- packages/granum/src/engine/vendor packages/granum/THIRD_PARTY_NOTICES.md"
+    "check:vendor": "node scripts/vendor-unocss.mjs && git diff --exit-code --stat -- packages/granum/src/engine/vendor packages/granum/THIRD_PARTY_NOTICES.md",
+    "verify:fixtures": "node scripts/run-workspaces.mjs fixtures verify",
+    "check:determinism": "node scripts/check-determinism.mjs"
   },
   "devDependencies": {
-    "vitest": "^4.1.10"
+    "@vitejs/plugin-vue": "^6.0.8",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10",
+    "vue": "^3.5.40"
   }
 }

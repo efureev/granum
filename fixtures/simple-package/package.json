@@ -1,0 +1,26 @@
+{
+  "name": "@granum-fixtures/simple",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Reference granum provider: base components, component-level theme token refs, nested parts, shared-chunk group.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/XTest1": "./dist/components/XTest1/index.js",
+    "./components/XTestStyled": "./dist/components/XTestStyled/index.js",
+    "./components/XTokenized": "./dist/components/XTokenized/index.js",
+    "./components/XNested": "./dist/components/XNested/index.js",
+    "./components/XNestedReverse": "./dist/components/XNestedReverse/index.js",
+    "./components/XGroupAOne": "./dist/components/XGroupAOne/index.js",
+    "./components/XGroupATwo": "./dist/components/XGroupATwo/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs"
+  }
+}

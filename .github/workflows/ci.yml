@@ -97,8 +97,10 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Build package, fixtures and apps
         run: yarn build:all
-      - name: Doctor on fixture providers
-        run: yarn doctor:fixtures
+      - name: Verify manifests of fixture providers
+        run: yarn verify:fixtures
+      - name: Rebuild fixtures and check manifests are byte-stable
+        run: yarn check:determinism
       - name: Verify built CSS of apps
         run: yarn verify:apps
       - name: Verify size budget of benchmark stands

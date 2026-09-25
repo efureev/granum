@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Provider build (stage 4): `granumProvider()` Vite plugin builds the entries from the
+  component registry, routes chunks and CSS into the contract layout, analyses the
+  bundle graph (component files, edges, undeclared dependencies), extracts classes
+  and consumed tokens, copies declared CSS and theme files, expands `@apply`,
+  materialises token refs, checks the browser/node boundary and `package.json#exports`,
+  and writes `granum.manifest.json`. `./codegen` ported with a `manifestExport` target.
+  `./node` gains CSS reading, token-set parsing, declaration scanning and token
+  consumption scanning. Fixture providers rebuilt on the contract with manifest
+  verification and a determinism check.
 - Manifest (stage 3): `serializeManifest` / `writeManifestSync` produce the canonical
   `granum.manifest.json` with a content hash; `parseManifest` / `readManifestSync`
   validate format version, schema, package-relative paths, hash, entry layout and token

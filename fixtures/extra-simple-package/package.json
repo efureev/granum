@@ -1,0 +1,25 @@
+{
+  "name": "@granum-fixtures/extra-simple",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "granum provider fixture with cross-provider component dependencies and a declared CSS file.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/XgQuick": "./dist/components/XgQuick/index.js",
+    "./components/XTokenizedLevel2": "./dist/components/XTokenizedLevel2/index.js"
+  },
+  "peerDependencies": {
+    "@granum-fixtures/simple": "*",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@granum-fixtures/simple": "0.1.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs"
+  }
+}

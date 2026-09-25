@@ -68,7 +68,7 @@ granum/
 | 3.2 `writeManifest` / `readManifest` в `./node` с валидацией по `manifest.md` §4 | INV-MAN-2,3,7 |
 | 3.3 Fixtures манифестов (валидные, с каждым видом нарушения) и unit-тесты | M-1…M-7 |
 
-## Этап 4 — Сборка провайдера (L)
+## Этап 4 — Сборка провайдера (L) — выполнен 2026-09-25
 
 | Задача | Результат |
 |---|---|
@@ -80,9 +80,9 @@ granum/
 | 4.6 Эмиссия манифеста в `closeBundle`; режим `--watch` | B-12, B-15 |
 | 4.7 Проверка границы на бандле: `node:` и node-entry granum в браузерных чанках; `data:`-URL | B-16, INV-BND-1, INV-LAY-3 |
 | 4.8 Перенести `./codegen` из v1; добавить цель `exports["./granum.manifest.json"]` и entry-карту для 4.1 | B-13, B-14, INV-LAY-2 |
-| 4.9 Перенести фикстурные провайдеры v1 в `fixtures/` на новый контракт; `doctor`-заглушка не нужна: сборка сама валидирует | AC-1 частично |
-| 4.10 Round-trip тесты: извлечение по `dist` даёт `classes` и `consumes` манифеста | INV-MAN-5,6 |
-| 4.11 Тест двойной сборки провайдера | INV-DET-1 |
+| 4.9 Перенести фикстурные провайдеры v1 в `fixtures/` (`@granum-fixtures/{simple,extra-simple,heavy}`) на новый контракт; `scripts/verify-fixture.mjs` + `expected-manifest.mjs` сверяют манифесты | AC-1 частично |
+| 4.10 Round-trip: извлечение по `dist` даёт `classes` и `consumes` манифеста — обобщённая проверка в `verify-fixture.mjs` | INV-MAN-5,6 |
+| 4.11 `scripts/check-determinism.mjs`: повторная сборка фикстур, манифест побайтно стабилен | INV-DET-1 |
 
 ## Этап 5 — Плагин приложения (L)
 

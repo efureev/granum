@@ -3,53 +3,43 @@ import * as errors from '../core/errors'
 
 /**
  * INV-ERR-2: каждая ошибка ядра — класс с `code`, наследующий `GranumError`,
- * с `name`, равным имени класса.
+ * с `name`, равным имени класса, и уникальным кодом.
  */
-describe('иерархия ошибок', () => {
-  type ErrorCtor = new (...args: unknown[]) => errors.GranumError
-  const classes = (Object.entries(errors) as [string, unknown][])
-    .filter(([name, value]) => typeof value === 'function' && name.endsWith('Error') && name !== 'GranumError')
-    .map(([name, value]) => [name, value as ErrorCtor] as const)
+const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
+  ['ApplyExpansionError', () => new errors.ApplyExpansionError('a.css', 'unmatched-class', 'detail')],
+  ['BoundaryViolationError', () => new errors.BoundaryViolationError('p', [{ file: 'index.js', specifier: 'node:fs', kind: 'node-import' }])],
+  ['CircularDependencyError', () => new errors.CircularDependencyError(['a', 'b', 'a'])],
+  ['CircularProviderDependencyError', () => new errors.CircularProviderDependencyError(['a', 'b', 'a'])],
+  ['ComponentNotFoundError', () => new errors.ComponentNotFoundError('p', 'X', ['A', 'B'], 'ref')],
+  ['CssReadError', () => new errors.CssReadError('p', 'theme', 'light', 'theme/light.css')],
+  ['CssSourceError', () => new errors.CssSourceError('https://x/y.css', 'unsupported-protocol')],
+  ['DuplicateComponentNameError', () => new errors.DuplicateComponentNameError('p', 'X')],
+  ['DuplicateProviderIdError', () => new errors.DuplicateProviderIdError('p', ['a', 'p'])],
+  ['GranumCodegenError', () => new errors.GranumCodegenError('missing-open-marker', 'a.ts has no marker', 'a.ts')],
+  ['InvalidComponentKeyError', () => new errors.InvalidComponentKeyError('bad')],
+  ['InvalidComponentNameError', () => new errors.InvalidComponentNameError('p', 'bad name')],
+  ['InvalidManifestError', () => new errors.InvalidManifestError('schema', 'details', 'components.X.entry', 'f.json')],
+  ['InvalidProviderError', () => new errors.InvalidProviderError('p', 'invalid-id', 'details', 'X')],
+  ['InvalidTokenKeyError', () => new errors.InvalidTokenKeyError('p', '--x', 'light')],
+  ['ManifestNotFoundError', () => new errors.ManifestNotFoundError('@x/pkg', '/app')],
+  ['PackageExportsError', () => new errors.PackageExportsError('p', ['./granum.manifest.json'])],
+  ['ProviderNotRegisteredError', () => new errors.ProviderNotRegisteredError('p', 'ref')],
+  ['TokenParseError', () => new errors.TokenParseError('message text', 'src', 'no-tokens')],
+  ['TokenRefError', () => new errors.TokenRefError('p', 'light', 'X', 'file:///x.css')],
+  ['UndeclaredDependencyError', () => new errors.UndeclaredDependencyError('p', [['A', 'p:B']])],
+  ['UnresolvedProviderDependencyError', () => new errors.UnresolvedProviderDependencyError('p', 'from')],
+  ['UnsupportedContractVersionError', () => new errors.UnsupportedContractVersionError('p', 2, 1)],
+  ['UnsupportedManifestVersionError', () => new errors.UnsupportedManifestVersionError(2, 1, 'f.json')],
+]
 
-  it('экспортирует классы ошибок', () => {
-    expect(classes.map(([name]) => name).sort()).toEqual([
-      'CircularDependencyError',
-      'CircularProviderDependencyError',
-      'ComponentNotFoundError',
-      'DuplicateComponentNameError',
-      'DuplicateProviderIdError',
-      'InvalidComponentKeyError',
-      'InvalidComponentNameError',
-      'InvalidManifestError',
-      'InvalidProviderError',
-      'InvalidTokenKeyError',
-      'ManifestNotFoundError',
-      'ProviderNotRegisteredError',
-      'UnresolvedProviderDependencyError',
-      'UnsupportedContractVersionError',
-      'UnsupportedManifestVersionError',
-    ])
+describe('иерархия ошибок', () => {
+  it('таблица покрывает все экспортированные классы ошибок', () => {
+    const exported = Object.keys(errors).filter(name => name.endsWith('Error') && name !== 'GranumError').sort()
+    expect(exported).toEqual(INSTANCES.map(([name]) => name))
   })
 
-  it.each([
-    ['CircularDependencyError', [['a', 'b', 'a']]],
-    ['CircularProviderDependencyError', [['a', 'b', 'a']]],
-    ['ComponentNotFoundError', ['p', 'X', ['A', 'B'], 'ref']],
-    ['DuplicateComponentNameError', ['p', 'X']],
-    ['DuplicateProviderIdError', ['p', ['a', 'p']]],
-    ['InvalidComponentKeyError', ['bad']],
-    ['InvalidComponentNameError', ['p', 'bad name']],
-    ['InvalidManifestError', ['schema', 'details', 'components.X.entry', 'f.json']],
-    ['ManifestNotFoundError', ['@x/pkg', '/app']],
-    ['UnsupportedManifestVersionError', [2, 1, 'f.json']],
-    ['InvalidProviderError', ['p', 'invalid-id', 'details', 'X']],
-    ['InvalidTokenKeyError', ['p', '--x', 'light']],
-    ['ProviderNotRegisteredError', ['p', 'ref']],
-    ['UnresolvedProviderDependencyError', ['p', 'from']],
-    ['UnsupportedContractVersionError', ['p', 2, 1]],
-  ] as const)('%s: GranumError с code и name', (name, args) => {
-    const Ctor = errors[name] as unknown as ErrorCtor
-    const e = new Ctor(...(args as unknown as unknown[]))
+  it.each(INSTANCES)('%s: GranumError с code и name', (name, make) => {
+    const e = make()
     expect(e).toBeInstanceOf(errors.GranumError)
     expect(e).toBeInstanceOf(Error)
     expect(e.name).toBe(name)
@@ -58,14 +48,7 @@ describe('иерархия ошибок', () => {
   })
 
   it('коды уникальны', () => {
-    const codes = classes.map(([, Ctor]) => {
-      try {
-        return new Ctor('p', 'x', ['a'], 'r').code
-      }
-      catch {
-        return new Ctor(['a']).code
-      }
-    })
+    const codes = INSTANCES.map(([, make]) => make().code)
     expect(new Set(codes).size).toBe(codes.length)
   })
 })

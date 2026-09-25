@@ -118,6 +118,15 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
     expect(engine.extract(code, '/x/B.vue')).toEqual(set)
   })
 
+  it('комментарий скомпилированного шаблона Vue (createCommentVNode) не даёт классов', () => {
+    const code = `const _hoisted = _createCommentVNode(" p-9 mt-9 "); const c = "p-1"; createCommentVNode('m-9')`
+    const set = extractClasses(code, 'chunks/Panel-abc.js')
+    expect(set).toContain('p-1')
+    expect(set).not.toContain('p-9')
+    expect(set).not.toContain('mt-9')
+    expect(set).not.toContain('m-9')
+  })
+
   it('stripComments: HTML-комментарии режутся только в html-подобных файлах', () => {
     expect(stripComments('<!-- p-9 --> a', 'x.vue')).not.toContain('p-9')
     expect(stripComments('<!-- p-9 --> a', 'x.ts')).toContain('p-9')

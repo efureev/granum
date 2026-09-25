@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { granumProvider } from '../build'
-import { runRegistryCodegen } from '../codegen'
+import * as build from '../build'
+import * as codegen from '../codegen'
 import { GRANUM_CONTRACT_VERSION } from '../contract/index'
 import * as root from '../index'
 import { GranumNotImplementedError } from '../internal/notImplemented'
@@ -28,12 +28,12 @@ describe('entry points', () => {
     expect(typeof root.resolveGranum).toBe('function')
     expect(typeof root.GranumError).toBe('function')
     expect(typeof node.readManifestSync).toBe('function')
+    expect(typeof build.granumProvider).toBe('function')
+    expect(typeof codegen.runRegistryCodegen).toBe('function')
     expect(node.GRANUM_CONTRACT_VERSION).toBe(1)
   })
 
   it.each([
-    ['granumProvider', 'stage 4', () => granumProvider()],
-    ['runRegistryCodegen', 'stage 4', () => runRegistryCodegen()],
     ['granum', 'stage 5', () => granum()],
     ['defineGranumConfig', 'stage 5', () => defineGranumConfig()],
     ['createThemeController', 'stage 5', () => createThemeController()],

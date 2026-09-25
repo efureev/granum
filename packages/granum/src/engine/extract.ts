@@ -18,6 +18,9 @@ export function stripComments(code: string, id: string): string {
     out = out.replace(/<!--[\s\S]*?-->/g, ' ')
   out = out.replace(/\/\*[\s\S]*?\*\//g, ' ')
   out = out.replace(/^[ \t]*\/\/[^\n]*$/gm, '')
+  // Скомпилированный шаблон Vue хранит HTML-комментарий вызовом
+  // `createCommentVNode("…")` — это тот же комментарий SFC, только в JS.
+  out = out.replace(/\b_?createCommentVNode\(\s*(["'])(?:(?!\1)[\s\S])*?\1/g, 'createCommentVNode(""')
   return out
 }
 

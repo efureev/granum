@@ -173,6 +173,8 @@ export type InvalidProviderReason
     | 'invalid-components'
     | 'invalid-dependency'
     | 'css-file-escapes-component'
+    | 'missing-source-url'
+    | 'missing-component-entry'
 
 /**
  * Провайдер объявлен некорректно. Бросается при регистрации (INV-ERR-1), а не
@@ -248,5 +250,154 @@ export class ManifestNotFoundError extends GranumError {
       + `The provider must be built with granumProvider() and export './granum.manifest.json' in package.json — run 'granum codegen' in the provider.`,
       options,
     )
+  }
+}
+
+/** Источник CSS невозможно прочитать в принципе: не-file протокол или битый data-URL. */
+export class CssSourceError extends GranumError {
+  readonly code = 'css-source' as const
+
+  constructor(
+    readonly source: string,
+    readonly reason: 'unsupported-protocol' | 'invalid-data-url',
+  ) {
+    super(reason === 'unsupported-protocol'
+      ? `Cannot read CSS from a non-file URL '${source}'. Only local paths, 'file://' URLs and 'data:text/css' URLs are supported.`
+      : `Unsupported CSS data URL: ${source.slice(0, 64)}…`)
+  }
+}
+
+/** CSS-файл, объявленный провайдером, не читается; провайдер, секция и субъект — в полях. */
+export class CssReadError extends GranumError {
+  readonly code = 'css-read' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly section: 'base' | 'tokens' | 'theme' | 'component',
+    readonly subject: string,
+    readonly path: string,
+    options?: { cause?: unknown },
+  ) {
+    const what = section === 'theme' ? `theme '${subject}'` : section === 'component' ? `component '${subject}'` : `${section} css`
+    super(`Cannot read ${what} of provider '${providerId}': ${path}`, options)
+  }
+}
+
+/** Отказ строгого разбора CSS с токенами: файл не даёт того, что просили. */
+export class TokenParseError extends GranumError {
+  readonly code = 'token-parse' as const
+
+  constructor(
+    message: string,
+    readonly source: string,
+    readonly reason: 'unsupported-blocks' | 'no-tokens' | 'selector-not-found',
+    readonly available?: readonly string[],
+  ) {
+    super(message)
+  }
+}
+
+/** Ссылка `tokenDefinitionsRef` не читается; провайдер, компонент и тема — в полях. */
+export class TokenRefError extends GranumError {
+  readonly code = 'token-ref' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly themeName: string,
+    readonly componentName: string | undefined,
+    readonly url: string,
+    options?: { cause?: unknown },
+  ) {
+    const where = componentName ? `component '${componentName}' of provider '${providerId}'` : `provider '${providerId}'`
+    super(
+      `Failed to resolve tokenDefinitionsRef['${themeName}'] declared by ${where}: ${url}${
+        options?.cause instanceof Error ? ` (${options.cause.message})` : ''}`,
+      options,
+    )
+  }
+}
+
+/** Фактический импорт между компонентами не покрыт объявленным графом `dependencies` (INV-CON-5). */
+export class UndeclaredDependencyError extends GranumError {
+  readonly code = 'undeclared-dependency' as const
+
+  constructor(
+    readonly providerId: string,
+    /** `[компонент, чей код импортирует, ключ импортируемого]`. */
+    readonly edges: readonly (readonly [from: string, to: string])[],
+  ) {
+    super(
+      `Provider '${providerId}' ships imports that its component graph does not declare: `
+      + `${edges.map(([from, to]) => `${from} → ${to}`).join(', ')}. `
+      + `Add the imported component to 'dependencies' of the importer (or remove the import).`,
+    )
+  }
+}
+
+/** `package.json#exports` провайдера не публикует манифест или subpath компонента (B-13, INV-LAY-2). */
+export class PackageExportsError extends GranumError {
+  readonly code = 'package-exports' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly missing: readonly string[],
+  ) {
+    super(
+      `package.json of '${providerId}' does not export ${missing.map(m => `'${m}'`).join(', ')}. `
+      + `Run 'granum codegen' (codegenTargets.packageExports) or add the entries by hand.`,
+    )
+  }
+}
+
+/** Браузерный чанк провайдера тянет node-код (INV-BND-1) или `data:`-URL вместо пути (INV-LAY-3). */
+export class BoundaryViolationError extends GranumError {
+  readonly code = 'boundary-violation' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly violations: readonly { readonly file: string, readonly specifier: string, readonly kind: 'node-import' | 'granum-node-entry' | 'data-url' }[],
+  ) {
+    super(
+      `Browser bundle of '${providerId}' crosses the browser/node boundary: ${
+        violations.map(v => `${v.file}: ${v.kind} '${v.specifier}'`).join('; ')}`,
+    )
+  }
+}
+
+/** `@apply` в CSS компонента нельзя раскрыть плоско (ADR-3). */
+export class ApplyExpansionError extends GranumError {
+  readonly code = 'apply-expansion' as const
+
+  constructor(
+    readonly file: string,
+    readonly reason: 'unmatched-class' | 'non-flat-rule' | 'nested-context',
+    readonly detail: string,
+  ) {
+    super(`Cannot expand @apply in ${file}: ${detail}`)
+  }
+}
+
+/** Причина, по которой генерация реестров не может продолжаться. */
+export type GranumCodegenReason
+  = | 'config-export-name-mismatch'
+    | 'missing-open-marker'
+    | 'missing-close-marker'
+    | 'missing-package-exports'
+    | 'no-component-exports'
+    | 'missing-components-dir'
+    | 'duplicate-component-name'
+    | 'subcomponent-name-clash'
+
+/** Генерация реестров провалилась; вызывающий отличает «реестры разошлись» от «сломалась оснастка» по `reason`. */
+export class GranumCodegenError extends GranumError {
+  readonly code = 'codegen' as const
+
+  constructor(
+    readonly reason: GranumCodegenReason,
+    message: string,
+    /** Файл, на котором генерация остановилась (если применимо). */
+    readonly file?: string,
+  ) {
+    super(message)
   }
 }
