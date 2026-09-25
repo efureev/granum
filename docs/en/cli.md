@@ -127,7 +127,8 @@ granum codegen --targets=barrel,exports --prefix=Xh
 `--prefix` is the component name prefix (`Gr` by default), from which the
 config export name is derived (`grAlertConfig`). `--components-dir`,
 `--barrel`, `--registry` override the paths; `--subcomponents` adds `exports`
-aliases for parts of compound components. Custom targets (`markedBlock`) go
+aliases for parts of compound components; `--exports=import` writes string
+subpaths without `types` (a package without declarations). Custom targets (`markedBlock`) go
 through the programmatic API of `@feugene/granum/codegen`.
 
 ## Programmatic access

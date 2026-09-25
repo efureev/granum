@@ -13,6 +13,12 @@ package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
   (`compare-js.mjs`), determinism of the application CSS and report, user
   guides in `docs/ru` and `docs/en`, invariant registry with verification
   references and a test that every `INV-*` has one.
+- Codegen: the provider registry target renders array entries (`xCardConfig,`) for
+  `components: [ … ]` of the granum contract; the default `exports` entry points
+  `import` at the flat `dist/components/<Name>/index.js` layout for grouped sources
+  too; `--exports=import` / `entryStyle: 'import'` writes string subpaths without
+  `types`. Fixture providers use marked blocks and `granum codegen --check` runs in
+  `verify:fixtures`.
 - Layer sizes in `granum-report.json` are now measured on the built CSS asset after
   minification, by `@layer` blocks (`sizesSource: 'bundle'`); the pre-minification
   emission sizes stay next to them as `emissionSizes`.

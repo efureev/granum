@@ -123,7 +123,8 @@ granum codegen --targets=barrel,exports --prefix=Xh
 `--prefix` — префикс имён компонентов (по умолчанию `Gr`), от него строится
 имя экспорта конфига (`grAlertConfig`). `--components-dir`, `--barrel`,
 `--registry` переопределяют пути; `--subcomponents` добавляет алиасы
-`exports` на части составных компонентов. Нестандартные цели (`markedBlock`)
+`exports` на части составных компонентов; `--exports=import` пишет строковые
+subpath без `types` (пакет без деклараций). Нестандартные цели (`markedBlock`)
 — через программный API `@feugene/granum/codegen`.
 
 ## Программный доступ

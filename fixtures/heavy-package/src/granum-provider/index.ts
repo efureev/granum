@@ -1,11 +1,13 @@
 import { defineGranumProvider } from '@feugene/granum/contract'
-import { xhListConfig } from '../components/data/XhList/config.ts'
-import { xhTableConfig } from '../components/data/XhTable/config.ts'
+// <granum:components:imports>
 import { xhAlertConfig } from '../components/XhAlert/config.ts'
 import { xhButtonConfig } from '../components/XhButton/config.ts'
 import { xhCardConfig } from '../components/XhCard/config.ts'
+import { xhListConfig } from '../components/data/XhList/config.ts'
 import { xhOverlayConfig } from '../components/XhOverlay/config.ts'
 import { xhPanelConfig } from '../components/XhPanel/config.ts'
+import { xhTableConfig } from '../components/data/XhTable/config.ts'
+// </granum:components:imports>
 
 export const PROVIDER_ID = '@granum-fixtures/heavy'
 
@@ -16,7 +18,17 @@ export const PROVIDER_ID = '@granum-fixtures/heavy'
 export const heavyProvider = defineGranumProvider({
   id: PROVIDER_ID,
   contractVersion: 1,
-  components: [xhCardConfig, xhButtonConfig, xhAlertConfig, xhOverlayConfig, xhPanelConfig, xhTableConfig, xhListConfig],
+  components: [
+    // <granum:components:registry>
+    xhAlertConfig,
+    xhButtonConfig,
+    xhCardConfig,
+    xhListConfig,
+    xhOverlayConfig,
+    xhPanelConfig,
+    xhTableConfig,
+    // </granum:components:registry>
+  ],
   theme: {
     baseCss: 'theme/base.css',
     tokensCss: 'theme/tokens.css',

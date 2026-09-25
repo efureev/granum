@@ -8,19 +8,19 @@
   "exports": {
     ".": "./dist/index.js",
     "./granum.manifest.json": "./dist/granum.manifest.json",
-    "./components/XhCard": "./dist/components/XhCard/index.js",
-    "./components/XhButton": "./dist/components/XhButton/index.js",
     "./components/XhAlert": "./dist/components/XhAlert/index.js",
+    "./components/XhButton": "./dist/components/XhButton/index.js",
+    "./components/XhCard": "./dist/components/XhCard/index.js",
+    "./components/XhList": "./dist/components/XhList/index.js",
     "./components/XhOverlay": "./dist/components/XhOverlay/index.js",
     "./components/XhPanel": "./dist/components/XhPanel/index.js",
-    "./components/XhTable": "./dist/components/XhTable/index.js",
-    "./components/XhList": "./dist/components/XhList/index.js"
+    "./components/XhTable": "./dist/components/XhTable/index.js"
   },
   "peerDependencies": {
     "vue": "^3.5.0"
   },
   "scripts": {
     "build": "vite build",
-    "verify": "node ../../scripts/verify-fixture.mjs"
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=X --exports=import --targets=exports,manifest,registry"
   }
 }

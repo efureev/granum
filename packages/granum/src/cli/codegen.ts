@@ -22,6 +22,8 @@ export interface CodegenCommandOptions {
   readonly registryFile?: string
   /** Алиасы `exports` на подкомпоненты составных компонентов. По умолчанию `false`. */
   readonly subcomponents?: boolean
+  /** Форма значения subpath-экспорта: объект `types` + `import` или строка `import`. */
+  readonly exportsStyle?: 'object' | 'import'
 }
 
 export interface CodegenCommandReport extends RegistryCodegenResult {
@@ -48,7 +50,7 @@ export function buildCodegenTargets(options: CodegenCommandOptions): GranumCodeg
         out.push(barrel(options.barrelFile))
         break
       case 'exports':
-        out.push(packageExports({ ...(options.subcomponents ? { subcomponents: true } : {}) }))
+        out.push(packageExports({ ...(options.subcomponents ? { subcomponents: true } : {}), ...(options.exportsStyle ? { entryStyle: options.exportsStyle } : {}) }))
         break
       case 'manifest':
         out.push(manifestExport())

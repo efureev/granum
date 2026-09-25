@@ -65,8 +65,9 @@ export function barrel(file = 'src/index.ts'): GranumCodegenTarget {
 }
 
 /**
- * Провайдер: импорты конфигов и запись в реестр. Две метки в одном файле,
- * поэтому две цели — рендеры складываются по порядку.
+ * Провайдер: импорты конфигов и записи в реестр. Две метки в одном файле,
+ * поэтому две цели — рендеры складываются по порядку. Реестр — массив
+ * дескрипторов (`components: [ … ]`, ТЗ §5.1), запись — `xConfig,`.
  */
 export function providerRegistry(file = 'src/granum-provider/index.ts'): GranumCodegenTarget[] {
   return [
@@ -80,9 +81,7 @@ export function providerRegistry(file = 'src/granum-provider/index.ts'): GranumC
     markedBlock({
       file,
       blockId: 'registry',
-      lines: (components, context) => components.map(component => (
-        `${component}: ${context.configExportName(component)},`
-      )),
+      lines: (components, context) => components.map(component => `${context.configExportName(component)},`),
     }),
   ]
 }
@@ -129,23 +128,28 @@ export function packageExports(options: {
   /** Префикс ключа. По умолчанию `./components/`. */
   keyPrefix?: string
   /**
-   * Значение экспорта. По умолчанию — пара `types` + `import` в `dist`.
+   * Значение экспорта. По умолчанию — пара `types` + `import`: `import` ведёт в
+   * плоскую раскладку `dist/components/<Name>/index.js` (B-1, одинаковую для
+   * плоских и сгруппированных исходников), `types` — в зеркало исходников
+   * `dist/types/src/components/<path>/index.d.ts`, которое пишет `tsc`.
    *
    * Вторым аргументом приходит путь компонента относительно `src/components`:
-   * у плоской раскладки он равен имени, у групповой несёт группу. Ключ при этом
-   * строится по имени — потребитель импортирует компонент, а не его место в
-   * дереве исходников.
+   * у плоской раскладки он равен имени, у групповой несёт группу.
    */
   entryFor?: (component: string, path: string) => unknown
+  /** `'import'` — строка `./dist/components/<Name>/index.js` без `types` (пакет без деклараций). По умолчанию `'object'`. */
+  entryStyle?: 'object' | 'import'
   /** Добавлять ли алиасы на подкомпоненты. По умолчанию `false`. */
   subcomponents?: boolean
 } = {}): GranumCodegenTarget {
   const file = options.file ?? 'package.json'
   const keyPrefix = options.keyPrefix ?? './components/'
-  const entryFor = options.entryFor ?? ((_component: string, path: string) => ({
-    types: `./dist/types/src/components/${path}/index.d.ts`,
-    import: `./dist/components/${path}/index.js`,
-  }))
+  const entryFor = options.entryFor ?? (options.entryStyle === 'import'
+    ? (component: string) => `./dist/components/${component}/index.js`
+    : (component: string, path: string) => ({
+        types: `./dist/types/src/components/${path}/index.d.ts`,
+        import: `./dist/components/${component}/index.js`,
+      }))
 
   return {
     file,

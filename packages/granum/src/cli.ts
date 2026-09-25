@@ -33,7 +33,7 @@ usage:
   granum report  [<report.json>] [--json] [--strict]
   granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
                  [--prefix=Gr] [--components-dir=src/components] [--barrel=src/index.ts]
-                 [--registry=src/granum-provider/index.ts] [--subcomponents]
+                 [--registry=src/granum-provider/index.ts] [--subcomponents] [--exports=object|import]
 
   <config> — path to granum.config.{ts,js,mjs} of the application; the
   application root is its directory. All commands work from manifests only,
@@ -116,6 +116,7 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
         ...(values.has('--components-dir') ? { componentsDir: values.get('--components-dir')! } : {}),
         ...(values.has('--barrel') ? { barrelFile: values.get('--barrel')! } : {}),
         ...(values.has('--registry') ? { registryFile: values.get('--registry')! } : {}),
+        ...(values.get('--exports') === 'import' ? { exportsStyle: 'import' as const } : {}),
       })
       emit(io, json, report, () => formatCodegenReport(report, cwd))
       return report.check && report.stale.length > 0 ? 1 : 0

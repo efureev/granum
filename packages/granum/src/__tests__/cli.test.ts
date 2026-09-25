@@ -162,7 +162,7 @@ function providerDir(): string {
   component('GrTabs')
   mkdirSync(join(root, 'src/granum-provider'), { recursive: true })
   writeFileSync(join(root, 'src/index.ts'), '// <granum:components>\n// </granum:components>\n')
-  writeFileSync(join(root, 'src/granum-provider/index.ts'), '// <granum:components:imports>\n// </granum:components:imports>\nexport const provider = defineGranumProvider({\n  components: {\n    // <granum:components:registry>\n    // </granum:components:registry>\n  },\n})\n')
+  writeFileSync(join(root, 'src/granum-provider/index.ts'), '// <granum:components:imports>\n// </granum:components:imports>\nexport const provider = defineGranumProvider({\n  components: [\n    // <granum:components:registry>\n    // </granum:components:registry>\n  ],\n})\n')
   // Один subpath компонента обязан быть: по нему генератор находит место ряда.
   writeFileSync(join(root, 'package.json'), `${JSON.stringify({ name: '@acme/kit', exports: { '.': { import: './dist/index.js' }, './components/GrOld': { import: './dist/components/GrOld/index.js' } } }, null, 2)}\n`)
   return root
@@ -179,7 +179,7 @@ describe('granum codegen', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     expect(Object.keys(pkg.exports)).toEqual(['.', './granum.manifest.json', './components/GrAlert', './components/GrTabs'])
     expect(pkg.exports['./components/GrOld']).toBeUndefined()
-    expect(readFileSync(join(root, 'src/granum-provider/index.ts'), 'utf8')).toContain('GrTabs: grTabsConfig,')
+    expect(readFileSync(join(root, 'src/granum-provider/index.ts'), 'utf8')).toContain('grTabsConfig,')
     const check = io(root)
     expect(await runGranumCli(['codegen', '.', '--check', '--json'], check.io), check.err.join('\n')).toBe(0)
     expect(JSON.parse(check.out[0]!).stale).toEqual([])

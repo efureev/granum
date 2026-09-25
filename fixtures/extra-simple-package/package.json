@@ -20,6 +20,6 @@
   },
   "scripts": {
     "build": "vite build",
-    "verify": "node ../../scripts/verify-fixture.mjs"
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=X --exports=import"
   }
 }

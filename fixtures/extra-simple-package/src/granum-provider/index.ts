@@ -1,6 +1,8 @@
 import { defineGranumProvider } from '@feugene/granum/contract'
+// <granum:components:imports>
 import { xgQuickConfig } from '../components/XgQuick/config.ts'
 import { xTokenizedLevel2Config } from '../components/XTokenizedLevel2/config.ts'
+// </granum:components:imports>
 
 export const PROVIDER_ID = '@granum-fixtures/extra-simple'
 
@@ -8,7 +10,12 @@ export const PROVIDER_ID = '@granum-fixtures/extra-simple'
 export const extraSimpleProvider = defineGranumProvider({
   id: PROVIDER_ID,
   contractVersion: 1,
-  components: [xgQuickConfig, xTokenizedLevel2Config],
+  components: [
+    // <granum:components:registry>
+    xgQuickConfig,
+    xTokenizedLevel2Config,
+    // </granum:components:registry>
+  ],
   dependencies: ['@granum-fixtures/simple'],
 })
 

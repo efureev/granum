@@ -44,11 +44,11 @@ const PROVIDER = `import { defineGranularProvider } from '@feugene/granum/contra
 // <granum:components:imports>
 // </granum:components:imports>
 
-export const provider = defineGranularProvider({
-  components: {
+export const provider = defineGranumProvider({
+  components: [
     // <granum:components:registry>
     // </granum:components:registry>
-  },
+  ],
 })
 `
 
@@ -133,7 +133,7 @@ describe('runRegistryCodegen', () => {
     await runRegistryCodegen({ packageDir: pkgDir, targets: standardTargets() })
 
     // Блок реестра лежит на втором уровне вложенности.
-    expect(await read('src/granum-provider/index.ts')).toContain(`    GrAlert: grAlertConfig,`)
+    expect(await read('src/granum-provider/index.ts')).toContain(`    grAlertConfig,`)
   })
 
   it('две метки в одном файле складываются, а не затирают друг друга', async () => {
@@ -143,7 +143,7 @@ describe('runRegistryCodegen', () => {
 
     const provider = await read('src/granum-provider/index.ts')
     expect(provider).toContain(`import { grAlertConfig } from '../components/GrAlert/config.ts'`)
-    expect(provider).toContain('GrAlert: grAlertConfig,')
+    expect(provider).toContain('grAlertConfig,')
   })
 
   it('в package.json ряд компонентов встаёт на место прежнего, порядок прочих ключей цел', async () => {
@@ -508,9 +508,10 @@ describe('групповая раскладка', () => {
     expect(await read('src/granum-provider/index.ts'))
       .toContain(`from '../components/transaction-details/GrExpenseModal/config.ts'`)
 
+    // Раскладка `dist` плоская для любых исходников (B-1): `import` — по имени, `types` зеркалят путь.
     const pkg = JSON.parse(await read('package.json'))
-    expect(pkg.exports['./components/GrExpenseModal'].import)
-      .toBe('./dist/components/transaction-details/GrExpenseModal/index.js')
+    expect(pkg.exports['./components/GrExpenseModal'].import).toBe('./dist/components/GrExpenseModal/index.js')
+    expect(pkg.exports['./components/GrExpenseModal'].types).toBe('./dist/types/src/components/transaction-details/GrExpenseModal/index.d.ts')
   })
 
   it('вложенность глубже одного уровня в реестры не тащится', async () => {
