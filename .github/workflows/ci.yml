@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  # Зеркальность docs/en ↔ docs/ru и README.md ↔ README.ru.md. Только
+  # встроенные модули Node — установка зависимостей не нужна.
+  docs-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Check en/ru documentation parity
+        run: node scripts/check-docs-parity.mjs
+
+  # Линт, typecheck и юнит-тесты пакета, тесты корневых скриптов.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [ 22, 24 ]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      # `lint`, а не `lint:fix`: последний идёт с `--fix` и молча починил бы
+      # нарушения, выйдя с нулём. Линт и typecheck от версии Node не зависят.
+      - name: Lint
+        if: matrix.node == 24
+        run: yarn lint
+      - name: Typecheck (with tests and configs)
+        if: matrix.node == 24
+        run: yarn typecheck
+      - name: Test package
+        run: yarn test
+      - name: Test repository scripts
+        if: matrix.node == 24
+        run: yarn test:scripts
+
+  # Сборка пакета, валидация метаданных и границ на `dist` (N-1, INV-DEP-1,
+  # INV-BND-1, INV-BND-2). Артефакт уходит в публикацию по тегу.
+  build:
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build package
+        run: yarn build
+      - name: Validate package metadata (publint)
+        working-directory: packages/granum
+        run: npx --yes publint@latest --pack npm
+      - name: Check dependency and browser/node boundaries on dist
+        run: yarn check:boundary
+      - name: Upload dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: granum-dist
+          path: packages/granum/dist/
+
+  # Сквозная проверка контракта: пакет → фикстурные провайдеры → приложения,
+  # затем `doctor` провайдеров, сверка CSS приложений и бюджет стендов.
+  # До этапа 4 фикстур нет и шаги пропускаются штатно (`run-workspaces.mjs`).
+  contract:
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build package, fixtures and apps
+        run: yarn build:all
+      - name: Doctor on fixture providers
+        run: yarn doctor:fixtures
+      - name: Verify built CSS of apps
+        run: yarn verify:apps
+      - name: Verify size budget of benchmark stands
+        run: yarn sizes:check
+
+  # Публикация в npm по тегу `v<semver>`; зависит и от `contract`: пакет,
+  # ломающий провайдеров или приложения, публиковать нельзя.
+  publish-npm:
+    needs: [ build, contract, docs-parity ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+      - name: Verify tag matches package version
+        working-directory: packages/granum
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json version: $PKG_VERSION"
+          echo "git tag version:      $TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+      - name: Download dist
+        uses: actions/download-artifact@v8
+        with:
+          name: granum-dist
+          path: packages/granum/dist
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        working-directory: packages/granum
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

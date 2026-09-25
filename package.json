@@ -1,0 +1,34 @@
+{
+  "name": "@feugene/granum-workspace",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "fixtures/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "yarn workspace @feugene/granum lint:check",
+    "lint:fix": "yarn workspace @feugene/granum lint",
+    "typecheck": "yarn workspace @feugene/granum typecheck",
+    "test": "yarn workspace @feugene/granum test:run",
+    "test:coverage": "yarn workspace @feugene/granum test:coverage",
+    "test:scripts": "vitest run --config vitest.config.mjs",
+    "build": "yarn workspace @feugene/granum build",
+    "build:fixtures": "node scripts/run-workspaces.mjs fixtures build",
+    "build:apps": "node scripts/run-workspaces.mjs apps build",
+    "build:all": "yarn build && yarn build:fixtures && yarn build:apps",
+    "check:boundary": "node scripts/check-dist-boundary.mjs",
+    "check:docs": "node scripts/check-docs-parity.mjs",
+    "doctor:fixtures": "node scripts/run-workspaces.mjs fixtures doctor",
+    "verify:apps": "node scripts/run-workspaces.mjs apps verify",
+    "sizes:check": "node scripts/run-workspaces.mjs apps sizes:check",
+    "test:all": "yarn lint && yarn typecheck && yarn test && yarn test:scripts && yarn check:docs && yarn build:all && yarn check:boundary && yarn doctor:fixtures && yarn verify:apps && yarn sizes:check"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

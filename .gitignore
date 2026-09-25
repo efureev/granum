@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.idea/
+.DS_Store
+.env
+.eslintcache
+junit-report.xml
+.claude/settings.local.json

@@ -1,0 +1,116 @@
+{
+  "name": "@feugene/granum",
+  "description": "Build pipeline for granular UI packages: components, styles, design tokens and themes flow from provider manifests to the application bundle through one resolution. Framework-agnostic, zero dependencies.",
+  "version": "0.0.0",
+  "license": "MIT",
+  "author": {
+    "name": "Evgeniy Fureev",
+    "url": "https://github.com/efureev"
+  },
+  "homepage": "https://github.com/efureev/granum#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/efureev/granum.git",
+    "directory": "packages/granum"
+  },
+  "bugs": {
+    "url": "https://github.com/efureev/granum/issues"
+  },
+  "keywords": [
+    "granum",
+    "granular",
+    "design-system",
+    "design-tokens",
+    "themes",
+    "vite-plugin",
+    "css",
+    "tree-shakeable",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "type": "module",
+  "types": "./dist/types/src/index.d.ts",
+  "bin": {
+    "granum": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/types/src/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/types/src/contract/index.d.ts",
+      "import": "./dist/contract.js",
+      "default": "./dist/contract.js"
+    },
+    "./engine": {
+      "types": "./dist/types/src/engine/index.d.ts",
+      "import": "./dist/engine.js",
+      "default": "./dist/engine.js"
+    },
+    "./build": {
+      "types": "./dist/types/src/build.d.ts",
+      "import": "./dist/build.js",
+      "default": "./dist/build.js"
+    },
+    "./vite": {
+      "types": "./dist/types/src/vite.d.ts",
+      "import": "./dist/vite.js",
+      "default": "./dist/vite.js"
+    },
+    "./node": {
+      "types": "./dist/types/src/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./runtime": {
+      "types": "./dist/types/src/runtime.d.ts",
+      "import": "./dist/runtime.js",
+      "default": "./dist/runtime.js"
+    },
+    "./codegen": {
+      "types": "./dist/types/src/codegen.d.ts",
+      "import": "./dist/codegen.js",
+      "default": "./dist/codegen.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.1.0",
+    "@types/node": "^26.1.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint --fix .",
+    "lint:check": "eslint .",
+    "test": "vitest --config vitest.config.ts",
+    "test:run": "vitest run --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage"
+  }
+}
