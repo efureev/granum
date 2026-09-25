@@ -118,7 +118,8 @@
 `{ code: string, component?: string, ...details }`. Коды первого релиза:
 `safelist-redundant` (`classes`), `default-theme-without-source` (`theme`),
 `token-undefined` (`tokens`, только по собственным слоям провайдера), `apply-not-expanded`
-(`file`).
+(`file`), `css-double-delivery` (`files`), `peer-missing` (`provider` — донор, которого
+нет в `peerDependencies` пакета, C-5).
 
 ## 4. Правила валидации (читатель)
 

@@ -90,6 +90,7 @@ export function strictCheck(expected, report) {
     push('granum.undefinedTokens', same(expected.granum.undefinedTokens ?? [], report.granum.undefinedTokens), report.granum.undefinedTokens, expected.granum.undefinedTokens ?? [])
     push('granum.pruneMode', report.granum.prune.mode === (expected.granum.pruneMode ?? 'off'), report.granum.prune.mode, expected.granum.pruneMode ?? 'off')
     if (expected.granum.noEngineInBundle)
+      // INV-ENG-6: сигнатур генератора в клиентском бандле нет.
       push('granum.noEngineInBundle', !report.engineInBundle, report.engineInBundle, false)
   }
   return checks

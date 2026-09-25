@@ -27,6 +27,7 @@ import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
 import { analyzeBundle, findUndeclaredEdges } from './graph'
 import { collectComponentSources, componentEntryFileName, granumAssetFileNames, granumChunkFileNames } from './layout'
+import { findMissingPeers } from './peers'
 
 export interface GranumProviderPluginOptions {
   /** Объект контракта провайдера — браузерный entry пакета. */
@@ -303,7 +304,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
 
       // 5. exports пакета (B-13).
       const pkgPath = join(root, 'package.json')
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown> }
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown>, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
       if ((options.exportsCheck ?? 'error') !== 'off') {
         const required = [`./${manifestFile}`, ...provider.components.map(c => `./components/${c.name}`)]
         const missing = required.filter(key => !(pkg.exports && key in pkg.exports))
@@ -315,6 +316,10 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
             throw error
         }
       }
+
+      // 5b. Кросс-провайдерные доноры без peerDependencies (C-5, INV-CON-9).
+      for (const donor of findMissingPeers(provider, pkg))
+        warnings.push({ code: 'peer-missing', provider: donor })
 
       // 6. Манифест.
       const dependencyIds = sortedUnique((provider.dependencies ?? []).map(d => (typeof d === 'string' ? d : d.id)))

@@ -1,7 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 — 2026-09-25
 
+First release of the successor of `@feugene/unocss-preset-granular`. The
+package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
+`docs/SPEC.md` and `MIGRATION.md`.
+
+- Acceptance (stage 7): benchmark stands `apps/bench-{zero,one,pruned}` with a
+  size budget (`scripts/report-css-budget.mjs`), CSS rule-set comparison of
+  `bench-one` with the v1 preset snapshot (`compare-css.mjs`, 58 = 58 rules),
+  byte comparison of the JS bundle with a build without the plugin
+  (`compare-js.mjs`), determinism of the application CSS and report, user
+  guides in `docs/ru` and `docs/en`, invariant registry with verification
+  references and a test that every `INV-*` has one.
 - Diagnostics and CLI (stage 6): `granum doctor | explain | why-css | tokens | prune |
   report` work from manifests and `granum.config.*` without building the application
   (`report` reads `dist/granum-report.json`). `doctor` checks referenced files, `@apply`
@@ -17,8 +28,6 @@
   outside the selection, `components: 'imports'`, token pruning with app sources, and a
   build report (`granum-report.json`). `./runtime` ported (`createThemeController`).
   Demo apps `apps/app-{1,3,5,6}` with expectation-based verification.
-## Unreleased
-
 - Provider build (stage 4): `granumProvider()` Vite plugin builds the entries from the
   component registry, routes chunks and CSS into the contract layout, analyses the
   bundle graph (component files, edges, undeclared dependencies), extracts classes

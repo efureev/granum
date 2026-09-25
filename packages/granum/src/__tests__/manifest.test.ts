@@ -113,7 +113,7 @@ describe('каноническая сериализация (INV-DET-1, manifest
   })
 })
 
-describe('parseManifest — порядок проверок (manifest.md §4)', () => {
+describe('parseManifest — порядок проверок (manifest.md §4; INV-MAN-3)', () => {
   const ok = serializeManifest(draft())
 
   it('валидный манифест даёт GranumLoadedManifest с базой', () => {

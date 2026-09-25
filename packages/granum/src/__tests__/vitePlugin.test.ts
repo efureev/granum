@@ -124,7 +124,7 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).not.toContain('.p-4{')
   })
 
-  it('импорт компонента вне селекции — ошибка; guard: warn — предупреждение; imports — попадает в селекцию (A-3, A-6, INV-SEL-5)', async () => {
+  it('импорт компонента вне селекции — ошибка; guard: warn — предупреждение; imports — попадает в селекцию (A-3, A-6, INV-SEL-5, INV-JS-2)', async () => {
     const code = `<script setup lang="ts">import { Table } from '@t/kit/components/Table'</script><template><Table/></template>`
     // Ошибку из `resolveId` бандлер заворачивает в свою; исходная лежит в `errors[0]`.
     const failure = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, code).then(() => undefined, (e: unknown) => e as { errors?: unknown[] })

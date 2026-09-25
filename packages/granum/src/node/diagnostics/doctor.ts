@@ -52,6 +52,7 @@ export type DoctorDiagnosticCode
     | 'safelist-redundant'
     | 'safelist-dead'
     | 'css-double-delivery'
+    | 'peer-missing'
     | 'important-in-provider-css'
     | 'override-skipped'
     | 'provider-without-manifest'
@@ -232,6 +233,8 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
         warn('safelist-redundant', subject, `safelist duplicates statically extracted classes: ${(w.classes as string[] | undefined)?.join(', ') ?? ''}`)
       else if (w.code === 'css-double-delivery')
         warn('css-double-delivery', subject, `component CSS is both inlined by granum and imported by its chunk (${(w.files as string[] | undefined)?.join(', ') ?? ''}) — it arrives twice (INV-CSS-5)`)
+      else if (w.code === 'peer-missing')
+        warn('peer-missing', provider.id, `depends on provider '${String(w.provider)}' but does not list it in peerDependencies (C-5)`)
     }
   }
 

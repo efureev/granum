@@ -37,7 +37,7 @@ describe('materializeProviderRefs (C-13, INV-THM-5, INV-THM-6)', () => {
     expect(materializeComponentRefs(provider.components[0]!, 'p')).toBe(provider.components[0])
   })
 
-  it('читаются только нужные темы; ссылка неактивной темы не открывается', () => {
+  it('читаются только нужные темы; ссылка неактивной темы не открывается (INV-THM-5)', () => {
     const descriptor = defineGranumComponent('file:///pkg/src/components/X/config.ts', {
       name: 'X',
       tokenDefinitionsRef: { light: dataUrl(':root{--a:1}'), broken: 'file:///nowhere/never.css' },

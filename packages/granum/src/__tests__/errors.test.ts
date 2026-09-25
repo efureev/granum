@@ -33,7 +33,7 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['UnsupportedManifestVersionError', () => new errors.UnsupportedManifestVersionError(2, 1, 'f.json')],
 ]
 
-describe('иерархия ошибок', () => {
+describe('иерархия ошибок (INV-ERR-2; таблица §14 ТЗ — INV-DIAG-3)', () => {
   it('таблица покрывает все экспортированные классы ошибок', () => {
     const exported = Object.keys(errors).filter(name => name.endsWith('Error') && name !== 'GranumError').sort()
     expect(exported).toEqual(INSTANCES.map(([name]) => name))

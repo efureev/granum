@@ -53,7 +53,7 @@ describe('granum doctor (D-2)', () => {
     expect(report.themes.names).toEqual(['light', 'dark'])
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
-    // `--nowhere` никем не объявлен; `shadow-legacy` — без правила движка.
+    // `--nowhere` никем не объявлен (INV-TOK-4); `shadow-legacy` — без правила движка.
     expect(codes).toContain('token-undefined')
     expect(codes).toContain('safelist-dead')
     expect(report.undefinedTokens).toEqual([{ token: '--nowhere', component: '@x/kit:Card' }])
@@ -81,6 +81,7 @@ describe('granum doctor (D-2)', () => {
       expect.stringContaining('\'node:fs\' (node-import)'),
     ])
     expect(byCode['safelist-redundant']?.[0]?.subject).toBe('@x/kit:Panel')
+    // INV-CSS-5: двойная доставка CSS видна в doctor.
     expect(byCode['css-double-delivery']?.[0]?.subject).toBe('@x/kit:Card')
     // Ошибки идут первыми.
     const levels = report.diagnostics.map(d => d.level)

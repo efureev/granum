@@ -34,7 +34,7 @@ export default function ({ manifest, distDir, check }) {
   }
   check(c.XhList.classes.includes('divide-y') && c.XhTable.classes.includes('odd:bg-[var(--xh-table-stripe)]'), 'group member own classes')
 
-  // Safelist: собранные в рантайме классы, включая намеренно мёртвый `shadow-legacy`.
+  // Safelist: собранные в рантайме классы, включая намеренно мёртвый `shadow-legacy` (INV-CON-4).
   check(c.XhButton.safelist.includes('shadow-legacy') && c.XhButton.safelist.includes('p-2'), `XhButton.safelist: ${c.XhButton.safelist}`)
   // Строки тонов лежат литералами целиком — движок видит их и как статику: пересечение честно предупреждает.
   check(manifest.warnings.some(w => w.code === 'safelist-redundant' && w.component === 'XhButton'), `warnings: ${JSON.stringify(manifest.warnings)}`)

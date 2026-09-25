@@ -4,7 +4,7 @@
  * INV-BND-2):
  *
  *   1. `dependencies` пусты, `peerDependencies` — ровно `vite`;
- *   2. браузерные entry (`index`, `contract`, `engine`, `runtime`) и всё, что
+ *   2. браузерные entry (`index`, `contract`, `engine`, `runtime`; INV-CON-10, INV-BND-1) и всё, что
  *      они импортируют относительными путями, не содержат `node:`-импортов,
  *      голых имён встроенных модулей Node и запрещённых пакетов;
  *   3. ни один файл `dist` не импортирует `unocss`, `@unocss/*`, `magic-string`,

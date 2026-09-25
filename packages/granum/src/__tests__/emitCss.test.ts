@@ -39,7 +39,7 @@ async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<R
   return { css: await emitCss(app), app }
 }
 
-describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2)', () => {
+describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities позже components — INV-CSS-6)', () => {
   it('пять слоёв в фиксированном порядке, объявление порядка первой строкой', async () => {
     const { css } = await run({ components: ['@x/kit:Panel'] })
     expect(css.css.startsWith('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;\n')).toBe(true)

@@ -53,6 +53,9 @@ for (const [name, component] of Object.entries(loaded.manifest.components)) {
   check(matched.join(' ') === component.classes.join(' '), `${name}: classes round-trip — manifest [${component.classes}] vs dist [${matched}]`)
   const expectedConsumes = [...consumes].sort()
   check(expectedConsumes.join(' ') === component.tokens.consumes.join(' '), `${name}: consumes round-trip — manifest [${component.tokens.consumes}] vs dist [${expectedConsumes}]`)
+  // INV-LAY-3: в браузерных чанках нет data:-URL на месте путей пакета.
+  for (const file of component.files)
+    check(!readFileSync(join(dir, 'dist', file), 'utf8').includes('data:text/css'), `${name}: ${file} contains a data:text/css URL`)
 }
 
 try {
