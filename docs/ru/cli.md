@@ -55,7 +55,8 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `token-conflict` | warn | токен пишут несколько слоёв; показана цепочка и итог |
 | `theme-warning` | warn | предупреждения резолюции тем (`extends`, неполные темы) |
 | `override-skipped` | warn | `strictTokens` отбросил override |
-| `provider-without-manifest` | warn | провайдер передан объектом: классы и потребление неизвестны |
+| `provider-without-manifest` | warn | провайдер передан объектом, а `baseUrl` не каталог на диске: классы и потребление неизвестны |
+| `provider-scanned` | warn | провайдер передан объектом: классы и токены просканированы по его `dist` приложением (медленный путь, без графа бандлера) |
 | `unused-provider` | warn | провайдер ничего не приносит в сборку |
 
 ```

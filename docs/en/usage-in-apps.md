@@ -25,7 +25,7 @@ export default defineGranumConfig({
 
 | Field | Default | Meaning |
 |---|---|---|
-| `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects |
+| `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects; an object whose `baseUrl` points at an existing `dist` is scanned by the application itself (slow path, `provider-scanned`) |
 | `components` | `'all'` | a list of `id:Name` keys / `{ provider, names }` or `'imports'` — from imports in `appSources` |
 | `themes.names` | by `define` → providers' `defaultThemes` → `['light']` | the active set of themes |
 | `themes.define` | — | application themes: `{ extends, tokens, tokensRef, label, colorScheme }` |

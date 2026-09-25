@@ -124,7 +124,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
 
   const warnings: string[] = []
   for (const w of app.warnings)
-    warnings.push(w.kind === 'provider-without-manifest' ? `provider-without-manifest: ${w.providerId}` : w.kind)
+    warnings.push('providerId' in w ? `${w.kind}: ${w.providerId}` : w.kind)
   for (const w of resolution.warnings) {
     if (w.kind !== 'provider-without-manifest')
       warnings.push(JSON.stringify(w))

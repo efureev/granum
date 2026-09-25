@@ -13,6 +13,11 @@ package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
   (`compare-js.mjs`), determinism of the application CSS and report, user
   guides in `docs/ru` and `docs/en`, invariant registry with verification
   references and a test that every `INV-*` has one.
+- Slow path for object-form providers (R-6): when `baseUrl` points at an existing `dist`,
+  the application scans component files and reachable shared chunks with the engine
+  extractor, collects consumed tokens and theme declarations, and feeds the resolver a
+  synthetic manifest (`provider-scanned` warning; no bundle graph, so component edges
+  are not verified). Instance donors of such providers are scanned too.
 - Codegen: the provider registry target renders array entries (`xCardConfig,`) for
   `components: [ … ]` of the granum contract; the default `exports` entry points
   `import` at the flat `dist/components/<Name>/index.js` layout for grouped sources

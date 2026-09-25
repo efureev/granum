@@ -111,7 +111,9 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       const app = await prepare()
       for (const w of app.warnings) {
         if (w.kind === 'provider-without-manifest')
-          log(`warning: provider '${w.providerId}' is passed as an object; its classes and tokens are not known (build it with granumProvider() to get a manifest)`)
+          log(`warning: provider '${w.providerId}' is passed as an object and its baseUrl is not on disk; its classes and tokens are not known (build it with granumProvider() to get a manifest)`)
+        else if (w.kind === 'provider-scanned')
+          log(`provider '${w.providerId}' has no manifest: classes and tokens scanned from its dist (slow path)`)
         else if (w.kind === 'imports-without-app-sources')
           log(`warning: components: 'imports' needs appSources.dirs — the selection is empty`)
       }

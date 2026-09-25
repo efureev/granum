@@ -56,6 +56,7 @@ export type DoctorDiagnosticCode
     | 'important-in-provider-css'
     | 'override-skipped'
     | 'provider-without-manifest'
+    | 'provider-scanned'
     | 'unused-provider'
 
 export interface DoctorDiagnostic {
@@ -275,7 +276,9 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   }
   for (const w of app.warnings) {
     if (w.kind === 'provider-without-manifest')
-      warn('provider-without-manifest', w.providerId, 'provider is passed as an object: its classes and consumed tokens are unknown; build it with granumProvider()')
+      warn('provider-without-manifest', w.providerId, 'provider is passed as an object and its baseUrl is not a directory on disk: classes and consumed tokens are unknown; build it with granumProvider()')
+    else if (w.kind === 'provider-scanned')
+      warn('provider-scanned', w.providerId, 'provider is passed as an object: classes and tokens were scanned from its dist by the application (slow path, no bundle graph); publish granum.manifest.json with granumProvider()')
   }
   const withSelected = new Set(components.map(c => c.providerId))
   for (const p of providers) {

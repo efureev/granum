@@ -23,6 +23,7 @@ import { scanAppSources } from './appSources'
 import { tokenSetFromCssSync } from './cssTokens'
 import { loadPackageManifest } from './manifest'
 import { materializeProviderRefs } from './materializeRefs'
+import { collectProviderInstances, scanObjectProvider } from './scanProvider'
 
 export interface PreparedApp {
   readonly config: GranumConfig
@@ -37,6 +38,8 @@ export interface PreparedApp {
 
 export type PreparedWarning
   = | { readonly kind: 'provider-without-manifest', readonly providerId: string }
+    /** Объектный провайдер просканирован по `dist` (R-6): классы и токены известны, но без графа бандлера. */
+    | { readonly kind: 'provider-scanned', readonly providerId: string }
     | { readonly kind: 'imports-without-app-sources' }
 
 interface EngineModuleShape {
@@ -63,6 +66,44 @@ export function loadProviderInputs(config: GranumConfig, root: string): GranumPr
       return entry
     return materializeProviderRefs(entry)
   })
+}
+
+/**
+ * Медленный путь R-6: объектные провайдеры с раскладкой на диске заменяются
+ * синтетическими манифестами; инстансы-доноры, которых нет во входе по id,
+ * добавляются и сканируются тоже. Объекты без каталога остаются как есть.
+ */
+export async function scanProviderInputs(inputs: readonly GranumProviderInput[], engine: GranumEngine, warnings: PreparedWarning[]): Promise<{ resolver: GranumProviderInput[], engineSources: GranumProviderInput[] }> {
+  const byId = new Set(inputs.map(i => (isLoadedManifest(i) ? i.manifest.id : i.id)))
+  const engineSources = [...inputs]
+  const queue = [...inputs]
+  for (const input of inputs) {
+    if (isLoadedManifest(input))
+      continue
+    for (const [id, donor] of collectProviderInstances(input)) {
+      if (!byId.has(id)) {
+        byId.add(id)
+        queue.push(donor)
+        engineSources.push(donor)
+      }
+    }
+  }
+  const resolver: GranumProviderInput[] = []
+  for (const input of queue) {
+    if (isLoadedManifest(input)) {
+      resolver.push(input)
+      continue
+    }
+    const scanned = await scanObjectProvider(input, engine)
+    if (scanned) {
+      warnings.push({ kind: 'provider-scanned', providerId: input.id })
+      resolver.push(scanned)
+    }
+    else {
+      resolver.push(input)
+    }
+  }
+  return { resolver, engineSources }
 }
 
 async function loadEngineContribution(inputs: readonly GranumProviderInput[]): Promise<PreparedApp['engineContribution']> {
@@ -157,9 +198,10 @@ export function tagSelection(tags: readonly string[], inputs: readonly GranumPro
 
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {
   const engine = createConfiguredEngine(config)
-  const inputs = loadProviderInputs(config, root)
+  const loaded = loadProviderInputs(config, root)
   const appScan = scanAppSources(config.appSources, root, engine)
   const warnings: PreparedWarning[] = []
+  const { resolver: inputs, engineSources } = await scanProviderInputs(loaded, engine, warnings)
 
   let components: ComponentSelection | undefined
   if (config.components === 'imports') {
@@ -188,7 +230,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     resolution,
     engine,
     appScan,
-    engineContribution: await loadEngineContribution(inputs),
+    engineContribution: await loadEngineContribution(engineSources),
     warnings,
   }
 }

@@ -56,7 +56,8 @@ legal but suspicious.
 | `token-conflict` | warn | several layers write the token; the chain and the outcome are shown |
 | `theme-warning` | warn | theme resolution warnings (`extends`, partial themes) |
 | `override-skipped` | warn | `strictTokens` dropped an override |
-| `provider-without-manifest` | warn | the provider is passed as an object: classes and consumption are unknown |
+| `provider-without-manifest` | warn | the provider is passed as an object and its `baseUrl` is not a directory on disk: classes and consumption are unknown |
+| `provider-scanned` | warn | the provider is passed as an object: classes and tokens were scanned from its `dist` by the application (slow path, no bundle graph) |
 | `unused-provider` | warn | the provider contributes nothing to the build |
 
 ```
