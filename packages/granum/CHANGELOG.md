@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Diagnostics and CLI (stage 6): `granum doctor | explain | why-css | tokens | prune |
+  report` work from manifests and `granum.config.*` without building the application
+  (`report` reads `dist/granum-report.json`). `doctor` checks referenced files, `@apply`
+  left in provider CSS, `!important`, the browser/node boundary of provider chunks,
+  manifest warnings of selected components, dead safelist entries, undefined tokens,
+  token conflicts and theme warnings; exit codes `0/1/2`, `--json`, `--strict`,
+  `--deep`. `granum*` functions and `format*Report` formatters are exported from
+  `./node`; the config loader (`loadGranumConfigFile`) too.
 - Application plugin (stage 5): `granum(config)` Vite plugin orchestrates the pipeline
   from one resolution — `virtual:granum.css` with cascade layers `tokens, base, themes,
   components, utilities` (and per-layer slices), `virtual:granum/components` re-exporting

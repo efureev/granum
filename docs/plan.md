@@ -101,7 +101,7 @@ granum/
 | 5.11 Приложения `apps/app-{1,3,5,6}` на granum: без `unocss`, `granum.config.ts` + `granum()`; `expected.mjs` сверяет CSS, JS и отчёт (`scripts/verify-app.mjs`). Стенды `bench-*` и остальные приложения — этап 7 | AC-5 |
 | 5.12 e2e в браузере: INV-CSS-6 (утилита перебивает базу), AC-9 (HMR) — перенесено в этап 7 (нужен браузер) | INV-CSS-6, AC-9 |
 
-## Этап 6 — Диагностика и CLI (M)
+## Этап 6 — Диагностика и CLI (M) — выполнен 2026-09-25
 
 | Задача | Результат |
 |---|---|
@@ -109,7 +109,8 @@ granum/
 | 6.2 `why-css` по карте `matched` движка | D-3 |
 | 6.3 `report` по `granum-report.json` | D-1 |
 | 6.4 `bin/granum`, коды выхода, `--json`, `--strict` | INV-ERR-3 |
-| 6.5 Архитектурный тест: потребители значений токенов импортируют одну функцию | INV-RES-3, INV-DIAG-1 |
+| 6.5 Архитектурный тест (`architecture.test.ts`): `effective` записывает только `core/tokenLayers.ts`, никто не выводит значение из слоёв заново, потребители читают `tokenLayers` резолюции | INV-RES-3, INV-DIAG-1 |
+| 6.6 Загрузка `granum.config.*` для CLI: `.ts` через `vite.loadConfigFromFile`, если `vite` резолвится из корня приложения, иначе нативный `import()`; экспорт `default` / `granum` / `config` | D-4 |
 
 ## Этап 7 — Приёмка и релиз (M)
 

@@ -1,3 +1,5 @@
+export { ConfigLoadError, loadGranumConfigFile } from './cli/loadConfig'
+export type { LoadedGranumConfig } from './cli/loadConfig'
 export type * from './config'
 export { defineGranumConfig } from './config'
 /**
@@ -13,8 +15,10 @@ export type { CssBlock, CssDeclarationOccurrence, CssScanResult } from './node/c
 export { scanCssBlocks, scanCssDeclarations } from './node/cssDeclarations'
 export type { ParsedTokenBlock, SkippedBlock, TokenSetFromCssOptions } from './node/cssTokens'
 export { parseCssTokenBlocks, parseCssTokenBlocksFromText, tokenSetFromCss, tokenSetFromCssSync } from './node/cssTokens'
+export * from './node/diagnostics/index'
 export type { EmittedCss, LayerName } from './node/emit'
 export { emitCss, LAYER_NAMES, serializeThemeBlock, wrapLayers } from './node/emit'
+export { boundaryKindOf, collectImportSpecifiers } from './node/imports'
 export type { InlinedCssKind, InlinedCssSource } from './node/inlinedCss'
 export { resolveInlinedCssSources, resolveProviderPath } from './node/inlinedCss'
 export {

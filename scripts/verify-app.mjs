@@ -4,7 +4,9 @@
  * из `dist/assets`, плюс проверки отчёта `granum-report.json`. Запускается
  * из каталога приложения: `yarn workspace <name> verify`.
  */
+import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -43,6 +45,21 @@ if (expected.report) {
     const report = JSON.parse(readFileSync(reportPath, 'utf8'))
     expected.report(report, (ok, message) => { if (!ok) failures.push(`отчёт: ${message}`) })
   }
+}
+
+// CLI на настоящем `granum.config.ts`: `doctor` обязан пройти без ошибок и
+// отдать JSON с той же селекцией, что в отчёте сборки (D-4, INV-DIAG-1).
+const bin = createRequire(join(dir, 'package.json')).resolve('@feugene/granum/package.json').replace(/package\.json$/, 'dist/bin.js')
+const doctor = spawnSync(process.execPath, [bin, 'doctor', 'granum.config.ts', '--json'], { cwd: dir, encoding: 'utf8' })
+if (doctor.status !== 0) {
+  failures.push(`granum doctor завершился кодом ${doctor.status}:\n${doctor.stderr || doctor.stdout}`)
+}
+else {
+  const selection = JSON.parse(doctor.stdout).components.map(c => c.key)
+  const reportPath = join(dir, 'dist', 'granum-report.json')
+  const built = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')).selection.map(s => s.key) : selection
+  if (JSON.stringify(selection) !== JSON.stringify(built))
+    failures.push(`granum doctor видит селекцию ${JSON.stringify(selection)}, а сборка — ${JSON.stringify(built)}`)
 }
 
 const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name

@@ -1,8 +1,15 @@
+import type { GranumBuildReport } from './node/report'
 /**
- * Логика CLI `granum` (ТЗ §12), отделённая от точки входа `bin.ts`, чтобы
- * тестироваться без подпроцесса. Команды появляются на этапе 6; оболочка уже
- * держит контракт кодов выхода (INV-ERR-3): `0` — успех, `2` — ошибка вызова.
+ * Логика CLI `granum` (ТЗ §12), отделённая от `bin.ts`. Коды выхода
+ * (INV-ERR-3): `0` — чисто; `1` — нарушения (`error`, с `--strict` и `warn`)
+ * или ошибка выполнения; `2` — неверный вызов.
  */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import process from 'node:process'
+import { loadGranumConfigFile } from './cli/loadConfig'
+import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
+import { prepareApp } from './node/prepare'
 import { GRANUM_VERSION } from './version'
 
 export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'prune', 'report'] as const
@@ -11,33 +18,150 @@ export type CliCommand = typeof CLI_COMMANDS[number]
 export interface CliIo {
   readonly stdout: (line: string) => void
   readonly stderr: (line: string) => void
+  readonly cwd?: string
 }
 
-export const USAGE = [
-  'usage: granum <command> [options]',
-  '',
-  'commands:',
-  ...CLI_COMMANDS.map(c => `  ${c}`),
-  '',
-  'options:',
-  '  --help       show this message',
-  '  --version    print version',
-].join('\n')
+export const USAGE = `granum — diagnostics for @feugene/granum
 
-export function runGranumCli(argv: readonly string[], io: CliIo): number {
-  const [first] = argv
-  if (first === undefined || first === '--help' || first === '-h') {
-    io.stdout(USAGE)
-    return 0
+usage:
+  granum doctor  <config> [--json] [--strict]
+  granum explain <config> <providerId:Component> [--json]
+  granum why-css <config> <class> [--json]
+  granum tokens  <config> <providerId:Component> [--deep] [--json]
+  granum prune   <config> [--json] [--strict]
+  granum report  [<report.json>] [--json] [--strict]
+
+  <config> — path to granum.config.{ts,js,mjs} of the application; the
+  application root is its directory. All commands work from manifests only,
+  without building the application; 'report' reads dist/granum-report.json.
+
+flags:
+  --json      structured report instead of text
+  --strict    doctor: warnings fail; prune: anything removable fails;
+              report: unmatched classes or undefined tokens fail
+  --deep      tokens: include the component's dependencies
+  --help, --version`
+
+interface ParsedArgs {
+  command?: string
+  positionals: string[]
+  flags: Set<string>
+}
+
+function parseArgs(args: readonly string[]): ParsedArgs {
+  const positionals: string[] = []
+  const flags = new Set<string>()
+  for (const arg of args) {
+    if (arg.startsWith('--'))
+      flags.add(arg)
+    else
+      positionals.push(arg)
   }
-  if (first === '--version' || first === '-v') {
+  const command = positionals.shift()
+  return { ...(command !== undefined ? { command } : {}), positionals, flags }
+}
+
+function emit(io: CliIo, json: boolean, report: unknown, text: () => string): void {
+  io.stdout(json ? JSON.stringify(report, null, 2) : text())
+}
+
+export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<number> {
+  const { command, positionals, flags } = parseArgs(argv)
+  const cwd = io.cwd ?? process.cwd()
+  const json = flags.has('--json')
+
+  if (command === '-v' || flags.has('--version')) {
     io.stdout(GRANUM_VERSION)
     return 0
   }
-  if ((CLI_COMMANDS as readonly string[]).includes(first)) {
-    io.stderr(`granum ${first}: not implemented yet (planned for stage 6)`)
+  if (command === undefined || command === '-h' || command === 'help' || flags.has('--help')) {
+    io.stdout(USAGE)
+    return command === undefined && !flags.has('--help') && argv.length > 0 ? 2 : 0
+  }
+  if (!(CLI_COMMANDS as readonly string[]).includes(command)) {
+    io.stderr(`granum: unknown command '${command}'\n\n${USAGE}`)
     return 2
   }
-  io.stderr(`granum: unknown command '${first}'\n\n${USAGE}`)
-  return 2
+
+  try {
+    if (command === 'report') {
+      const file = resolve(cwd, positionals[0] ?? 'dist/granum-report.json')
+      const report = JSON.parse(readFileSync(file, 'utf8')) as GranumBuildReport
+      emit(io, json, report, () => formatBuildReport(report))
+      const bad = report.classes.unmatched.length > 0 || report.tokens.undefined.length > 0
+      return flags.has('--strict') && bad ? 1 : 0
+    }
+
+    const [configPath, subject] = positionals
+    if (!configPath) {
+      io.stderr(`granum ${command}: missing <config>\n\n${USAGE}`)
+      return 2
+    }
+    if ((command === 'explain' || command === 'tokens' || command === 'why-css') && !subject) {
+      io.stderr(`granum ${command}: missing ${command === 'why-css' ? '<class>' : '<providerId:Component>'}\n\n${USAGE}`)
+      return 2
+    }
+    const loaded = await loadGranumConfigFile(configPath, cwd)
+    const app = await prepareApp(loaded.config, loaded.root)
+
+    if (command === 'doctor') {
+      const report = await granumDoctor(app)
+      emit(io, json, report, () => formatDoctorReport(report))
+      if (!report.ok)
+        return 1
+      return flags.has('--strict') && countDoctorDiagnostics(report).warnings > 0 ? 1 : 0
+    }
+    if (command === 'explain') {
+      const report = granumExplain(app, subject!)
+      emit(io, json, report, () => formatExplainReport(report))
+      return report.reason === 'unknown' ? 1 : 0
+    }
+    if (command === 'why-css') {
+      const report = await granumWhyCss(app, subject!)
+      emit(io, json, report, () => formatWhyCssReport(report))
+      return report.found ? 0 : 1
+    }
+    if (command === 'tokens') {
+      const report = granumTokens(app, subject!, flags.has('--deep') ? 'deep' : 'own')
+      emit(io, json, report, () => formatTokensReport(report))
+      return report.unresolved ? 1 : 0
+    }
+    const report = await granumTokenPrune(app)
+    emit(io, json, report, () => formatTokenPruneReport(report, loaded.root))
+    return flags.has('--strict') && report.removed.length > 0 ? 1 : 0
+  }
+  catch (error) {
+    io.stderr(`[granum] ${(error as Error)?.message ?? String(error)}`)
+    return 1
+  }
+}
+
+export function formatBuildReport(report: GranumBuildReport): string {
+  const lines: string[] = []
+  const push = (s = ''): void => void lines.push(s)
+  push('granum report')
+  push('=============')
+  push()
+  push(`Generated by: ${report.generatedBy}`)
+  push(`Selection (${report.selection.length}): ${report.selection.map(s => s.key).join(', ') || '—'}`)
+  push(`Themes: [${report.themes.names.join(', ')}] (${report.themes.namesSource})`)
+  push(`Classes: ${report.classes.matched} matched of ${report.classes.input} candidates; unmatched with a known source: ${report.classes.unmatched.length}`)
+  for (const u of report.classes.unmatched)
+    push(`  ✗ ${u.className} ← ${u.sources.join(', ')}`)
+  if (report.classes.safelistRedundant.length)
+    push(`Safelist covered by static classes: ${report.classes.safelistRedundant.join(' ')}`)
+  push(`Undefined tokens: ${report.tokens.undefined.join(' ') || '—'}`)
+  if (report.prune)
+    push(`Prune (${report.prune.mode}): removable ${report.prune.removable.length}, kept ${report.prune.kept}, dead patterns ${report.prune.deadPatterns.length}`)
+  push()
+  push('Sizes (raw / gzip / brotli):')
+  for (const [name, size] of Object.entries(report.sizes))
+    push(`  ${name.padEnd(11)} ${String(size.raw).padStart(8)} ${String(size.gzip).padStart(8)} ${String(size.brotli).padStart(8)}`)
+  if (report.warnings.length) {
+    push()
+    push(`Warnings (${report.warnings.length}):`)
+    for (const w of report.warnings)
+      push(`  ⚠ ${w}`)
+  }
+  return lines.join('\n')
 }
