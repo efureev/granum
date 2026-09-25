@@ -9,4 +9,11 @@ export default antfu({
   jsonc: false,
   yaml: false,
   markdown: false,
+  // Вендоренное ядро UnoCSS правится только патчами в scripts/vendor-unocss.mjs.
+  ignores: ['src/engine/vendor/**'],
+}, {
+  // Перенос unocss-mini-extra-rules: код держится близко к оригиналу ради
+  // синхронизации, явные типы возврата там не требуются.
+  files: ['src/engine/rules/extra/**/*.ts'],
+  rules: { 'ts/explicit-function-return-type': 'off' },
 })

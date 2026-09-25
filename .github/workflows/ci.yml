@@ -64,6 +64,10 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+      # Вендоренное ядро UnoCSS порождается скриптом; расхождение с
+      # зафиксированным в git означает ручную правку (ADR-2).
+      - name: Check vendored UnoCSS core is up to date
+        run: yarn check:vendor
       - name: Build package
         run: yarn build
       - name: Validate package metadata (publint)

@@ -16,6 +16,8 @@ export default defineConfig({
         'src/**/*.test.ts',
         'src/**/__tests__/**',
         'src/**/*.d.ts',
+        // Вендоренный код покрывается golden-тестами, а не построчно.
+        'src/engine/vendor/**',
         // Точка входа CLI: шебанг + вызов `runGranumCli` и `process.exitCode`.
         // Исполняется на импорте, покрывается только запуском подпроцесса.
         'src/bin.ts',

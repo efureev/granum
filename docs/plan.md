@@ -48,15 +48,15 @@ granum/
 | 1.5 Перенести тесты ядра v1 (8 наборов: expandProviders, providerValidation, resolveSelection, resolveThemes, tokenLayers, appThemes, contractHelpers, debug) с адаптацией входа; добавить тесты на новые ошибки, манифестную форму, мемоизацию, детерминизм | INV-SEL-*, INV-THM-1..4, INV-RES-1..3, INV-DET-3 |
 | 1.6 Иерархия ошибок `GranumError` с `code`; тест, что все классы наследуют её | INV-ERR-2 |
 
-## Этап 2 — Движок (L)
+## Этап 2 — Движок (L) — выполнен 2026-09-25
 
 | Задача | Результат |
 |---|---|
-| 2.1 Вендорить `@unocss/core`, `preset-mini`, `rule-utils` (без `magic-string`), `extractor-arbitrary-variants` @66.7.5 в `src/engine/vendor/`; `THIRD_PARTY_NOTICES.md`; скрипт `scripts/vendor-unocss.mjs` с фиксированной версией | ADR-2 |
-| 2.2 Внутренние типы `GranumRule`, `GranumVariant`, `GranumPreflight`, `EngineTheme`; удалить импорты `@unocss/*` из вендоренного кода через патчи | INV-DEP-1 |
+| 2.1 Вендорить `@unocss/core`, `preset-mini`, `rule-utils` (без `magic-string`), `extractor-arbitrary-variants` @66.7.5 в `src/engine/vendor/`; `THIRD_PARTY_NOTICES.md`; скрипт `scripts/vendor-unocss.mjs` с фиксированной версией; `check:vendor` в CI сверяет идемпотентность | ADR-2 |
+| 2.2 Внутренние типы `GranumRule`, `GranumVariant`, `GranumPreflight`, `EngineTheme` (структурные, поверхность `./engine` не ссылается на vendor); импорты `@unocss/*` переписаны скриптом на относительные, единственный патч — `magic-string` | INV-DEP-1 |
 | 2.3 Перенести правила `unocss-mini-extra-rules` (8 семейств) в `src/engine/rules/extra/` на внутренних типах; перенести их тесты | E-4 |
 | 2.4 Реализовать `createEngine()` с `extract` и `generate` по §9.1; `matched`/`unmatched`; порядок правил | E-1…E-3, INV-ENG-1,2,3 |
-| 2.5 Golden-тесты: собрать эталонный набор классов (все классы фикстур v1 + арбитражные значения + варианты), снапшот из `unocss@66.7.5` в devDependencies только тестов | E-5, INV-ENG-4 |
+| 2.5 Golden-тесты: эталонный набор классов фикстур v1 + арбитражные значения + варианты; живая сверка с `unocss@66.7.5` + `@feugene/unocss-mini-extra-rules@0.8.1` из devDependencies и файловый снапшот `golden.css` | E-5, INV-ENG-4 |
 | 2.6 Экстрактор: кавычки, шаблонные литералы, `_` в арбитражных значениях, игнор комментариев SFC | E-6, INV-ENG-5 |
 | 2.7 Тесты детерминизма и параллельных вызовов | INV-ENG-1 |
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build'
 import { runRegistryCodegen } from '../codegen'
 import { GRANUM_CONTRACT_VERSION } from '../contract/index'
-import { createEngine } from '../engine/index'
 import * as root from '../index'
 import { GranumNotImplementedError } from '../internal/notImplemented'
 import { readManifest } from '../node'
@@ -31,7 +30,6 @@ describe('entry points', () => {
   })
 
   it.each([
-    ['createEngine', 'stage 2', () => createEngine()],
     ['readManifest', 'stage 3', () => readManifest()],
     ['granumProvider', 'stage 4', () => granumProvider()],
     ['runRegistryCodegen', 'stage 4', () => runRegistryCodegen()],

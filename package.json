@@ -26,7 +26,9 @@
     "doctor:fixtures": "node scripts/run-workspaces.mjs fixtures doctor",
     "verify:apps": "node scripts/run-workspaces.mjs apps verify",
     "sizes:check": "node scripts/run-workspaces.mjs apps sizes:check",
-    "test:all": "yarn lint && yarn typecheck && yarn test && yarn test:scripts && yarn check:docs && yarn build:all && yarn check:boundary && yarn doctor:fixtures && yarn verify:apps && yarn sizes:check"
+    "test:all": "yarn lint && yarn typecheck && yarn test && yarn test:scripts && yarn check:docs && yarn check:vendor && yarn build:all && yarn check:boundary && yarn doctor:fixtures && yarn verify:apps && yarn sizes:check",
+    "vendor:unocss": "node scripts/vendor-unocss.mjs",
+    "check:vendor": "node scripts/vendor-unocss.mjs && git diff --exit-code --stat -- packages/granum/src/engine/vendor packages/granum/THIRD_PARTY_NOTICES.md"
   },
   "devDependencies": {
     "vitest": "^4.1.10"
