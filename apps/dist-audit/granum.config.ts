@@ -9,13 +9,14 @@ import { defineGranumConfig } from '@feugene/granum/vite'
  * tree-shaking'ом, его классы — селекцией, его токены и мёртвый груз шкалы —
  * обрезкой.
  *
- * Обе темы активны намеренно: обрезка обязана резать объявления в каждом
- * блоке, а не только в теме по умолчанию.
+ * Тема одна, светлая: приложение не умеет переключаться, и платить за второй
+ * блок ему незачем. Тёмная тема пакета в дистрибутив не попадает целиком —
+ * это ещё одна строка аудита, которую видно рядом с обрезкой токенов.
  */
 export default defineGranumConfig({
   providers: ['@granum-fixtures/mini-ds'],
   components: ['@granum-fixtures/mini-ds:XxCard'],
-  themes: { names: ['light', 'dark'] },
+  themes: { names: ['light'] },
   appSources: { dirs: ['src'] },
   pruneTokens: { mode: 'on' },
 })
