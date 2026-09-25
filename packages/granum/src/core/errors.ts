@@ -191,3 +191,62 @@ export class InvalidProviderError extends GranumError {
     super(`Invalid provider: ${where}'${providerId}' — ${details}`)
   }
 }
+
+/** Версия формата манифеста, которую этот пакет не понимает (INV-MAN-3). */
+export class UnsupportedManifestVersionError extends GranumError {
+  readonly code = 'unsupported-manifest-version' as const
+
+  constructor(
+    readonly version: unknown,
+    readonly supported: number,
+    readonly file?: string,
+  ) {
+    const where = file ? ` (${file})` : ''
+    super(
+      `Manifest${where} declares format version ${String(version)}, but this package understands version ${supported}. `
+      + `Upgrade '@feugene/granum' or rebuild the provider.`,
+    )
+  }
+}
+
+export type InvalidManifestReason
+  = | 'json'
+    | 'schema'
+    | 'path-escapes-package'
+    | 'hash-mismatch'
+    | 'entry-layout'
+    | 'token-key-prefix'
+
+/** Манифест не проходит проверку читателя (`docs/manifest.md` §4). */
+export class InvalidManifestError extends GranumError {
+  readonly code = 'invalid-manifest' as const
+
+  constructor(
+    readonly reason: InvalidManifestReason,
+    details: string,
+    /** Путь до поля внутри JSON, если применимо (`components.XhPanel.entry`). */
+    readonly path?: string,
+    readonly file?: string,
+  ) {
+    const at = path ? ` at '${path}'` : ''
+    const where = file ? ` (${file})` : ''
+    super(`Invalid manifest${where}${at}: ${details}`)
+  }
+}
+
+/** `<pkg>/granum.manifest.json` не разрешается через `exports` пакета (A-2, INV-LAY-2). */
+export class ManifestNotFoundError extends GranumError {
+  readonly code = 'manifest-not-found' as const
+
+  constructor(
+    readonly packageName: string,
+    readonly from: string,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `Cannot resolve '${packageName}/granum.manifest.json' from '${from}'. `
+      + `The provider must be built with granumProvider() and export './granum.manifest.json' in package.json — run 'granum codegen' in the provider.`,
+      options,
+    )
+  }
+}

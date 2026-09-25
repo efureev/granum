@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Manifest (stage 3): `serializeManifest` / `writeManifestSync` produce the canonical
+  `granum.manifest.json` with a content hash; `parseManifest` / `readManifestSync`
+  validate format version, schema, package-relative paths, hash, entry layout and token
+  keys in the documented order; `locateManifest` resolves a provider's manifest through
+  its package `exports` without executing package code.
 - Utility engine (stage 2): `createEngine()` on a vendored UnoCSS 66.7.5 core
   (`@unocss/core`, `preset-mini`, `rule-utils` without `magic-string`,
   `extractor-arbitrary-variants`) plus the rules of `@feugene/unocss-mini-extra-rules`

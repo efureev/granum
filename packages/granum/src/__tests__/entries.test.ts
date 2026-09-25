@@ -4,7 +4,7 @@ import { runRegistryCodegen } from '../codegen'
 import { GRANUM_CONTRACT_VERSION } from '../contract/index'
 import * as root from '../index'
 import { GranumNotImplementedError } from '../internal/notImplemented'
-import { readManifest } from '../node'
+import * as node from '../node'
 import { createThemeController } from '../runtime'
 import { GRANUM_VERSION } from '../version'
 import { defineGranumConfig, granum } from '../vite'
@@ -27,10 +27,11 @@ describe('entry points', () => {
     expect(typeof root.defineGranumComponent).toBe('function')
     expect(typeof root.resolveGranum).toBe('function')
     expect(typeof root.GranumError).toBe('function')
+    expect(typeof node.readManifestSync).toBe('function')
+    expect(node.GRANUM_CONTRACT_VERSION).toBe(1)
   })
 
   it.each([
-    ['readManifest', 'stage 3', () => readManifest()],
     ['granumProvider', 'stage 4', () => granumProvider()],
     ['runRegistryCodegen', 'stage 4', () => runRegistryCodegen()],
     ['granum', 'stage 5', () => granum()],

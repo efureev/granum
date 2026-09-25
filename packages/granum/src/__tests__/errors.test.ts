@@ -20,11 +20,14 @@ describe('иерархия ошибок', () => {
       'DuplicateProviderIdError',
       'InvalidComponentKeyError',
       'InvalidComponentNameError',
+      'InvalidManifestError',
       'InvalidProviderError',
       'InvalidTokenKeyError',
+      'ManifestNotFoundError',
       'ProviderNotRegisteredError',
       'UnresolvedProviderDependencyError',
       'UnsupportedContractVersionError',
+      'UnsupportedManifestVersionError',
     ])
   })
 
@@ -36,6 +39,9 @@ describe('иерархия ошибок', () => {
     ['DuplicateProviderIdError', ['p', ['a', 'p']]],
     ['InvalidComponentKeyError', ['bad']],
     ['InvalidComponentNameError', ['p', 'bad name']],
+    ['InvalidManifestError', ['schema', 'details', 'components.X.entry', 'f.json']],
+    ['ManifestNotFoundError', ['@x/pkg', '/app']],
+    ['UnsupportedManifestVersionError', [2, 1, 'f.json']],
     ['InvalidProviderError', ['p', 'invalid-id', 'details', 'X']],
     ['InvalidTokenKeyError', ['p', '--x', 'light']],
     ['ProviderNotRegisteredError', ['p', 'ref']],
