@@ -2,18 +2,14 @@ import { describe, expect, it } from 'vitest'
 import * as build from '../build'
 import * as codegen from '../codegen'
 import { GRANUM_CONTRACT_VERSION } from '../contract/index'
+import * as engine from '../engine/index'
 import * as root from '../index'
-import { GranumNotImplementedError } from '../internal/notImplemented'
 import * as node from '../node'
-import { createThemeController } from '../runtime'
+import * as runtime from '../runtime'
 import { GRANUM_VERSION } from '../version'
-import { defineGranumConfig, granum } from '../vite'
+import * as vite from '../vite'
 
-/**
- * Каждая точка входа существует и честно сообщает, что ещё не реализована:
- * заглушка бросает `GranumNotImplementedError` с именем API и этапом, а не
- * возвращает `undefined`.
- */
+/** Каждая точка входа отдаёт свой публичный API (ТЗ §4.2). */
 describe('entry points', () => {
   it('contract exposes contract version 1 (C-2)', () => {
     expect(GRANUM_CONTRACT_VERSION).toBe(1)
@@ -27,27 +23,18 @@ describe('entry points', () => {
     expect(typeof root.defineGranumComponent).toBe('function')
     expect(typeof root.resolveGranum).toBe('function')
     expect(typeof root.GranumError).toBe('function')
-    expect(typeof node.readManifestSync).toBe('function')
-    expect(typeof build.granumProvider).toBe('function')
-    expect(typeof codegen.runRegistryCodegen).toBe('function')
-    expect(node.GRANUM_CONTRACT_VERSION).toBe(1)
   })
 
-  it.each([
-    ['granum', 'stage 5', () => granum()],
-    ['defineGranumConfig', 'stage 5', () => defineGranumConfig()],
-    ['createThemeController', 'stage 5', () => createThemeController()],
-  ])('%s is a typed stub for %s', (api, stage, call) => {
-    expect(call).toThrowError(GranumNotImplementedError)
-    try {
-      call()
-    }
-    catch (error) {
-      const e = error as GranumNotImplementedError
-      expect(e.api).toBe(api)
-      expect(e.stage).toBe(stage)
-      expect(e.code).toBe('not-implemented')
-      expect(e.message).toContain(api)
-    }
+  it('engine, build, vite, node, runtime and codegen expose their APIs', () => {
+    expect(typeof engine.createEngine).toBe('function')
+    expect(typeof build.granumProvider).toBe('function')
+    expect(typeof vite.granum).toBe('function')
+    expect(typeof vite.defineGranumConfig).toBe('function')
+    expect(typeof node.readManifestSync).toBe('function')
+    expect(typeof node.prepareApp).toBe('function')
+    expect(typeof node.emitCss).toBe('function')
+    expect(node.GRANUM_CONTRACT_VERSION).toBe(1)
+    expect(typeof runtime.createThemeController).toBe('function')
+    expect(typeof codegen.runRegistryCodegen).toBe('function')
   })
 })

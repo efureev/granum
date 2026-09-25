@@ -1,10 +1,7 @@
 /**
- * Точка входа `./runtime`: переключение тем в браузере (ТЗ §11).
- * Ни FS, ни зависимостей. Перенос из v1 — этап 5.
+ * Точка входа `./runtime`: переключение тем в браузере (ТЗ §11). Только типы,
+ * чистый парсер селекторов и контроллер над DOM: ни FS, ни зависимостей.
+ * Пара к нему — `virtual:granum/themes` плагина приложения.
  */
-import { notImplemented } from './internal/notImplemented'
-
-/** Контроллер тем поверх манифеста из `virtual:granum/themes`. Этап 5. */
-export function createThemeController(): never {
-  return notImplemented('createThemeController', 'stage 5')
-}
+export { createThemeController, type GranumThemeController, type GranumThemeControllerOptions, type GranumThemeStorage, type GranumThemeTarget } from './runtime/controller'
+export { type GranumThemeActivation, type GranumThemeEntry, type GranumThemeManifest, resolveThemeActivation, splitSelectorList } from './runtime/manifest'

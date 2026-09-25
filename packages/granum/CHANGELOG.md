@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Application plugin (stage 5): `granum(config)` Vite plugin orchestrates the pipeline
+  from one resolution — `virtual:granum.css` with cascade layers `tokens, base, themes,
+  components, utilities` (and per-layer slices), `virtual:granum/components` re-exporting
+  the selection, `virtual:granum/themes` for the runtime, an import guard for components
+  outside the selection, `components: 'imports'`, token pruning with app sources, and a
+  build report (`granum-report.json`). `./runtime` ported (`createThemeController`).
+  Demo apps `apps/app-{1,3,5,6}` with expectation-based verification.
+## Unreleased
+
 - Provider build (stage 4): `granumProvider()` Vite plugin builds the entries from the
   component registry, routes chunks and CSS into the contract layout, analyses the
   bundle graph (component files, edges, undeclared dependencies), extracts classes

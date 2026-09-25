@@ -1,0 +1,7 @@
+/* Палитра темы `crimson` — обычный CSS; читается при загрузке конфига (tokensRef). */
+:root {
+  --app-bg: #1f0a0d;
+  --app-fg: #ffe4e6;
+  --app-accent: #e11d48;
+  --app-muted: #7f1d2b;
+}

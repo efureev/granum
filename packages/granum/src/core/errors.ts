@@ -401,3 +401,20 @@ export class GranumCodegenError extends GranumError {
     super(message)
   }
 }
+
+/** Приложение импортирует компонент провайдера, не вошедший в селекцию (A-6, INV-JS-2). */
+export class ComponentOutsideSelectionError extends GranumError {
+  readonly code = 'component-outside-selection' as const
+
+  constructor(
+    readonly key: string,
+    readonly importer: string | undefined,
+    readonly selection: readonly string[],
+  ) {
+    const from = importer ? ` from '${importer}'` : ''
+    super(
+      `Component '${key}' is imported${from} but is not part of the granum selection `
+      + `[${selection.join(', ')}]. Add it to 'components' in granum.config (or use components: 'imports').`,
+    )
+  }
+}
