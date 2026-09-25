@@ -100,6 +100,12 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.report?.selection.map((s: { key: string }) => s.key)).toEqual(['@t/kit:Card', '@t/kit:Panel'])
     expect(app.report?.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@t/kit:Card'] }])
     expect(app.report?.prune.removable).toEqual(['t-unused'])
+    // Размеры слоёв — по блокам @layer собранного ассета (A-19); эмиссия лежит рядом.
+    expect(app.report?.sizesSource).toBe('bundle')
+    expect(app.report?.sizes.utilities.raw).toBeGreaterThan(0)
+    // Сборка теста без минификации, поэтому блок бандла с обёрткой `@layer …{}` не меньше эмиссии слоя.
+    expect(app.report?.sizes.components.raw).toBeGreaterThan(0)
+    expect(app.report?.emissionSizes.total.raw).toBeGreaterThan(0)
     expect(app.logs.at(-1)).toMatch(/2 components/)
   })
 

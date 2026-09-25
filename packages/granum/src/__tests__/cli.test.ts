@@ -36,6 +36,7 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
     classes: { input: 2, matched: 1, unmatched: [{ className: 'no-such-rule', sources: ['safelist:@x/kit:Card'] }], safelistRedundant: [] },
     tokens: { undefined: [] },
     prune: null,
+    sizesSource: 'emission',
     sizes: { tokens: { raw: 0, gzip: 20, brotli: 1 }, base: { raw: 0, gzip: 20, brotli: 1 }, themes: { raw: 21, gzip: 30, brotli: 25 }, components: { raw: 26, gzip: 40, brotli: 30 }, utilities: { raw: 22, gzip: 40, brotli: 30 }, total: { raw: 69, gzip: 80, brotli: 70 } },
     warnings: ['something'],
     ...(patch.reportExtra ? JSON.parse(patch.reportExtra) : {}),

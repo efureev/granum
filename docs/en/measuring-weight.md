@@ -37,20 +37,22 @@ yarn compare:js       # bench-one JS is byte-equal to a build without the plugin
   всего                      23 797       28 908   +5 111
   без vue                       617        5 290   +4 673
 
-СЛОИ GRANUM (эмиссия до минификации, из granum-report.json)      raw     gzip
-  tokens                                                      3 470    1 537
-  base                                                        1 429      767
-  themes                                                      7 028    2 237
-  components                                                  1 647      799
-  utilities                                                   2 877      681
+СЛОИ GRANUM (из бандла после минификации, granum-report.json)      raw     gzip
+  tokens                                                      1 258      566
+  base                                                          588      322
+  themes                                                      3 743      956
+  components                                                    773      347
+  utilities                                                   2 192      626
 
 ТОКЕНЫ В ДИСТРИБУТИВЕ: объявлено 117, достижимо 49, мёртвый груз 68
 ```
 
 Asset roles are `vue`, `pkg` (provider chunks), `css` (all granum CSS in one
 file), `entry`. An asset matching no role fails the report: there is no
-"other" bucket on purpose. Layers come from the build report, which is
-computed from the same emission as the CSS.
+"other" bucket on purpose. Layers come from the build report: the plugin
+splits the built asset by `@layer` blocks after minification
+(`sizesSource: 'bundle'`); emission sizes before minification sit next to
+them in `emissionSizes`.
 
 Token reachability is computed over the distribution: a root is a reference
 outside a custom property value (a CSS rule, a JS literal), then along

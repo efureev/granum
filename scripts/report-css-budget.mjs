@@ -82,7 +82,7 @@ const report = {
   tokens: { declared: subject.length, reachable: subject.length - unused.length, unused },
   engineInBundle: /granularity-spin|\bcreateGenerator\b|presetMini/.test(js),
   granum: stand.report
-    ? { selection: stand.report.selection.map(s => s.key), layers: stand.report.sizes, unmatched: stand.report.classes.unmatched.map(u => u.className), undefinedTokens: stand.report.tokens.undefined, prune: stand.report.prune ?? { mode: 'off' } }
+    ? { selection: stand.report.selection.map(s => s.key), layers: stand.report.sizes, sizesSource: stand.report.sizesSource ?? 'emission', emissionLayers: stand.report.emissionSizes ?? stand.report.sizes, unmatched: stand.report.classes.unmatched.map(u => u.className), undefinedTokens: stand.report.tokens.undefined, prune: stand.report.prune ?? { mode: 'off' } }
     : null,
 }
 const expectedFile = join(stand.dir, 'expected-budget.mjs')
@@ -114,7 +114,7 @@ else {
     out.push(`  ${'без vue'.padEnd(20)} ${pad(formatBytes(b - bv), 12)} ${pad(formatBytes(report.totals.withoutVue.gzip), 12)} ${pad(formatDelta(report.totals.withoutVue.gzip - (b - bv)), 8)}`)
   }
   if (report.granum) {
-    out.push('', 'СЛОИ GRANUM (эмиссия до минификации, из granum-report.json)      raw     gzip')
+    out.push('', `СЛОИ GRANUM (${report.granum.sizesSource === 'bundle' ? 'из бандла после минификации' : 'эмиссия до минификации'}, granum-report.json)      raw     gzip`)
     for (const [layer, size] of Object.entries(report.granum.layers))
       out.push(`  ${layer.padEnd(56)} ${pad(formatBytes(size.raw), 8)} ${pad(formatBytes(size.gzip), 8)}`)
     out.push(`  селекция: ${report.granum.selection.join(', ')}`)

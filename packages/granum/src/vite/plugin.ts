@@ -46,6 +46,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   let server: ViteDevServer | undefined
   let prepared: Promise<PreparedApp> | undefined
   let emitted: Promise<EmittedCss> | undefined
+  /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте (A-19). */
+  let bundleCss: string | undefined
 
   const prepare = (): Promise<PreparedApp> => {
     prepared ??= prepareApp(config, root)
@@ -58,6 +60,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   const invalidate = (): void => {
     prepared = undefined
     emitted = undefined
+    bundleCss = undefined
     if (!server)
       return
     for (const id of [RESOLVED_CSS, RESOLVED_COMPONENTS, RESOLVED_THEMES, ...LAYER_NAMES.map(n => `${RESOLVED_LAYER_PREFIX}${n}.css`)]) {
@@ -164,12 +167,22 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       return null
     },
 
+    generateBundle(_options, bundle): void {
+      const parts: string[] = []
+      for (const name of Object.keys(bundle).sort()) {
+        const item = bundle[name]
+        if (item && item.type === 'asset' && name.endsWith('.css') && typeof item.source === 'string')
+          parts.push(item.source)
+      }
+      bundleCss = parts.join('\n')
+    },
+
     async closeBundle(): Promise<void> {
       if (!isBuild)
         return
       const app = await prepare()
       const css = await emit()
-      const report = buildReport(app, css)
+      const report = buildReport(app, css, bundleCss !== undefined ? { bundleCss } : {})
       const file = config.report?.file ?? 'granum-report.json'
       if (file !== false) {
         const target = join(resolve(root, outDir), file)

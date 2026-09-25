@@ -134,4 +134,6 @@ themes.set('dark')
 
 `dist/granum-report.json` — селекция, темы и их источник, классы без правила
 с источниками, safelist-записи, покрытые статикой, план обрезки, токены без
-объявления, размеры слоёв raw/gzip/brotli. Прочитать его: `granum report`.
+объявления, размеры слоёв raw/gzip/brotli по собранному ассету после
+минификации (`sizesSource: 'bundle'`) и по эмиссии (`emissionSizes`).
+Прочитать его: `granum report`.

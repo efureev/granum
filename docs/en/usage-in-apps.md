@@ -137,5 +137,6 @@ overlay.
 
 `dist/granum-report.json` — the selection, themes and their source, classes
 without a rule with their sources, safelist entries covered by static
-classes, the prune plan, undefined tokens, layer sizes raw/gzip/brotli. Read
-it with `granum report`.
+classes, the prune plan, undefined tokens, layer sizes raw/gzip/brotli from
+the built asset after minification (`sizesSource: 'bundle'`) and from the
+emission (`emissionSizes`). Read it with `granum report`.

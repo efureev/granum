@@ -190,7 +190,7 @@ export function formatBuildReport(report: GranumBuildReport): string {
   if (report.prune)
     push(`Prune (${report.prune.mode}): removable ${report.prune.removable.length}, kept ${report.prune.kept}, dead patterns ${report.prune.deadPatterns.length}`)
   push()
-  push('Sizes (raw / gzip / brotli):')
+  push(`Sizes (raw / gzip / brotli, ${report.sizesSource === 'bundle' ? 'from the built bundle after minification' : 'from the emission before minification'}):`)
   for (const [name, size] of Object.entries(report.sizes))
     push(`  ${name.padEnd(11)} ${String(size.raw).padStart(8)} ${String(size.gzip).padStart(8)} ${String(size.brotli).padStart(8)}`)
   if (report.warnings.length) {

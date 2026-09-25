@@ -13,6 +13,9 @@ package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
   (`compare-js.mjs`), determinism of the application CSS and report, user
   guides in `docs/ru` and `docs/en`, invariant registry with verification
   references and a test that every `INV-*` has one.
+- Layer sizes in `granum-report.json` are now measured on the built CSS asset after
+  minification, by `@layer` blocks (`sizesSource: 'bundle'`); the pre-minification
+  emission sizes stay next to them as `emissionSizes`.
 - `granumResolver(config, options)` from `./vite` for auto-import tools
   (`unplugin-vue-components` shape); in `components: 'imports'` mode PascalCase tags
   found in `appSources` join the selection when exactly one provider declares the name.

@@ -9,6 +9,7 @@ import { Buffer } from 'node:buffer'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
 import { sortedUnique } from '../core/dedupe'
 import { GRANUM_VERSION } from '../version'
+import { extractLayerBlocks } from './cssLayerBlocks'
 import { LAYER_NAMES } from './emit'
 import { resolveInlinedCssSources } from './inlinedCss'
 
@@ -34,15 +35,40 @@ export interface GranumBuildReport {
     readonly undefined: readonly string[]
   }
   readonly prune: { readonly mode: string, readonly removable: readonly string[], readonly deadPatterns: readonly string[], readonly kept: number } | null
+  /**
+   * Размеры слоёв. `bundle` — по блокам `@layer` в собранном CSS после
+   * минификации (то, что уехало в дистрибутив); `emission` — по эмиссии
+   * плагина до минификации (dev, `css.layers: false` или отчёт без бандла).
+   */
+  readonly sizesSource: 'bundle' | 'emission'
   readonly sizes: Readonly<Record<LayerName | 'total', LayerSize>>
+  /** Размеры эмиссии до минификации — всегда; при `sizesSource: 'bundle'` отличаются от `sizes`. */
+  readonly emissionSizes: Readonly<Record<LayerName | 'total', LayerSize>>
   readonly warnings: readonly string[]
+}
+
+export interface BuildReportOptions {
+  /** CSS-ассеты бандла (конкатенация): источник размеров слоёв после минификации. */
+  readonly bundleCss?: string
+}
+
+/** Размеры по блокам `@layer` бандла; `undefined`, если блоков granum там нет. */
+export function bundleLayerSizes(bundleCss: string, prefix: string): Record<LayerName | 'total', LayerSize> | undefined {
+  const { blocks, statements } = extractLayerBlocks(bundleCss, prefix)
+  if (blocks.size === 0)
+    return undefined
+  const total = [...statements, ...LAYER_NAMES.map(name => blocks.get(name) ?? '')].join('')
+  return Object.fromEntries([
+    ...LAYER_NAMES.map(name => [name, sizeOf(blocks.get(name) ?? '')]),
+    ['total', sizeOf(total)],
+  ]) as Record<LayerName | 'total', LayerSize>
 }
 
 function sizeOf(text: string): LayerSize {
   return { raw: Buffer.byteLength(text), gzip: gzipSync(text).length, brotli: brotliCompressSync(text).length }
 }
 
-export function buildReport(app: PreparedApp, css: EmittedCss): GranumBuildReport {
+export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
   const { resolution } = app
   const sourcesOf = (className: string): string[] => {
     const out: string[] = []
@@ -88,10 +114,13 @@ export function buildReport(app: PreparedApp, css: EmittedCss): GranumBuildRepor
   const hasManifests = resolution.providers.some(p => p.form === 'manifest') && resolveInlinedCssSources(resolution).length >= 0
   const tokenUndefined = hasManifests ? [...consumed].filter(t => !declared.has(t) && !t.startsWith('--un-')).sort() : []
 
-  const sizes = Object.fromEntries([
+  const emissionSizes = Object.fromEntries([
     ...LAYER_NAMES.map(name => [name, sizeOf(css.layers[name])]),
     ['total', sizeOf(css.css)],
   ]) as Record<LayerName | 'total', LayerSize>
+  const fromBundle = options.bundleCss !== undefined && app.config.css?.layers !== false
+    ? bundleLayerSizes(options.bundleCss, app.config.css?.layerPrefix ?? 'granum')
+    : undefined
 
   const warnings: string[] = []
   for (const w of app.warnings)
@@ -122,7 +151,9 @@ export function buildReport(app: PreparedApp, css: EmittedCss): GranumBuildRepor
     prune: css.prune
       ? { mode: app.config.pruneTokens?.mode ?? 'off', removable: css.prune.removable, deadPatterns: css.prune.deadPatterns, kept: css.prune.kept.size }
       : null,
-    sizes,
+    sizesSource: fromBundle ? 'bundle' : 'emission',
+    sizes: fromBundle ?? emissionSizes,
+    emissionSizes,
     warnings,
   }
 }
