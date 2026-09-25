@@ -74,6 +74,23 @@ vanished expected discrepancy is as much an event as a new one:
 
 Bytes live in `hints` and are printed next to the facts as a reference.
 
+## The neighbouring stand: what is left over
+
+`bench-*` answer "how much does it weigh", `apps/dist-audit` answers "what is
+left of the package". It is an application of one `div` and one component on
+top of the miniature design system `fixtures/mini-ds-package`: two components,
+two themes, ten tokens with deliberate dead weight.
+
+```bash
+yarn workspace @granum-apps/dist-audit audit:dist
+```
+
+The audit reads the package manifest, the built CSS and JS and names each
+finding: the code of the unselected component (dropped by tree-shaking), its
+classes (not taken by the selection), the tokens removed by pruning, and
+package tokens in the distribution that nothing can reach. There must be none
+of the latter — that is what the stand fails on.
+
 ## Comparison with the v1 preset
 
 `apps/bench-one/v1-snapshot.css` is the CSS of the same stand built with

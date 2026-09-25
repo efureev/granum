@@ -1,0 +1,6 @@
+/* Собственный CSS компонента: рамка и поверхность из токенов темы. */
+.xxx-card {
+  border: 1px solid var(--xxx-line);
+  background: var(--xxx-bg);
+  color: var(--xxx-fg);
+}

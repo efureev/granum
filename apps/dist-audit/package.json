@@ -1,0 +1,18 @@
+{
+  "name": "@granum-apps/dist-audit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "@granum-fixtures/mini-ds": "0.1.0"
+  },
+  "scripts": {
+    "audit:dist": "node scripts/audit-dist.mjs",
+    "build": "vite build",
+    "dev": "vite",
+    "verify": "node ../../scripts/verify-app.mjs && node scripts/audit-dist.mjs"
+  }
+}

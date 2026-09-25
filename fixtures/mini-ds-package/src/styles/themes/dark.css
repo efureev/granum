@@ -1,0 +1,12 @@
+/* Тёмная тема: и атрибут, и класс — приложение выбирает способ активации. */
+.dark,
+[data-theme='dark'] {
+  --xxx-bg: #0b1120;
+  --xxx-fg: #e2e8f0;
+  --xxx-line: #1e293b;
+
+  --xxx-accent: #60a5fa;
+  --xxx-accent-fg: #0b1120;
+
+  --xxx-muted: #94a3b8;
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@granum-fixtures/mini-ds",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Miniature granum design system: two themes, base tokens, two components and deliberate dead weight for distribution audits.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/XxBadge": "./dist/components/XxBadge/index.js",
+    "./components/XxCard": "./dist/components/XxCard/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=Xx --exports=import"
+  }
+}
