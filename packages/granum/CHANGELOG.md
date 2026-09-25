@@ -13,6 +13,9 @@ package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
   (`compare-js.mjs`), determinism of the application CSS and report, user
   guides in `docs/ru` and `docs/en`, invariant registry with verification
   references and a test that every `INV-*` has one.
+- `granum codegen [<package-dir>] [--check] [--targets=barrel,exports,manifest,registry]`
+  regenerates the standard provider registries from the command line; `--check`
+  exits with `1` when they are stale.
 - Diagnostics and CLI (stage 6): `granum doctor | explain | why-css | tokens | prune |
   report` work from manifests and `granum.config.*` without building the application
   (`report` reads `dist/granum-report.json`). `doctor` checks referenced files, `@apply`

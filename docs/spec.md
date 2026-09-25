@@ -427,7 +427,7 @@ export default defineGranumConfig({
 
 | ID | Требование |
 |---|---|
-| D-1 | Команды: `doctor`, `explain <providerId:Name>`, `why-css <class>`, `tokens <providerId:Name> [--deep]`, `prune`, `report`. Все принимают путь к `granum.config.*` и `--json`. |
+| D-1 | Команды: `doctor`, `explain <providerId:Name>`, `why-css <class>`, `tokens <providerId:Name> [--deep]`, `prune`, `report`, `codegen [<package-dir>] [--check]`. Команды приложения принимают путь к `granum.config.*`; `codegen` работает в пакете-провайдере со стандартными целями B-14 (`barrel`, `exports`, `manifest`, `registry`). Все принимают `--json`. |
 | D-2 | `doctor` MUST проверять: валидность и версии манифестов, наличие файлов, на которые они ссылаются, граф провайдеров и компонентов, конфликты токенов с цепочкой источников, `token-undefined`, `safelist-redundant`, границу browser/node на бандле провайдера (B-16), нарушения раскладки. Выход `1` при `error`; `--strict` — и при `warn`. |
 | D-3 | `why-css <class>` MUST отвечать по карте `matched` движка и манифестам: каким правилом, из какого источника, из какого компонента или файла приложения класс пришёл. |
 | D-4 | Все команды MUST работать без сборки приложения, только по манифестам и конфигу; исключение — `report`, читающий `granum-report.json` собранного приложения. |

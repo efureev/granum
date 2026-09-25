@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -146,6 +146,62 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     const clean = appDir({ reportExtra: JSON.stringify({ classes: { input: 1, matched: 1, unmatched: [], safelistRedundant: [] } }) })
     expect(await runGranumCli(['report', '--strict'], io(clean).io)).toBe(0)
     expect(formatBuildReport(JSON.parse(json.out[0]!))).toContain('utilities         22       40       30')
+  })
+})
+
+/** Пакет-провайдер с размеченными реестрами — как в codegen.test.ts. */
+function providerDir(): string {
+  const root = mkdtempSync(join(tmpdir(), 'granum-cli-codegen-'))
+  const component = (name: string) => {
+    mkdirSync(join(root, 'src/components', name), { recursive: true })
+    writeFileSync(join(root, 'src/components', name, 'index.ts'), 'export {}\n')
+    writeFileSync(join(root, 'src/components', name, 'config.ts'), `export const ${name[0]!.toLowerCase()}${name.slice(1)}Config = defineGranumComponent(import.meta.url, { name: '${name}' })\n`)
+  }
+  component('GrAlert')
+  component('GrTabs')
+  mkdirSync(join(root, 'src/granum-provider'), { recursive: true })
+  writeFileSync(join(root, 'src/index.ts'), '// <granum:components>\n// </granum:components>\n')
+  writeFileSync(join(root, 'src/granum-provider/index.ts'), '// <granum:components:imports>\n// </granum:components:imports>\nexport const provider = defineGranumProvider({\n  components: {\n    // <granum:components:registry>\n    // </granum:components:registry>\n  },\n})\n')
+  // Один subpath компонента обязан быть: по нему генератор находит место ряда.
+  writeFileSync(join(root, 'package.json'), `${JSON.stringify({ name: '@acme/kit', exports: { '.': { import: './dist/index.js' }, './components/GrOld': { import: './dist/components/GrOld/index.js' } } }, null, 2)}\n`)
+  return root
+}
+
+describe('granum codegen', () => {
+  it('генерирует barrel, exports с манифестом и реестр; --check после — чисто', async () => {
+    const root = providerDir()
+    const t = io(root)
+    expect(await runGranumCli(['codegen'], t.io), t.err.join('\n')).toBe(0)
+    expect(t.out[0]).toContain('Components (2): GrAlert, GrTabs')
+    expect(t.out[0]).toContain('Written (3)')
+    expect(readFileSync(join(root, 'src/index.ts'), 'utf8')).toContain(`export * from './components/GrAlert'`)
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    expect(Object.keys(pkg.exports)).toEqual(['.', './granum.manifest.json', './components/GrAlert', './components/GrTabs'])
+    expect(pkg.exports['./components/GrOld']).toBeUndefined()
+    expect(readFileSync(join(root, 'src/granum-provider/index.ts'), 'utf8')).toContain('GrTabs: grTabsConfig,')
+    const check = io(root)
+    expect(await runGranumCli(['codegen', '.', '--check', '--json'], check.io), check.err.join('\n')).toBe(0)
+    expect(JSON.parse(check.out[0]!).stale).toEqual([])
+  })
+
+  it('--check при устаревших реестрах — код 1 со списком файлов; --targets ограничивает цели', async () => {
+    const root = providerDir()
+    expect(await runGranumCli(['codegen', root, '--targets=barrel'], io('/').io)).toBe(0)
+    const check = io(root)
+    expect(await runGranumCli(['codegen', '--check'], check.io)).toBe(1)
+    expect(check.out[0]).toContain('Out of date (2): package.json, src/granum-provider/index.ts')
+    const bad = io(root)
+    expect(await runGranumCli(['codegen', '--targets=barrel,nope'], bad.io)).toBe(2)
+    expect(bad.err[0]).toContain('unknown target')
+  })
+
+  it('ошибка генерации (нет exports) — код 1 с сообщением', async () => {
+    const root = providerDir()
+    writeFileSync(join(root, 'package.json'), '{ "name": "@acme/kit" }\n')
+    const t = io(root)
+    expect(await runGranumCli(['codegen', '--targets=manifest'], t.io)).toBe(1)
+    expect(t.err[0]).toContain('[granum]')
+    expect(t.err[0]).toContain('exports')
   })
 })
 

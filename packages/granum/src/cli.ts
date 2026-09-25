@@ -7,12 +7,13 @@ import type { GranumBuildReport } from './node/report'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { formatCodegenReport, parseCodegenTargets, runCodegenCommand } from './cli/codegen'
 import { loadGranumConfigFile } from './cli/loadConfig'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
 import { prepareApp } from './node/prepare'
 import { GRANUM_VERSION } from './version'
 
-export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'prune', 'report'] as const
+export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'prune', 'report', 'codegen'] as const
 export type CliCommand = typeof CLI_COMMANDS[number]
 
 export interface CliIo {
@@ -30,35 +31,51 @@ usage:
   granum tokens  <config> <providerId:Component> [--deep] [--json]
   granum prune   <config> [--json] [--strict]
   granum report  [<report.json>] [--json] [--strict]
+  granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
+                 [--prefix=Gr] [--components-dir=src/components] [--barrel=src/index.ts]
+                 [--registry=src/granum-provider/index.ts] [--subcomponents]
 
   <config> — path to granum.config.{ts,js,mjs} of the application; the
   application root is its directory. All commands work from manifests only,
   without building the application; 'report' reads dist/granum-report.json.
+  'codegen' runs in a provider package: it regenerates the barrel, the
+  component subpaths and manifest export in package.json and the provider
+  registry from src/components (marked blocks <granum:components…>).
 
 flags:
   --json      structured report instead of text
   --strict    doctor: warnings fail; prune: anything removable fails;
               report: unmatched classes or undefined tokens fail
   --deep      tokens: include the component's dependencies
+  --check     codegen: only compare, exit 1 when registries are out of date
   --help, --version`
 
 interface ParsedArgs {
   command?: string
   positionals: string[]
   flags: Set<string>
+  /** Флаги со значением: `--prefix=Gr`. */
+  values: Map<string, string>
 }
 
 function parseArgs(args: readonly string[]): ParsedArgs {
   const positionals: string[] = []
   const flags = new Set<string>()
+  const values = new Map<string, string>()
   for (const arg of args) {
-    if (arg.startsWith('--'))
-      flags.add(arg)
-    else
+    if (arg.startsWith('--')) {
+      const eq = arg.indexOf('=')
+      if (eq > 0)
+        values.set(arg.slice(0, eq), arg.slice(eq + 1))
+      else
+        flags.add(arg)
+    }
+    else {
       positionals.push(arg)
+    }
   }
   const command = positionals.shift()
-  return { ...(command !== undefined ? { command } : {}), positionals, flags }
+  return { ...(command !== undefined ? { command } : {}), positionals, flags, values }
 }
 
 function emit(io: CliIo, json: boolean, report: unknown, text: () => string): void {
@@ -66,7 +83,7 @@ function emit(io: CliIo, json: boolean, report: unknown, text: () => string): vo
 }
 
 export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<number> {
-  const { command, positionals, flags } = parseArgs(argv)
+  const { command, positionals, flags, values } = parseArgs(argv)
   const cwd = io.cwd ?? process.cwd()
   const json = flags.has('--json')
 
@@ -84,6 +101,25 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
   }
 
   try {
+    if (command === 'codegen') {
+      const targets = parseCodegenTargets(values.get('--targets'))
+      if (!targets) {
+        io.stderr(`granum codegen: unknown target in '--targets=${values.get('--targets')}' (expected barrel, exports, manifest, registry)\n\n${USAGE}`)
+        return 2
+      }
+      const report = await runCodegenCommand({
+        packageDir: resolve(cwd, positionals[0] ?? '.'),
+        targets,
+        check: flags.has('--check'),
+        subcomponents: flags.has('--subcomponents'),
+        ...(values.has('--prefix') ? { prefix: values.get('--prefix')! } : {}),
+        ...(values.has('--components-dir') ? { componentsDir: values.get('--components-dir')! } : {}),
+        ...(values.has('--barrel') ? { barrelFile: values.get('--barrel')! } : {}),
+        ...(values.has('--registry') ? { registryFile: values.get('--registry')! } : {}),
+      })
+      emit(io, json, report, () => formatCodegenReport(report, cwd))
+      return report.check && report.stale.length > 0 ? 1 : 0
+    }
     if (command === 'report') {
       const file = resolve(cwd, positionals[0] ?? 'dist/granum-report.json')
       const report = JSON.parse(readFileSync(file, 'utf8')) as GranumBuildReport

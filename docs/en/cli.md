@@ -14,6 +14,7 @@ granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
+granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
 ```
 
 A `.ts` config is loaded through the application's `vite`
@@ -31,7 +32,9 @@ native `import()`. The `default`, `granum` and `config` exports are accepted.
 `doctor` returns `1` on any `error` regardless of `--strict`; `explain`,
 `tokens` and `why-css` return `1` when the subject is not found; `prune`
 returns `1` only with `--strict` and removable tokens; `report` returns `1`
-with `--strict` when there are classes without a rule or undefined tokens.
+with `--strict` when there are classes without a rule or undefined tokens;
+`codegen` returns `1` with `--check` when registries are stale, and on a
+generation error.
 
 ## `doctor`
 
@@ -104,6 +107,28 @@ after" per file.
 Reads `granum-report.json`: selection, themes, classes without a rule with
 sources, safelist covered by statics, the prune plan, layer sizes
 raw/gzip/brotli, warnings.
+
+## `codegen`
+
+Runs in a provider package (the argument is its root, the current directory
+by default) and brings the registries in line with `src/components`: the
+`src/index.ts` barrel, component subpath exports and `./granum.manifest.json`
+in `package.json`, config imports and entries in
+`src/granum-provider/index.ts`. The generator writes only inside the marked
+blocks `<granum:components>`, `<granum:components:imports>`,
+`<granum:components:registry>`; everything around them belongs to the package.
+
+```bash
+granum codegen                       # all four targets
+granum codegen --check               # in CI: exit 1 when registries are stale
+granum codegen --targets=barrel,exports --prefix=Xh
+```
+
+`--prefix` is the component name prefix (`Gr` by default), from which the
+config export name is derived (`grAlertConfig`). `--components-dir`,
+`--barrel`, `--registry` override the paths; `--subcomponents` adds `exports`
+aliases for parts of compound components. Custom targets (`markedBlock`) go
+through the programmatic API of `@feugene/granum/codegen`.
 
 ## Programmatic access
 

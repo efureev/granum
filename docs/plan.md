@@ -110,6 +110,7 @@ granum/
 | 6.3 `report` по `granum-report.json` | D-1 |
 | 6.4 `bin/granum`, коды выхода, `--json`, `--strict` | INV-ERR-3 |
 | 6.5 Архитектурный тест (`architecture.test.ts`): `effective` записывает только `core/tokenLayers.ts`, никто не выводит значение из слоёв заново, потребители читают `tokenLayers` резолюции | INV-RES-3, INV-DIAG-1 |
+| 6.7 `granum codegen [<package-dir>] [--check] [--targets=…]` — стандартные цели B-14 из командной строки (добавлено после приёмки) | D-1, B-14 |
 | 6.6 Загрузка `granum.config.*` для CLI: `.ts` через `vite.loadConfigFromFile`, если `vite` резолвится из корня приложения, иначе нативный `import()`; экспорт `default` / `granum` / `config` | D-4 |
 
 ## Этап 7 — Приёмка и релиз (M) — выполнен 2026-09-25

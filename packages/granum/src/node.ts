@@ -1,3 +1,5 @@
+export type { CodegenCommandOptions, CodegenCommandReport, CodegenTargetName } from './cli/codegen'
+export { buildCodegenTargets, CODEGEN_TARGET_NAMES, formatCodegenReport, parseCodegenTargets, runCodegenCommand } from './cli/codegen'
 export { ConfigLoadError, loadGranumConfigFile } from './cli/loadConfig'
 export type { LoadedGranumConfig } from './cli/loadConfig'
 export type * from './config'

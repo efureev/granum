@@ -14,6 +14,7 @@ granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
+granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
 ```
 
 Конфиг `.ts` загружается через `vite` приложения (`loadConfigFromFile`), а
@@ -31,7 +32,8 @@ granum report  [dist/granum-report.json] [--json] [--strict]
 `doctor` возвращает `1` при любом `error` независимо от `--strict`;
 `explain`, `tokens` и `why-css` — `1`, если предмет не найден; `prune` — `1`
 только с `--strict` и при наличии удаляемых токенов; `report` — `1` с
-`--strict`, если есть классы без правила или токены без объявления.
+`--strict`, если есть классы без правила или токены без объявления; `codegen` —
+`1` с `--check`, если реестры устарели, и при ошибке генерации.
 
 ## `doctor`
 
@@ -101,6 +103,28 @@ CSS компонента, исходники приложения — и как�
 Читает `granum-report.json`: селекция, темы, классы без правила с
 источниками, safelist, покрытый статикой, план обрезки, размеры слоёв
 raw/gzip/brotli, предупреждения.
+
+## `codegen`
+
+Запускается в пакете-провайдере (аргумент — его корень, по умолчанию текущий
+каталог) и приводит реестры в соответствие с `src/components`: barrel
+`src/index.ts`, subpath-экспорты компонентов и `./granum.manifest.json` в
+`package.json`, импорты конфигов и записи в `src/granum-provider/index.ts`.
+Генератор пишет только внутрь размеченных блоков `<granum:components>`,
+`<granum:components:imports>`, `<granum:components:registry>`; всё вокруг
+принадлежит пакету.
+
+```bash
+granum codegen                       # все четыре цели
+granum codegen --check               # в CI: код 1, если реестры устарели
+granum codegen --targets=barrel,exports --prefix=Xh
+```
+
+`--prefix` — префикс имён компонентов (по умолчанию `Gr`), от него строится
+имя экспорта конфига (`grAlertConfig`). `--components-dir`, `--barrel`,
+`--registry` переопределяют пути; `--subcomponents` добавляет алиасы
+`exports` на части составных компонентов. Нестандартные цели (`markedBlock`)
+— через программный API `@feugene/granum/codegen`.
 
 ## Программный доступ
 

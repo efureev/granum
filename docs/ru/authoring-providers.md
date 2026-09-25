@@ -125,7 +125,9 @@ granumProvider({
 ## Codegen
 
 Реестр провайдера, barrel и `exports` генерируются из директорий
-компонентов:
+компонентов. Стандартный набор целей доступен из CLI —
+`granum codegen` и `granum codegen --check` для CI (см. [CLI](./cli.md));
+свои цели — программно:
 
 ```js
 // scripts/generate-registry.mjs

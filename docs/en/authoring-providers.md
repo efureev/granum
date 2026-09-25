@@ -127,7 +127,9 @@ in another component's chunks.
 ## Codegen
 
 The provider registry, the barrel and `exports` are generated from the
-component directories:
+component directories. The standard set of targets is available from the CLI —
+`granum codegen` and `granum codegen --check` for CI (see [CLI](./cli.md));
+custom targets programmatically:
 
 ```js
 // scripts/generate-registry.mjs
