@@ -91,6 +91,27 @@ has no side effects: tree-shaking removes what is unused. Plain imports of
 `@acme/ui/components/XhPanel` work too; the plugin neither rewrites provider
 code nor changes the chunk layout.
 
+## Auto-import
+
+For `unplugin-vue-components` and compatible tools there is a resolver: given
+a component name it returns the provider subpath; an unknown or ambiguous
+name (two providers with the same `Name`) is not resolved.
+
+```ts
+import { granum, granumResolver } from '@feugene/granum/vite'
+import Components from 'unplugin-vue-components/vite'
+
+export default defineConfig({
+  plugins: [vue(), granum(config), Components({ resolvers: [granumResolver(config, { prefix: 'Xh' })] })],
+})
+```
+
+In `components: 'imports'` mode the selection is extended not by the
+resolver but by a scan of PascalCase tags in `appSources`: `<XhPanel>`
+without an import joins the selection when exactly one provider of the graph
+declares the name. That keeps the selection independent of the bundler's
+transform order.
+
 ## Themes at runtime
 
 ```ts

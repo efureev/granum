@@ -24,6 +24,9 @@ type CacheKey = readonly [
   EngineInput['sources'],
 ]
 
+/** Сколько последних множеств классов помнить на генератор. */
+const OUTPUT_CACHE_SIZE = 8
+
 export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
   let last: { key: CacheKey, prepared: Promise<Prepared> } | undefined
 
@@ -36,12 +39,19 @@ export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
     return prepared
   }
 
+  const outputs = new WeakMap<object, Map<string, EngineOutput>>()
   return {
     name: 'builtin',
     extract: extractClasses,
     async generate(input: EngineInput): Promise<EngineOutput> {
       const { uno, sourceOf } = await prepare(input)
       const classes = [...new Set(input.classes)].sort()
+      // Кэш результата по генератору и множеству классов (A-17): в dev каждая
+      // правка исходников приложения заново собирает тот же вход из манифестов.
+      const key = classes.join(' ')
+      const cached = outputs.get(uno)?.get(key)
+      if (cached)
+        return cached
       const result = await uno.generate(new Set(classes), { preflights: true, safelist: false, minify: false })
 
       const matched = new Map<string, EngineMatch>()
@@ -62,11 +72,20 @@ export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
         })
       }
 
-      return {
+      const output: EngineOutput = {
         css: result.css,
         matched,
         unmatched: classes.filter(c => !matched.has(c)),
       }
+      let byKey = outputs.get(uno)
+      if (!byKey) {
+        byKey = new Map()
+        outputs.set(uno, byKey)
+      }
+      if (byKey.size >= OUTPUT_CACHE_SIZE)
+        byKey.delete(byKey.keys().next().value!)
+      byKey.set(key, output)
+      return output
     },
   }
 }

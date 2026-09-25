@@ -90,6 +90,26 @@ import { XhPanel } from 'virtual:granum/components'
 импорты `@acme/ui/components/XhPanel` тоже работают; плагин не переписывает
 код провайдера и не меняет раскладку чанков.
 
+## Auto-import
+
+Для `unplugin-vue-components` и совместимых инструментов есть резолвер: по
+имени компонента он отдаёт subpath провайдера, неизвестное или неоднозначное
+имя (два провайдера с одним `Name`) не резолвит.
+
+```ts
+import { granum, granumResolver } from '@feugene/granum/vite'
+import Components from 'unplugin-vue-components/vite'
+
+export default defineConfig({
+  plugins: [vue(), granum(config), Components({ resolvers: [granumResolver(config, { prefix: 'Xh' })] })],
+})
+```
+
+В режиме `components: 'imports'` селекция пополняется не резолвером, а
+сканом PascalCase-тегов в `appSources`: `<XhPanel>` без импорта попадает в
+селекцию, если имя объявляет ровно один провайдер графа. Так селекция не
+зависит от порядка трансформаций бандлера.
+
 ## Темы в рантайме
 
 ```ts

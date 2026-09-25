@@ -19,6 +19,8 @@ export interface AppSourcesScan {
   readonly consumes: readonly string[]
   /** Импорты вида `<pkg>/components/<Name>`: ключи `pkg:Name`. */
   readonly componentImports: readonly string[]
+  /** PascalCase-теги разметки (`<XhPanel>`): кандидаты в селекцию при auto-import (A-8). */
+  readonly componentTags: readonly string[]
 }
 
 const COMPONENT_IMPORT_RE = /["'](@[^/"']+\/[^/"']+|[^./@"'][^/"']*)\/components\/([A-Z][\w-]*)["']/g
@@ -36,14 +38,18 @@ export function listSourceFiles(dir: string, extensions: readonly string[]): str
   }
 }
 
+/** Открывающий тег с именем в PascalCase; kebab-case не считается: авто-импорт по нему всё равно ведёт к тому же имени через резолвер. */
+const COMPONENT_TAG_RE = /<([A-Z]\w*)(?=[\s/>])/g
+
 export function scanAppSources(config: GranumAppSources | undefined, root: string, engine: GranumEngine): AppSourcesScan {
   if (!config)
-    return { files: [], classes: [], consumes: [], componentImports: [] }
+    return { files: [], classes: [], consumes: [], componentImports: [], componentTags: [] }
   const extensions = config.extensions ?? DEFAULT_APP_EXTENSIONS
   const files: string[] = []
   const classes = new Set<string>()
   const consumes = new Set<string>()
   const imports = new Set<string>()
+  const tags = new Set<string>()
 
   for (const dir of config.dirs) {
     for (const file of listSourceFiles(resolve(root, dir), extensions)) {
@@ -60,6 +66,8 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
           classes.add(token)
         for (const m of text.matchAll(COMPONENT_IMPORT_RE))
           imports.add(`${m[1]}:${m[2]}`)
+        for (const m of text.matchAll(COMPONENT_TAG_RE))
+          tags.add(m[1]!)
       }
       const scan = scanTokenConsumption(text, file)
       for (const name of scan.uses.keys())
@@ -69,5 +77,5 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
     }
   }
 
-  return { files, classes: sortedUnique(classes), consumes: sortedUnique(consumes), componentImports: sortedUnique(imports) }
+  return { files, classes: sortedUnique(classes), consumes: sortedUnique(consumes), componentImports: sortedUnique(imports), componentTags: sortedUnique(tags) }
 }

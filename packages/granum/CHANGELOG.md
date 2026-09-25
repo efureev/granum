@@ -13,6 +13,12 @@ package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships
   (`compare-js.mjs`), determinism of the application CSS and report, user
   guides in `docs/ru` and `docs/en`, invariant registry with verification
   references and a test that every `INV-*` has one.
+- `granumResolver(config, options)` from `./vite` for auto-import tools
+  (`unplugin-vue-components` shape); in `components: 'imports'` mode PascalCase tags
+  found in `appSources` join the selection when exactly one provider declares the name.
+- In-process caches: manifests by file stat, engine output per class set — editing
+  application sources in dev neither re-reads manifests nor regenerates the same
+  utilities.
 - Demo apps `app-2` (safelist of runtime-assembled classes plus `tokenOverrides`) and
   `app-4` (classes of nested SFC parts from the manifest plus the extra engine rules
   under `engine.variablePrefix`) ported from the v1 preset; all six v1 apps now run

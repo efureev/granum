@@ -15,6 +15,7 @@ import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { TokenRefError } from '../core/errors'
+import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
 import { createEngine } from '../engine/builtin'
@@ -132,6 +133,28 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
   return changed ? { ...themes, define } : themes
 }
 
+/**
+ * Теги разметки → ключи селекции (A-8): имя берётся, если ровно один
+ * провайдер графа его объявляет; неоднозначное или чужое имя пропускается.
+ */
+export function tagSelection(tags: readonly string[], inputs: readonly GranumProviderInput[]): string[] {
+  if (tags.length === 0)
+    return []
+  const owners = new Map<string, string[]>()
+  for (const input of inputs) {
+    const node = toProviderNode(input)
+    for (const component of node.components)
+      owners.set(component.name, [...(owners.get(component.name) ?? []), node.id])
+  }
+  const out: string[] = []
+  for (const tag of tags) {
+    const providers = owners.get(tag)
+    if (providers?.length === 1)
+      out.push(`${providers[0]}:${tag}`)
+  }
+  return out
+}
+
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {
   const engine = createConfiguredEngine(config)
   const inputs = loadProviderInputs(config, root)
@@ -142,7 +165,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
   if (config.components === 'imports') {
     if (!config.appSources)
       warnings.push({ kind: 'imports-without-app-sources' })
-    components = appScan.componentImports
+    components = [...appScan.componentImports, ...tagSelection(appScan.componentTags, inputs)]
   }
   else {
     components = config.components

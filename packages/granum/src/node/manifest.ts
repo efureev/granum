@@ -5,7 +5,7 @@
  */
 import type { GranumLoadedManifest, GranumManifest, GranumTokenSet } from '../contract'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -152,9 +152,43 @@ export function locateManifest(packageName: string, fromDir: string): string {
   }
 }
 
-/** `locateManifest` + `readManifestSync`. */
+/**
+ * Кэш прочитанных манифестов на процесс (A-17): ключ — путь, версия —
+ * размер и mtime файла. Повторная подготовка приложения в dev (правка
+ * исходников, HMR) не перечитывает и не перехеширует манифесты; изменённый
+ * манифест (`vite build --watch` у провайдера) читается заново.
+ */
+const manifestCache = new Map<string, { readonly stamp: string, readonly loaded: GranumLoadedManifest }>()
+
+function fileStamp(file: string): string | undefined {
+  try {
+    const stat = statSync(file)
+    return `${stat.size}:${stat.mtimeMs}`
+  }
+  catch {
+    return undefined
+  }
+}
+
+/** `readManifestSync` с кэшем по пути и stat файла. */
+export function readManifestCached(file: string): GranumLoadedManifest {
+  const stamp = fileStamp(file)
+  const hit = manifestCache.get(file)
+  if (hit && stamp !== undefined && hit.stamp === stamp)
+    return hit.loaded
+  const loaded = readManifestSync(file)
+  if (stamp !== undefined)
+    manifestCache.set(file, { stamp, loaded })
+  return loaded
+}
+
+export function clearManifestCache(): void {
+  manifestCache.clear()
+}
+
+/** `locateManifest` + `readManifestCached`. */
 export function loadPackageManifest(packageName: string, fromDir: string): GranumLoadedManifest {
-  return readManifestSync(locateManifest(packageName, fromDir))
+  return readManifestCached(locateManifest(packageName, fromDir))
 }
 
 // ---------------------------------------------------------------------------
