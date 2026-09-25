@@ -1,0 +1,16 @@
+{
+  "name": "@granum-apps/bench-pruned",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@granum-fixtures/heavy": "0.1.0",
+    "vue": "^3.5.40"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "verify": "node ../../scripts/verify-app.mjs",
+    "sizes:check": "node ../../scripts/report-css-budget.mjs --strict"
+  }
+}

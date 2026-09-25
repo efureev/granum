@@ -49,6 +49,16 @@ if (expected.report) {
 
 // CLI на настоящем `granum.config.ts`: `doctor` обязан пройти без ошибок и
 // отдать JSON с той же селекцией, что в отчёте сборки (D-4, INV-DIAG-1).
+// Стенд без granum (`noGranum`) конфига не имеет — пропуск.
+if (expected.noGranum) {
+  if (existsSync(join(dir, 'dist', 'granum-report.json')))
+    failures.push('стенд без granum, а dist/granum-report.json есть')
+}
+else {
+  runDoctor()
+}
+
+function runDoctor() {
 const bin = createRequire(join(dir, 'package.json')).resolve('@feugene/granum/package.json').replace(/package\.json$/, 'dist/bin.js')
 const doctor = spawnSync(process.execPath, [bin, 'doctor', 'granum.config.ts', '--json'], { cwd: dir, encoding: 'utf8' })
 if (doctor.status !== 0) {
@@ -60,6 +70,7 @@ else {
   const built = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')).selection.map(s => s.key) : selection
   if (JSON.stringify(selection) !== JSON.stringify(built))
     failures.push(`granum doctor видит селекцию ${JSON.stringify(selection)}, а сборка — ${JSON.stringify(built)}`)
+}
 }
 
 const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name

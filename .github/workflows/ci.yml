@@ -103,6 +103,10 @@ jobs:
         run: yarn check:determinism
       - name: Verify built CSS of apps
         run: yarn verify:apps
+      - name: Compare bench-one CSS rules with the v1 snapshot (AC-2)
+        run: yarn compare:css
+      - name: Compare bench-one JS with a build without the plugin (AC-3)
+        run: yarn compare:js
       - name: Verify size budget of benchmark stands
         run: yarn sizes:check
 

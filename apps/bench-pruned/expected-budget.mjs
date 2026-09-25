@@ -1,0 +1,18 @@
+/**
+ * Ожидаемый бюджет bench-pruned. Главная строка — `tokens.maxUnused: 0`:
+ * стенд отличается от `bench-one` одной строкой конфига, и если после обрезки
+ * в дистрибутиве остаётся хоть один недостижимый токен — обрезка чего-то не
+ * увидела.
+ */
+export default {
+  purpose: 'бюджет того же приложения с включённой обрезкой токенов',
+  assets: { roles: ['vue', 'pkg', 'css', 'entry'] },
+  tokens: { maxUnused: 0, minDeclared: 40 },
+  granum: {
+    unmatched: ['shadow-legacy'],
+    undefinedTokens: [],
+    pruneMode: 'on',
+    noEngineInBundle: true,
+  },
+  hints: { cssGzip: 1300, savedVsBenchOneGzip: 700 },
+}
