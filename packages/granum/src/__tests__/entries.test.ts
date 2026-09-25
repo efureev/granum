@@ -21,9 +21,13 @@ describe('entry points', () => {
     expect(root.GRANUM_CONTRACT_VERSION).toBe(1)
   })
 
-  it('root re-exports the package version', () => {
+  it('root re-exports the package version, contract helpers and the resolver', () => {
     expect(root.GRANUM_VERSION).toBe(GRANUM_VERSION)
     expect(GRANUM_VERSION).toBe('0.0.0-test')
+    expect(typeof root.defineGranumProvider).toBe('function')
+    expect(typeof root.defineGranumComponent).toBe('function')
+    expect(typeof root.resolveGranum).toBe('function')
+    expect(typeof root.GranumError).toBe('function')
   })
 
   it.each([

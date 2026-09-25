@@ -172,7 +172,7 @@ interface GranumProvider {
 |---|---|
 | C-1 | `id` MUST быть непустой строкой без пробелов, уникальной в графе приложения; MAY содержать `:` (разделитель ключа — последнее двоеточие, INV-SEL-1). |
 | C-2 | `contractVersion` MUST быть равен `1`; несовпадение, включая большее значение, — `UnsupportedContractVersionError` при регистрации. |
-| C-3 | Имена компонентов внутри провайдера MUST быть уникальны и являться валидными сегментами пути (INV-CON-2). |
+| C-3 | Имена компонентов внутри провайдера MUST быть уникальны и являться валидными сегментами пути: `/^[A-Za-z][\w-]*$/` (INV-CON-2, `InvalidComponentNameError`). |
 | C-4 | `dependencies`: объект-инстанс тянет донора в граф; строка — мягкое требование присутствия по `id` (SPEC v1 §3.2). Объявление зависимости MUST NOT выбирать компоненты донора. |
 | C-5 | Провайдер, ссылающийся на компоненты другого провайдера, MUST перечислить донора в `peerDependencies`. |
 | C-6 | `baseUrl`, если задан, MUST быть абсолютным URL с завершающим `/`. Провайдер MUST NOT вычислять его литералом `new URL('..', import.meta.url)` (бандлер подменяет на `data:`), а MUST использовать `resolvePackageBaseUrl`. Для манифестной формы поле не используется. |
@@ -185,11 +185,12 @@ interface GranumComponentDescriptor {
   name: string
   dependencies?: readonly GranumComponentDependency[]   // 'Name' | 'providerId:Name' | { provider, components }
   safelist?: readonly string[]
-  cssFiles?: readonly string[]                          // относительные пути к CSS, читаемым как есть
+  cssFiles?: readonly string[]                          // после define*: `components/<Name>/<file>`, относительно корня раскладки
   tokenDefinitions?: Readonly<Record<string, GranumTokenSet>>
-  tokenDefinitionsRef?: Readonly<Record<string, GranumTokenRef | string>>
+  tokenDefinitionsRef?: Readonly<Record<string, GranumTokenRef>>   // после define*: объект с абсолютным `url`
   dynamicTokens?: readonly string[]                     // токены, имена которых собираются в рантайме
   group?: string
+  sourceUrl?: string                                    // `import.meta.url` модуля config.ts; нужен только сборке провайдера
 }
 ```
 
@@ -198,7 +199,7 @@ interface GranumComponentDescriptor {
 | C-8 | `safelist` MUST содержать только собственные классы компонента, недоступные статическому извлечению. Классы, написанные в шаблоне литерально, MUST NOT дублироваться в safelist; пересечение с извлечёнными классами — предупреждение сборки провайдера `safelist-redundant` (INV-MAN-4). |
 | C-9 | `dependencies` MUST покрывать фактические импорты: если код компонента импортирует файл из директории другого компонента (напрямую или через общий чанк), тот MUST быть достижим из `dependencies`. Проверяется сборкой провайдера по графу модулей (не по тексту бандла, как в v1), нарушение — ошибка `undeclared-dependency` (INV-CON-5). |
 | C-10 | Импорт константы, типа или хелпера из директории другого компонента зависимостью не является; объявлять его SHOULD NOT (тянет чужой CSS и safelist). |
-| C-11 | `cssFiles` — пути относительно `config.ts`; `defineGranumComponent` нормализует их к путям относительно корня пакета. Механизма `cssFileAssetNames` нет: в манифесте лежит один путь относительно манифеста (§15.2). |
+| C-11 | Во вводе `defineGranumComponent` `cssFiles` — пути относительно `config.ts`; хелпер нормализует их к `components/<Name>/<file>` относительно корня раскладки и сохраняет `sourceUrl`, по которому сборка провайдера находит исходник. Путь, выходящий за директорию компонента, отклоняется (`css-file-escapes-component`). Механизма `cssFileAssetNames` нет: в манифесте лежит один путь относительно манифеста (§15.2). |
 | C-12 | Ключи токенов в `tokenDefinitions` MUST NOT начинаться с `--`; префикс добавляет генератор. Ключ с `--` — ошибка регистрации `InvalidTokenKeyError` (в v1 было молчаливое `----x`). |
 | C-13 | `tokenDefinitionsRef` — ссылка на CSS, из которого токены читаются при сборке провайдера (а не приложения, как в v1) и материализуются в манифест. `strict` по умолчанию `true`. |
 | C-14 | `dynamicTokens` — имена (или префиксы с `*`) токенов, которые компонент читает в рантайме; они MUST попадать в манифест как потребляемые и MUST NOT удаляться обрезкой. |
@@ -293,12 +294,12 @@ interface GranumComponentDescriptor {
 
 | ID | Требование |
 |---|---|
-| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: ManifestLike[], config }` без обращения к FS и сети; результат — `Resolution`. |
+| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: (GranumProvider \| GranumLoadedManifest)[], components?, themes? }` без обращения к FS и сети; результат — `GranumResolution`. `GranumLoadedManifest` — `{ manifest, baseUrl }`: JSON плюс директория файла как база путей. |
 | R-2 | `Resolution` MUST содержать: упорядоченный список провайдеров, реестр компонентов, селекцию после транзитивного замыкания в post-order DFS (INV-SEL-2), активный набор тем с источником (`namesSource`), слои токенов и эффективные значения по темам, объединённые множества классов и safelist по компонентам, список CSS-ссылок в порядке эмиссии, предупреждения. |
 | R-3 | Резолюция MUST мемоизироваться по идентичности объекта конфига; все каналы одного билда MUST использовать один и тот же объект `Resolution` (INV-RES-1). |
 | R-4 | Ошибки резолюции MUST быть типизированы и нести структурные поля (§14). |
 | R-5 | Вычисление эффективного значения токена MUST выполняться одной функцией (`tokenLayers`), которую используют эмиссия CSS, отчёт, `granum tokens` и prune (INV-THM-3). |
-| R-6 | Резолвер MUST принимать смешанный вход: манифесты и объекты `GranumProvider`. Для объектной формы поля `classes` и `tokens.consumes` считаются пустыми и заполняются позже медленным путём в `./node` (сканирование исходников), с предупреждением `provider-without-manifest`. |
+| R-6 | Резолвер MUST принимать смешанный вход: манифесты и объекты `GranumProvider`; обе формы нормализуются в `ProviderNode`, и всё ядро ниже работает только с узлами. Для объектной формы поля `classes` и `tokens.consumes` считаются пустыми и заполняются позже медленным путём в `./node` (сканирование исходников), с предупреждением `provider-without-manifest`. Отброшенный `strictTokens` override — предупреждение `override-skipped` в резолюции, а не `console.warn`. |
 
 ---
 
@@ -464,6 +465,8 @@ export default defineGranumConfig({
 | путь в манифесте абсолютный или с `..` | `InvalidManifestError` (`path-escapes-package`) | чтение манифеста |
 | пустой / невалидный `id` | `InvalidProviderError` (`invalid-id`) | регистрация |
 | `baseUrl` не URL / без `/` | `InvalidProviderError` (`invalid-base-url`, `base-url-not-a-directory`) | регистрация |
+| запись `dependencies` не инстанс и не непустая строка | `InvalidProviderError` (`invalid-dependency`) | регистрация |
+| `cssFiles` дескриптора вне `components/<Name>/` | `InvalidProviderError` (`css-file-escapes-component`) | регистрация |
 | ключ токена с `--` | `InvalidTokenKeyError` | регистрация |
 | два инстанса с одним `id` | `DuplicateProviderIdError` | регистрация |
 | два компонента с одним именем | `DuplicateComponentNameError` | регистрация |

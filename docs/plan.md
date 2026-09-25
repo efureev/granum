@@ -37,7 +37,7 @@ granum/
 | 0.4 CI: jobs `docs-parity`, `test` (lint, typecheck, unit, scripts), `build` (publint, `check:boundary`), `contract` (build:all, doctor, verify, sizes), `publish-npm` по тегу | каркас всех проверок приёмки; `contract` до этапа 4 штатно пропускает пустые каталоги |
 | 0.5 Скопировать комплект ТЗ в `docs/`, завести `docs/ru`, `docs/en`, `check-docs-parity` | N-8 |
 
-## Этап 1 — Контракт и резолвер (M)
+## Этап 1 — Контракт и резолвер (M) — выполнен 2026-09-25
 
 | Задача | Результат |
 |---|---|
@@ -45,7 +45,7 @@ granum/
 | 1.2 Проверки при регистрации: id, имя компонента как сегмент пути, ключ токена с `--`, версия контракта | INV-CON-1,2,3,7; INV-ERR-1 |
 | 1.3 Перенести `src/core` (expandProviders, registry, resolveSelection, resolveThemes, tokenLayers, dedupe, errors, debug); заменить вход на `ManifestLike | GranumProvider` | R-1…R-6 |
 | 1.4 Определить тип `Resolution` со всеми полями R-2; мемоизация по идентичности | INV-RES-1,2 |
-| 1.5 Перенести тесты ядра v1 (36 файлов) с адаптацией входа; добавить тесты на новые ошибки | INV-SEL-*, INV-THM-1..4 |
+| 1.5 Перенести тесты ядра v1 (8 наборов: expandProviders, providerValidation, resolveSelection, resolveThemes, tokenLayers, appThemes, contractHelpers, debug) с адаптацией входа; добавить тесты на новые ошибки, манифестную форму, мемоизацию, детерминизм | INV-SEL-*, INV-THM-1..4, INV-RES-1..3, INV-DET-3 |
 | 1.6 Иерархия ошибок `GranumError` с `code`; тест, что все классы наследуют её | INV-ERR-2 |
 
 ## Этап 2 — Движок (L)
