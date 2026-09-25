@@ -98,7 +98,7 @@ granum/
 | 5.8 Dev: HMR по виртуальным модулям, кэш по `hash` манифеста, watcher на манифесты в монорепо, оверлей ошибок | A-16…A-18 |
 | 5.9 Отчёт сборки `granum-report.json` с размерами слоёв (порт `cssBudget.mjs` в `./node`) | A-19, A-20, INV-DIAG-1,2 |
 | 5.10 Перенести `./runtime` из v1 без изменений | RT-1, RT-2 |
-| 5.11 Приложения `apps/app-{1,3,5,6}` на granum: без `unocss`, `granum.config.ts` + `granum()`; `expected.mjs` сверяет CSS, JS и отчёт (`scripts/verify-app.mjs`). Стенды `bench-*` и остальные приложения — этап 7 | AC-5 |
+| 5.11 Приложения `apps/app-{1..6}` на granum: без `unocss`, `granum.config.ts` + `granum()`; `expected.mjs` сверяет CSS, JS и отчёт (`scripts/verify-app.mjs`). `app-2` (safelist + `tokenOverrides`) и `app-4` (вложенные SFC + доп-правила под `variablePrefix`) перенесены после приёмки; стенды `bench-*` — этап 7 | AC-5 |
 | 5.12 e2e в браузере: INV-CSS-6 (утилита перебивает базу), AC-9 (HMR) — перенесено в этап 7 (нужен браузер) | INV-CSS-6, AC-9 |
 
 ## Этап 6 — Диагностика и CLI (M) — выполнен 2026-09-25
