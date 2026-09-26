@@ -403,9 +403,23 @@ export function formatDoctorReport(report: DoctorReport): string {
   push('granum doctor')
   push('=============')
   push()
+  // Движок называется первым: от него зависит и список классов каждого пакета,
+  // и то, какие правила вообще будут исполнены (D-E1, D-E2).
+  push(`Engine: ${report.engine.name}${report.engine.version ? ` ${report.engine.version}` : ''} — dialect ${report.engine.dialect}, vocabulary ${report.engine.vocabulary}`)
+  push()
   push(`Providers (${report.providers.length}):`)
-  for (const p of report.providers)
-    push(`  • ${p.id} [${p.form}${p.version ? ` ${p.version}` : ''}] — components: ${p.components}${p.hasTheme ? ', theme: yes' : ''}${p.hasEngine ? ', engine: yes' : ''}`)
+  for (const p of report.providers) {
+    const extra: string[] = [`components: ${p.components}`]
+    if (p.hasTheme)
+      extra.push('theme: yes')
+    if (p.hasEngine)
+      extra.push('engine rules: yes')
+    // Диалект рядом с формой: он объясняет и пересчёт, и пропущенные правила.
+    extra.push(`dialect: ${p.dialect ?? 'none'}`)
+    if (p.dialect !== null && p.vocabulary !== report.engine.vocabulary)
+      extra.push(`classes: ${p.classSource}`)
+    push(`  • ${p.id} [${p.form}${p.version ? ` ${p.version}` : ''}] — ${extra.join(', ')}`)
+  }
   push()
   push(`Selected components (${report.components.length}, order = deps → dependents):`)
   for (const c of report.components) {
