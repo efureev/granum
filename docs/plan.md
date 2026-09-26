@@ -133,22 +133,22 @@ granum/
 ТЗ этапа — [`spec-engine.md`](./spec-engine.md); идентификаторы требований ниже
 оттуда. Контракт ломается без обратной совместимости: `0.1.0` опубликован как
 проверка и потребителей не имеет. Порядок шагов важен — каждый следующий
-опирается на предыдущий, и до 8.10 нормативные разделы `spec.md` не трогаются.
+опирается на предыдущий, и до 8.11 нормативные разделы `spec.md` не трогаются.
 
 | Задача | Результат |
 |---|---|
-| 8.1 Диалект в интерфейсе: `GranumEngine.dialect`, `parseDialect`, валидатор формата; `EngineInput`/`EngineOutput` без изменений | E-1, E-4 |
-| 8.2 Новый пакет `packages/granum-engine-mini`: переезд `src/engine/{vendor,rules,builtin}`, `THIRD_PARTY_NOTICES.md`, `scripts/vendor-unocss.mjs`, golden-тест и `check:vendor`; фабрика `miniEngine(options)`, диалекты по `extraRules`; ядро оставляет типы, `extractClasses`, `parseDialect` | E-5, INV-ENG-4, INV-ENG-9 |
+| 8.1 Диалект и отпечаток в интерфейсе: `GranumEngine.dialect`, `.vocabulary`, `.version?`; `parseDialect`, валидатор формата, `vocabularyFingerprint` по идентификаторам правил и именам вариантов; `EngineInput`/`EngineOutput` без изменений | E-1…E-6, E-7 |
+| 8.2 Новый пакет `packages/granum-engine-mini`: переезд `src/engine/{vendor,rules,builtin}`, `THIRD_PARTY_NOTICES.md`, `scripts/vendor-unocss.mjs`, golden-тест и `check:vendor`; фабрика `miniEngine(options)`, диалект по `extraRules`, отпечаток по фактическому набору правил (включая `options.rules`) | E-8, INV-ENG-4, INV-ENG-7 |
 | 8.3 Ядро без движка: `./engine` только типы и хелперы; тест на состав экспортов и `check:boundary` на `dist` | INV-ENG-9, AC-E2 |
-| 8.4 Конфиг приложения: `engine` обязателен и принимает инстанс; `'builtin'` и объект опций убраны; `InvalidConfigError` с путём до поля | A-E1, A-E2 |
+| 8.4 Конфиг приложения: `engine` обязателен и принимает инстанс; `'builtin'` и объект опций убраны; `InvalidConfigError` с путём до поля при отсутствии диалекта или отпечатка | A-E1, A-E2 |
 | 8.5 Контракт провайдера: `provider.engine = { dialect, rules?, variants?, preflights? }`, `rules-without-dialect` и `invalid-dialect` при регистрации; `granumProvider({ engine })` требует инстанс; сверка утверждённого диалекта с движком сборки — `EngineDialectMismatchError` | C-E1…C-E4, INV-ENG-10 |
-| 8.6 Манифест версии 2: блок `engine { dialect, name, version?, module }`, удаление `engineModule`, правила чтения включая `dialect-without-classes`; канонизация и хеш учитывают новый блок | M-E1…M-E4, INV-MAN-9 |
-| 8.7 Сверка диалектов в приложении: решение до генерации, пересчёт классов из `files` движком приложения при несовпадении, `safelist` не пересчитывается, правила грузятся только при равенстве | A-E3…A-E6, INV-ENG-8, AC-E3 |
-| 8.8 Диагностика: поля движка и по-провайдерные диалекты в отчёте, коды `provider-dialect-mismatch`, `provider-dialect-checked`, `engine-rules-skipped` в докторе, объяснение через диалекты в `why-css` | D-E1…D-E3 |
-| 8.9 Фикстуры: `fixtures/atoms-engine` (движок ~80 строк для `granum-fixtures/atoms@1`), `atoms-package` (свой диалект + модуль правил), `plain-package` (диалект `null`, только свой CSS и токены); существующие четыре пересобираются `miniEngine()`; `expected-manifest.mjs` на блок `engine` у каждой | §12 ТЗ, AC-E4 |
-| 8.10 Приложения: явный движок во всех существующих; новые `app-dialects` (движок без доп-правил против `heavy` с `divide-y` — ветка «наборы разошлись») и `app-atoms` (свой движок, пакет со своим диалектом плюс пакет без диалекта); `expected.doctor` на каждую ветку таблицы §8 | §13 ТЗ, AC-E1, AC-E5 |
-| 8.11 Документы: нормативная часть переносится в `spec.md` (§5 контракт, §7 манифест, §9 движок, §10 конфиг, §14 ошибки), инварианты INV-ENG-7…10 и INV-MAN-9 в реестр, ADR-8, перегенерация пакетного `SPEC.md`, руководства `docs/ru` и `docs/en` | AC-E6 |
-| 8.12 Релиз `0.2.0`: CHANGELOG с ломающими изменениями, тег, публикация | — |
+| 8.6 Манифест версии 2: блок `engine { dialect, vocabulary, name, version?, module }`, удаление `engineModule`, правила чтения `dialect-without-classes` и `dialect-vocabulary-mismatch`, запись `null/null` по факту сборки; канонизация и хеш учитывают новый блок | M-E1…M-E5, INV-MAN-9 |
+| 8.7 Сверка в приложении: решение по таблице §8 до генерации, пересчёт классов из `files` движком приложения при различии отпечатков, правила грузятся по равенству диалектов, `safelist` не пересчитывается, `lost` остаётся в `unmatched`, кэш пересчёта в памяти | A-E3…A-E8, INV-ENG-8, INV-ENG-11, INV-ENG-12, AC-E3, AC-E6, AC-E7 |
+| 8.8 Диагностика: движок и по-провайдерные диалекты с отпечатками в отчёте, коды `provider-dialect-mismatch`, `provider-vocabulary-drift`, `provider-classes-recovered`, `provider-classes-dropped`, `engine-rules-skipped` в докторе, объяснение через диалект и отпечаток в `why-css` | D-E1…D-E3 |
+| 8.9 Фикстуры: `fixtures/atoms-engine` (движок для `granum-fixtures/atoms@1` на публичных хелперах ядра), `atoms-package` (свой диалект + модуль правил), `plain-package` (диалект `null`, только свой CSS и токены); существующие четыре пересобираются `miniEngine()`; `expected-manifest.mjs` на блок `engine` у каждой | §12 ТЗ, AC-E4 |
+| 8.10 Приложения: явный движок во всех существующих; `app-2` переводится на `miniEngine({ rules })` — ветка «отпечаток другой»; новые `app-dialects` (движок без доп-правил против `heavy` с `divide-y` — «наборы разошлись») и `app-atoms` (свой движок, пакет со своим диалектом плюс пакет без диалекта); `expected.doctor` на каждую ветку таблицы §8 | §13 ТЗ, AC-E1, AC-E5 |
+| 8.11 Документы: нормативная часть переносится в `spec.md` (§5 контракт, §7 манифест, §9 движок, §10 конфиг, §14 ошибки), инварианты INV-ENG-7…12 и INV-MAN-9 в реестр, ADR-8 и ADR-9, перегенерация пакетного `SPEC.md`, руководства `docs/ru` и `docs/en` | AC-E8 |
+| 8.12 Релиз `0.2.0`: CHANGELOG с ломающими изменениями, тег, публикация обоих пакетов | — |
 
 Проверка готовности этапа, помимо обычного `yarn test:all`: каждая строка
 таблицы решений §8 ТЗ имеет стенд или тест, и `heavy`, собранный одним движком,
