@@ -17,7 +17,7 @@
 | INV-CON-3 | `contractVersion` сравнивается строго; большее значение — тоже ошибка | v1 §2 | `./contract` | `UnsupportedContractVersionError`; unit |
 | INV-CON-4 | `safelist` содержит только собственные классы, недоступные статике; пересечение со статикой фиксируется как `safelist-redundant` | v1 §4, усилен | `./build` | `buildPlugin.test.ts`; `fixtures/heavy-package/expected-manifest.mjs` (`safelist-redundant` у XhButton); `doctor` |
 | INV-CON-5 | Объявленный граф `dependencies` покрывает фактические импорты между директориями компонентов (включая через общие чанки) | v1 §4.1, усилен | `./build` | `UndeclaredDependencyError` по графу модулей; интеграционный тест на фикстуре с намеренно пропущенным ребром |
-| INV-CON-6 | Импорт хелпера/типа/константы из чужой директории не считается зависимостью и не обязан объявляться | v1 §4.1 | `./build` | тест: фикстура `overlayZ` (общий модуль вне `components/`) не даёт ребра |
+| INV-CON-6 | Общий модуль, лежащий ВНЕ `components/<Name>/`, ребром графа не является, сколько бы компонентов его ни брали; импорт файла из чужой директории компонента — ребро, даже если это хелпер или константа (на бандле их не отличить) | v1 §4.1, уточнён | `./build` | `buildGraph.test.ts`: фикстура `overlayZ` (общий модуль вне `components/`) не даёт ребра; `buildPlugin.test.ts`: импорт из `components/Card/` без объявления — `UndeclaredDependencyError` |
 | INV-CON-7 | Ключи токенов без `--`; префикс добавляет генератор | v1 §6.1, усилен | `./contract` | `InvalidTokenKeyError` при регистрации; unit |
 | INV-CON-8 | Объявление зависимости провайдера не выбирает компоненты донора | v1 §3.2 | резолвер | `invariantsCoverage.test.ts` |
 | INV-CON-9 | Кросс-провайдерный донор перечислен в `peerDependencies` провайдера | v1 §3.2 | `./build` | `findMissingPeers` (`invariantsCoverage.test.ts`); предупреждение `peer-missing` в манифесте и в `doctor` |
@@ -30,7 +30,7 @@
 | INV-LAY-1 | Для каждого компонента существует `components/<Name>/index.js`, и его SFC-код лежит под этой директорией | v1 §7.1 | `./build` | плагин формирует entry и chunkFileNames; `doctor` проверяет на `dist`; интеграционный тест |
 | INV-LAY-2 | Манифест лежит в корне раскладки и экспортируется как `./granum.manifest.json`; база путей — директория манифеста | new | `./build`, `./codegen` | `PackageExportsError` при сборке; тест разрешения через `import.meta.resolve` |
 | INV-LAY-3 | В собранном коде провайдера нет `data:`-URL на месте путей пакета | v1 §3.1 | `./build` | `analyzeBundle` (`data-url` в `BoundaryViolation`); `scripts/verify-fixture.mjs` — grep `data:text/css` по файлам компонентов |
-| INV-LAY-4 | Общие чанки группы лежат в `groups/<g>/shared/`; общие чанки вне групп — в `chunks/`, и они учтены как рёбра графа | v1 §7.2, усилен | `./build` | unit на `chunkFileNames`; тест графа |
+| INV-LAY-4 | Общие чанки группы лежат в `groups/<g>/shared/`; общие чанки вне групп — в `chunks/`. Общий чанк входит в файлы каждого дотянувшегося компонента, а рёбра находятся сквозь него, а не от него | v1 §7.2, уточнён | `./build` | `buildLayout.test.ts` (`chunkFileNames`); `buildGraph.test.ts` (общий модуль ребром не считается, рёбра транзитивны) |
 | INV-BND-1 | Браузерные entry (`.`, `./contract`, `./engine`, `./runtime`) и браузерный код провайдера не импортируют `node:*` и node-entry granum | v1 §9, усилен | `./build`, CI пакета | `BoundaryViolationError` при сборке провайдера; тест на `dist` granum: grep `node:` в браузерных бандлах пуст |
 | INV-BND-2 | Точка входа `./vite` и `./build` не импортируют `unocss`, `@unocss/*` | new | пакет | тест на `dist`; `dependencies` пусты (INV-DEP-1) |
 
@@ -51,7 +51,7 @@
 
 | ID | Инвариант | Источник | Владелец | Проверка |
 |---|---|---|---|---|
-| INV-RES-1 | За один билд существует ровно одна `Resolution`, и все каналы читают её; мемоизация по идентичности конфига | v1 (архитектура) | резолвер, `./vite` | unit на мемоизацию; тест, что плагин вызывает `resolveGranum` один раз |
+| INV-RES-1 | За один билд существует ровно одна `Resolution`, и все каналы читают её; мемоизация по идентичности конфига | v1 (архитектура) | резолвер, `./vite` | `resolve.test.ts` — мемоизация по идентичности входа; единственность в билде держит кэш `prepareApp` в плагине (`vitePlugin.test.ts`), отдельные вызовы ради реестра (резолвер авто-импорта) в эмиссии не участвуют |
 | INV-RES-2 | Резолвер чист: без FS, сети, времени, случайности; одинаковый вход — глубоко равный выход | new | резолвер | unit; тест, что `./core` не импортирует `node:` |
 | INV-RES-3 | Эффективное значение токена вычисляется одной функцией для эмиссии, отчёта, CLI и prune | v1 §6.3 | резолвер (`tokenLayers`) | `architecture.test.ts`: `effective` пишет только `tokenLayers.ts`, потребители читают цепочки резолюции; `diagnostics.test.ts` (override виден в `explain`/`tokens` тем же значением) |
 | INV-SEL-1 | Разделитель ключа `providerId:Name` — последнее двоеточие; обе части непусты | v1 §5.1 | резолвер | `InvalidComponentKeyError`; unit с `a:b:C` |
@@ -83,7 +83,7 @@
 | INV-CSS-2 | Внутри слоёв порядок нормативен: провайдеры в порядке графа; темы — структурные блоки, затем файлы с дедупом по пути; компоненты — в порядке селекции; утилиты — в порядке правил движка | v1 §8 | сборщик CSS | снапшот на фикстуре с тремя провайдерами |
 | INV-CSS-3 | Вход движка = ∪(classes селекции) ∪ ∪(safelist селекции) ∪ классы `appSources`; ничего сверх | new | `./vite` | unit на сборку входа; тест, что класс из невыбранного компонента не даёт CSS |
 | INV-CSS-4 | Конкатенация `virtual:granum/layers/*.css` в порядке слоёв побайтно равна `virtual:granum.css` | new | `./vite` | `emitCss.test.ts`; `vitePlugin.test.ts` (A-12) |
-| INV-CSS-5 | CSS компонентов проходит побайтно, кроме раскрытия `@apply` и обрезки токенов; один и тот же CSS не доставляется дважды (импорт из чанка + инлайн) | v1 §8, gotchas | `./build`, `./vite` | снапшот; тест на фикстуре, где `styles.css` объявлен и в `cssFiles`, и в SFC → предупреждение `css-double-delivery` |
+| INV-CSS-5 | CSS компонентов проходит побайтно, кроме раскрытия `@apply` и обрезки токенов; один и тот же CSS не доставляется дважды (импорт из чанка + инлайн) | v1 §8, gotchas | `./build`, `./vite` | снапшот; `buildGraph.test.ts` — `cssImportedByChunk` у чанка, который сам импортирует свой CSS; `diagnostics.test.ts` — доведение `css-double-delivery` до `doctor` |
 | INV-CSS-6 | Утилита приложения перебивает базовый стиль компонента: слой `utilities` позже `components`; нелейерный CSS приложения перебивает всё | new (ADR-4) | сборщик CSS | `emitCss.test.ts` (порядок слоёв); `scripts/e2e-dev.mjs` — computed `gap` элемента до и после появления утилиты приложения, джоба CI `e2e` |
 | INV-CSS-7 | Одно правило эмитируется один раз независимо от числа источников класса | new | движок, сборщик | `invariantsCoverage.test.ts` |
 

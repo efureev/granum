@@ -115,11 +115,16 @@
 
 ### 3.4 `warnings[]`
 
-`{ code: string, component?: string, ...details }`. Коды первого релиза:
-`safelist-redundant` (`classes`), `default-theme-without-source` (`theme`),
-`token-undefined` (`tokens`, только по собственным слоям провайдера), `apply-not-expanded`
-(`file`), `css-double-delivery` (`files`), `peer-missing` (`provider` — донор, которого
-нет в `peerDependencies` пакета, C-5).
+`{ code: string, component?: string, ...details }`. Коды, которые пишет сборка
+провайдера: `safelist-redundant` (`classes`), `css-double-delivery` (`files`),
+`peer-missing` (`provider` — донор, которого нет в `peerDependencies` пакета, C-5),
+`engine-module-missing` (провайдер объявил `engine`, но не передал `engineModule`,
+M-7).
+
+Предупреждения резолюции приложения (`default-theme-without-source`,
+`provider-scanned`, `override-skipped`) и диагностики `doctor` (`token-undefined`,
+`apply-not-expanded`, `safelist-dead`) в манифест НЕ попадают: провайдер о селекции
+и темах приложения ничего не знает. Их список — в ТЗ §14.
 
 ## 4. Правила валидации (читатель)
 
@@ -146,7 +151,8 @@
   фиксирован как в примере (для читаемости диффов).
 - Массивы строк отсортированы тем же компаратором. Исключения с семантичным порядком:
   `css` (порядок эмиссии), `defaultThemes` (порядок активации тем), `warnings`
-  (порядок обнаружения).
+  (сборка провайдера упорядочивает их по `code` и компоненту — порядок
+  обнаружения зависел бы от обхода бандла и ломал бы побайтное равенство).
 - `hash` считается от сериализации, в которой поле `hash` заменено пустой строкой.
 
 Два запуска сборки без изменений входа обязаны дать побайтно одинаковый файл

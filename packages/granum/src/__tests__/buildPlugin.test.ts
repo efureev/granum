@@ -31,9 +31,10 @@ function makeFixture(options: {
   exportsOk?: boolean
   nodeImport?: boolean
   brokenCss?: boolean
+  engineRules?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false } = options
 
   write(root, 'package.json', JSON.stringify({
     name: '@t/kit',
@@ -65,6 +66,7 @@ function makeFixture(options: {
     contractVersion: 1,
     components: [card, panel],
     theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light'] },
+    ...(engineRules ? { engine: { rules: [['kit-reset', { appearance: 'none' }] as const] } } : {}),
   })
   return { root, provider }
 }
@@ -83,6 +85,66 @@ async function run(fixture: Fixture, pluginOptions: Partial<Parameters<typeof gr
 }
 
 describe('granumProvider с настоящим Vite', () => {
+  it('правила движка без engineModule — предупреждение, а не тихая потеря (M-7)', async () => {
+    // Правила известны сборке (классы провайдера ими извлекаются), но манифест
+    // ссылается на модуль, и без пути приложение их не получит.
+    const { manifest, logs } = await run(makeFixture({ engineRules: true }))
+
+    expect(manifest.engineModule).toBeNull()
+    expect(manifest.warnings.map(w => w.code)).toContain('engine-module-missing')
+    expect(logs.some(line => line.includes('engineModule') && line.includes('warning'))).toBe(true)
+
+    // С переданным путём предупреждения нет, а путь уезжает в манифест.
+    const withModule = await run(makeFixture({ engineRules: true }), { engineModule: 'engine.js' })
+    expect(withModule.manifest.engineModule).toBe('engine.js')
+    expect(withModule.manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
+  })
+
+  it('нарушение границы не переезжает в следующую сборку того же инстанса (B-15)', async () => {
+    /*
+     * Состояние границы, собранное в одной сборке, не имеет права дожить до
+     * следующей: `transform` при пересборке идёт только по изменённым модулям,
+     * и старое нарушение продолжало бы ронять сборку после починки кода.
+     *
+     * Гарантию даёт сброс в `buildStart` — он вызывается на каждую сборку,
+     * включая пересборку в `vite build --watch`, где `configResolved` за всю
+     * сессию срабатывает один раз. Этот тест сторожит изоляцию между двумя
+     * `build()` и сам watch-сессию не воспроизводит: программный `build()`
+     * зовёт `configResolved` каждый раз, поэтому зелёным он был бы и со
+     * сбросом в прежнем месте. Watch проверен руками: пересборка перезаписывает
+     * манифест (B-15).
+     */
+    const fixture = makeFixture({ nodeImport: true })
+    const logs: string[] = []
+    const plugin = granumProvider({ provider: fixture.provider, boundaryCheck: 'warn', log: l => logs.push(l) })
+    const rebuild = async (): Promise<void> => {
+      await build({
+        root: fixture.root,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [vue(), plugin],
+        build: { minify: false, rolldownOptions: { external: ['vue'] } },
+      })
+    }
+
+    await rebuild()
+    expect(logs.some(line => line.includes('node:fs'))).toBe(true)
+
+    // Починка: тот же файл без node-импорта, тот же инстанс плагина.
+    write(fixture.root, 'src/components/Card/Card.vue', `<script setup lang="ts"></script>\n<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
+    logs.length = 0
+    await rebuild()
+
+    expect(logs.filter(line => line.includes('node:fs'))).toEqual([])
+  })
+
+  it('провайдер без правил движка предупреждения не получает', async () => {
+    const { manifest } = await run(makeFixture())
+
+    expect(manifest.engineModule).toBeNull()
+    expect(manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
+  })
+
   it('раскладка, манифест, классы, токены, копии CSS, @apply, exports (B-1…B-14)', async () => {
     const { manifest, dist, logs } = await run(makeFixture())
 

@@ -58,6 +58,42 @@ describe('analyzeBundle (B-6…B-9)', async () => {
   })
 })
 
+describe('двойная доставка CSS (B-3, INV-CSS-5)', () => {
+  /*
+   * CSS компонента доставляет манифест — приложение инлайнит его в слой
+   * `components`. Если чанк компонента ещё и сам импортирует свой CSS-ассет,
+   * тот же файл приезжает дважды: один раз слоем, второй — бандлером
+   * приложения. Сборка обязана это назвать (`css-double-delivery`), потому что
+   * молча удваивается только вес.
+   */
+  const withImportedCss: BundleLike = {
+    'components/XhCard/index.js': chunk(
+      'components/XhCard/index.js',
+      `import './styles.css'; const c = "p-4"`,
+      ['components/XhCard/styles.css'],
+      { viteMetadata: { importedCss: new Set(['components/XhCard/styles.css']) } },
+    ),
+    'components/XhCard/styles.css': { type: 'asset', fileName: 'components/XhCard/styles.css', source: '.xh-card{color:red}' },
+  }
+  const only = [defineGranumComponent(`${root}/XhCard/config.ts`, { name: 'XhCard' })]
+
+  it('чанк, импортирующий свой CSS, попадает в cssImportedByChunk', async () => {
+    const analysis = await analyzeBundle(withImportedCss, only, engine)
+    const card = analysis.components.get('XhCard')!
+
+    expect(card.cssAssets).toEqual(['components/XhCard/styles.css'])
+    expect(card.cssImportedByChunk).toEqual(['components/XhCard/index.js'])
+  })
+
+  it('без импорта ассета из чанка двойной доставки нет', async () => {
+    const analysis = await analyzeBundle(bundle, descriptors, engine)
+
+    // `XhPanel` свой CSS не импортирует: ассет объявлен `cssFiles`, а в чанке
+    // ссылки на файл нет.
+    expect(analysis.components.get('XhPanel')!.cssImportedByChunk).toEqual([])
+  })
+})
+
 describe('findUndeclaredEdges (INV-CON-5, INV-CON-6)', () => {
   it('объявленное и транзитивно покрытое ребро — норма; неучтённое — нарушение', async () => {
     const analysis = await analyzeBundle(bundle, descriptors, engine)

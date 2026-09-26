@@ -138,7 +138,17 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     configResolved(config: ResolvedConfig): void {
       root = config.root
       outDir = resolve(root, config.build.outDir)
+    },
+
+    /*
+     * Состояние сбрасывается здесь, а не в `configResolved`: в `vite build
+     * --watch` тот вызывается один раз на сессию, а `transform` при пересборке
+     * идёт только по изменённым модулям. Нарушения границы от прошлой сборки
+     * иначе копились бы и продолжали ронять сборку после починки кода (B-15).
+     */
+    buildStart(): void {
       graphViolations = []
+      analysis = undefined
     },
 
     // Граница ловится на исходном коде модулей: `vite:resolve` подменяет `node:*`
@@ -197,6 +207,29 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
 
       const warnings: GranumManifestWarning[] = []
+
+      /*
+       * Правила движка в манифест не встраиваются — он ссылается на модуль
+       * (M-7), и путь задаёт автор опцией `engineModule`. Провайдер, который
+       * объявил `engine`, но опцию не передал, отгрузил бы манифест с
+       * `engineModule: null`: свои классы он извлечёт (правила известны
+       * сборке), а приложению правила не достанутся, и его CSS молча
+       * разойдётся с пакетным. Молчать здесь нельзя (INV-DIAG-3).
+       */
+      const engineContribution = provider.engine
+      const hasEngineRules = Boolean(
+        engineContribution?.rules?.length
+        || engineContribution?.variants?.length
+        || engineContribution?.preflights?.length,
+      )
+      if (hasEngineRules && !options.engineModule) {
+        warnings.push({ code: 'engine-module-missing' })
+        log(
+          `warning: provider declares engine rules but granumProvider({ engineModule }) is not set — `
+          + `the manifest ships 'engineModule: null' and applications will not get them`,
+        )
+      }
+
       const sourceDir = resolve(root, options.sourceDir ?? 'src')
       const componentSources = new Map(sources().map(s => [s.descriptor.name, s]))
 
