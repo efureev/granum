@@ -95,10 +95,23 @@ try {
   // перегенерироваться и приехать по HMR.
   writeFileSync(appSource, original.replace('<XTest1>', `<XTest1 class="${HMR_CLASS}">`), 'utf8')
 
+  /*
+   * Ждём ДВА факта, а не один: правило в CSS и класс на элементе.
+   *
+   * Обновлений здесь два и они независимы: слой `utilities` перегенерировался
+   * (это CSS) и Vue перерисовал компонент с новым атрибутом `class` (это DOM).
+   * Дождавшись только правила, можно прочитать вычисленный стиль элемента, на
+   * котором класса ещё нет, — так проверка и краснела в CI, оставаясь зелёной
+   * локально из-за разницы в скорости.
+   */
   await page.waitForFunction(
-    () => [...document.querySelectorAll('style')].some(node => node.textContent?.includes('.gap-0')),
+    () => {
+      const element = document.querySelector('.x-sp-test')
+      const hasRule = [...document.querySelectorAll('style')].some(node => node.textContent?.includes('.gap-0'))
+      return Boolean(element?.classList.contains('gap-0')) && hasRule
+    },
     undefined,
-    { timeout: 15_000 },
+    { timeout: 20_000 },
   )
 
   const after = await page.evaluate(() => {
