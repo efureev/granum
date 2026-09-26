@@ -22,6 +22,10 @@ jobs:
           node-version: 24
       - name: Check en/ru documentation parity
         run: node scripts/check-docs-parity.mjs
+      # Нормативная часть ТЗ уезжает в пакет копией: проверяем, что копия не
+      # отстала от `docs/spec.md`.
+      - name: Check the package SPEC is generated from the specification
+        run: node scripts/generate-spec.mjs --check
 
   # Линт, typecheck и юнит-тесты пакета, тесты корневых скриптов.
   test:

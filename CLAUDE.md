@@ -26,6 +26,10 @@ UI-пакетов (компоненты, стили, токены, темы) о�
 **`docs/en` и `docs/ru` — зеркала**, как и корневые `README.md`/`README.ru.md`;
 `yarn check:docs` после любой правки документации.
 
+**Нормативную часть правят в `docs/spec.md`, а не в пакетном `SPEC.md`.** Второй —
+порождаемая копия (`yarn generate:spec`), которая уезжает в опубликованный пакет;
+правка руками теряется, а расхождение ловит `yarn check:spec`.
+
 ## Команды
 
 | Команда | Что делает |
@@ -34,6 +38,7 @@ UI-пакетов (компоненты, стили, токены, темы) о�
 | `yarn test:scripts` | чистые функции `scripts/` |
 | `yarn build` | сборка пакета в `packages/granum/dist` |
 | `yarn check:boundary` | зависимости и `node:`-импорты в собранных браузерных entry |
+| `yarn check:spec` | `packages/granum/docs/SPEC.md` совпадает с нормативными разделами `docs/spec.md` (`yarn generate:spec` перезаписывает) |
 | `yarn build:all` | пакет → фикстуры → приложения |
 | `yarn verify:fixtures` | round-trip и сверка манифестов собранных фикстур с `expected-manifest.mjs` |
 | `yarn check:determinism` | повторная сборка фикстур: манифест побайтно стабилен |
