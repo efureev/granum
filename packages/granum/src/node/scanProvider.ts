@@ -13,9 +13,11 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GRANUM_MANIFEST_VERSION } from '../contract'
 import { sortedUnique } from '../core/dedupe'
 import { GRANUM_VERSION } from '../version'
 import { scanCssDeclarations } from './cssDeclarations'
+import { objectRulesAllowed } from './dialects'
 import { collectImportSpecifiers } from './imports'
 import { computeManifestHash } from './manifest'
 import { scanTokenConsumption } from './tokenScan'
@@ -141,10 +143,14 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       for (const n of scanTokenConsumption(readRel(distDir, path), path).uses.keys())
         consumes.add(`--${n}`)
     }
+    // Правила пакета исполняются только движком объявленного словаря
+    // (INV-ENG-8): чужой диалект — классы считаются без них, и они окажутся
+    // в `unmatched`, а не молча выпадут.
+    const rulesAllowed = objectRulesAllowed(provider, engine)
     const generated = await engine.generate({
       classes: candidates,
-      ...(provider.engine?.rules ? { rules: provider.engine.rules } : {}),
-      ...(provider.engine?.variants ? { variants: provider.engine.variants } : {}),
+      ...(rulesAllowed && provider.engine?.rules ? { rules: provider.engine.rules } : {}),
+      ...(rulesAllowed && provider.engine?.variants ? { variants: provider.engine.variants } : {}),
     })
     const classes = sortedUnique(generated.matched.keys())
     const safelist = sortedUnique(descriptor.safelist ?? [])
@@ -190,8 +196,9 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     }
   }
 
+  const usesVocabulary = Object.values(components).some(c => c.classes.length > 0 || c.safelist.length > 0)
   const body: Omit<GranumManifest, 'hash'> = {
-    granum: 1,
+    granum: GRANUM_MANIFEST_VERSION,
     contractVersion: 1,
     id: provider.id,
     version: '0.0.0',
@@ -205,7 +212,15 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       tokenDefinitions: theme?.tokenDefinitions ?? {},
       declares: sortedUnique(declares),
     },
-    engineModule: null,
+    engine: {
+      // Классы просканированного пакета отфильтровал движок ПРИЛОЖЕНИЯ здесь и
+      // сейчас — значит, его диалект и отпечаток и есть факт о списке (M-E5).
+      dialect: usesVocabulary ? engine.dialect : null,
+      vocabulary: usesVocabulary ? engine.vocabulary : null,
+      name: engine.name,
+      ...(engine.version !== undefined ? { version: engine.version } : {}),
+      module: null,
+    },
     components,
     warnings,
   }

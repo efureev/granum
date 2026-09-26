@@ -4,6 +4,7 @@
  */
 import type { GranumConfig } from '../config'
 import { GranumError } from '../core/errors'
+import { isDialect } from '../engine/dialect'
 
 export class InvalidConfigError extends GranumError {
   readonly code = 'invalid-config' as const
@@ -17,6 +18,36 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/**
+ * Движок — обязательный инстанс (A-E1, A-E2). Проверяется форма, а не
+ * реализация: имя словаря и его отпечаток нужны для решений, `extract` и
+ * `generate` — для работы. Без отпечатка granum не смог бы решить, верить ли
+ * списку классов манифеста, и молча поверил бы — ровно то, чего нельзя.
+ */
+function validateEngine(engine: unknown): void {
+  if (engine === undefined || engine === null) {
+    throw new InvalidConfigError(
+      'engine',
+      `expected a GranumEngine instance — e.g. miniEngine() from '@feugene/granum-engine-mini'. `
+      + `The application picks the engine: granum ships no implementation.`,
+    )
+  }
+  if (typeof engine === 'string')
+    throw new InvalidConfigError('engine', `expected a GranumEngine instance, got the string ${JSON.stringify(engine)} — pass the engine itself`)
+  if (!isRecord(engine))
+    throw new InvalidConfigError('engine', `expected a GranumEngine instance, got ${typeof engine}`)
+  for (const method of ['extract', 'generate'] as const) {
+    if (typeof engine[method] !== 'function')
+      throw new InvalidConfigError(`engine.${method}`, 'expected a function')
+  }
+  if (typeof engine.name !== 'string' || engine.name.length === 0)
+    throw new InvalidConfigError('engine.name', 'expected a non-empty string naming the implementation')
+  if (!isDialect(engine.dialect))
+    throw new InvalidConfigError('engine.dialect', `expected '<vendor>/<vocabulary>@<major>', got ${JSON.stringify(engine.dialect)}`)
+  if (typeof engine.vocabulary !== 'string' || engine.vocabulary.length === 0)
+    throw new InvalidConfigError('engine.vocabulary', 'expected a non-empty fingerprint of the generated name set (vocabularyFingerprint)')
+}
+
 export function validateGranumConfig(config: unknown): asserts config is GranumConfig {
   if (!isRecord(config))
     throw new InvalidConfigError('', 'expected an object')
@@ -26,6 +57,7 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
     if (typeof p === 'string' ? p.trim().length === 0 : !isRecord(p))
       throw new InvalidConfigError(`providers.${i}`, 'expected a package name or an object')
   })
+  validateEngine(config.engine)
   const c = config.components
   if (c !== undefined && c !== 'all' && c !== 'imports' && !Array.isArray(c))
     throw new InvalidConfigError('components', `expected 'all', 'imports' or an array, got ${typeof c}`)

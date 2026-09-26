@@ -175,6 +175,8 @@ export type InvalidProviderReason
     | 'css-file-escapes-component'
     | 'missing-source-url'
     | 'missing-component-entry'
+    | 'invalid-dialect'
+    | 'rules-without-dialect'
 
 /**
  * Провайдер объявлен некорректно. Бросается при регистрации (INV-ERR-1), а не
@@ -191,6 +193,29 @@ export class InvalidProviderError extends GranumError {
   ) {
     const where = componentName ? `component '${componentName}' of ` : ''
     super(`Invalid provider: ${where}'${providerId}' — ${details}`)
+  }
+}
+
+/**
+ * Провайдер объявил один словарь, а собирают его движком другого (C-E2,
+ * INV-ENG-10). Записать в манифест чужой диалект нельзя: приложение поверит,
+ * что список классов отфильтрован реализацией объявленного словаря, а он
+ * отфильтрован другой.
+ */
+export class EngineDialectMismatchError extends GranumError {
+  readonly code = 'engine-dialect-mismatch' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly declared: string,
+    readonly engineDialect: string,
+    readonly engineName: string,
+  ) {
+    super(
+      `Provider '${providerId}' declares engine dialect '${declared}', but the build runs on '${engineName}' `
+      + `whose dialect is '${engineDialect}'. Pass an engine of the declared dialect to granumProvider({ engine }), `
+      + `or drop 'engine.dialect' from the provider to record the build engine's dialect as a fact.`,
+    )
   }
 }
 
@@ -218,6 +243,8 @@ export type InvalidManifestReason
     | 'hash-mismatch'
     | 'entry-layout'
     | 'token-key-prefix'
+    | 'dialect-vocabulary-mismatch'
+    | 'dialect-without-classes'
 
 /** Манифест не проходит проверку читателя (`docs/manifest.md` §4). */
 export class InvalidManifestError extends GranumError {

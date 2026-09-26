@@ -97,7 +97,10 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   }))
 
   // 4. Утилиты: классы манифестов ∪ safelist ∪ приложение (INV-CSS-3).
-  const engineInput = sortedUnique([...resolution.classes, ...resolution.safelist, ...app.appScan.classes])
+  // `reextractLost` — классы, которые были в манифесте и не нашлись при
+  // пересчёте. Они обязаны остаться видны в `unmatched`: пересчёт не имеет
+  // права делать потерю тише, чем она была (A-E7, INV-DIAG-2).
+  const engineInput = sortedUnique([...resolution.classes, ...resolution.safelist, ...app.appScan.classes, ...app.reextractLost])
   const generated = await engine.generate({
     classes: new Set(engineInput),
     ...(config.themes && 'engineTheme' in config.themes ? {} : {}),

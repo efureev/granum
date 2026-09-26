@@ -9,8 +9,9 @@ import type { GranumProviderInput } from '../contract'
 import type { GranumResolution, GranumThemesInput } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
 import type { GranumAppThemeDefinition } from '../core/resolveThemes'
-import type { EngineInput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from '../engine/types'
+import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
+import type { ProviderEngineDecision } from './dialects'
 import { resolve as resolvePath } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
@@ -18,9 +19,9 @@ import { TokenRefError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
-import { createEngine } from '../engine/builtin'
 import { scanAppSources } from './appSources'
 import { tokenSetFromCssSync } from './cssTokens'
+import { reconcileProviderEngines } from './dialects'
 import { loadPackageManifest } from './manifest'
 import { materializeProviderRefs } from './materializeRefs'
 import { collectProviderInstances, scanObjectProvider } from './scanProvider'
@@ -31,8 +32,12 @@ export interface PreparedApp {
   readonly resolution: GranumResolution
   readonly engine: GranumEngine
   readonly appScan: AppSourcesScan
-  /** Правила/варианты/preflights провайдеров графа, с источниками (E-3). */
+  /** Правила/варианты/preflights провайдеров графа, с источниками (E-9). */
   readonly engineContribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
+  /** Решение по каждому провайдеру: диалект, отпечаток, откуда взяты классы (A-E3). */
+  readonly engineDecisions: readonly ProviderEngineDecision[]
+  /** Классы, потерянные пересчётом: подаются движку, чтобы остаться в `unmatched` (A-E7). */
+  readonly reextractLost: readonly string[]
   readonly warnings: readonly PreparedWarning[]
 }
 
@@ -42,23 +47,8 @@ export type PreparedWarning
     | { readonly kind: 'provider-scanned', readonly providerId: string }
     | { readonly kind: 'imports-without-app-sources' }
 
-interface EngineModuleShape {
-  readonly rules?: readonly GranumRule[]
-  readonly variants?: readonly GranumVariant[]
-  readonly preflights?: readonly GranumPreflight[]
-}
-
-export function createConfiguredEngine(config: GranumConfig): GranumEngine {
-  const engine = config.engine
-  if (engine === undefined || engine === 'builtin')
-    return createEngine()
-  if (typeof (engine as GranumEngine).generate === 'function')
-    return engine as GranumEngine
-  return createEngine(engine as Parameters<typeof createEngine>[0])
-}
-
 /** Провайдер по имени пакета — манифест через `exports` (A-2); объект — как есть. */
-export function loadProviderInputs(config: GranumConfig, root: string): GranumProviderInput[] {
+export function loadProviderInputs(config: Pick<GranumConfig, 'providers'>, root: string): GranumProviderInput[] {
   return config.providers.map((entry) => {
     if (typeof entry === 'string')
       return loadPackageManifest(entry, root)
@@ -104,35 +94,6 @@ export async function scanProviderInputs(inputs: readonly GranumProviderInput[],
     }
   }
   return { resolver, engineSources }
-}
-
-async function loadEngineContribution(inputs: readonly GranumProviderInput[]): Promise<PreparedApp['engineContribution']> {
-  const rules: GranumRule[] = []
-  const variants: GranumVariant[] = []
-  const preflights: GranumPreflight[] = []
-  const sources = new Map<GranumRule | GranumVariant, string>()
-  const tag = (id: string, shape: EngineModuleShape | undefined): void => {
-    for (const rule of shape?.rules ?? []) {
-      rules.push(rule)
-      sources.set(rule, id)
-    }
-    for (const variant of shape?.variants ?? []) {
-      variants.push(variant)
-      sources.set(variant, id)
-    }
-    preflights.push(...(shape?.preflights ?? []))
-  }
-  for (const input of inputs) {
-    if (isLoadedManifest(input)) {
-      if (input.manifest.engineModule) {
-        const mod = await import(new URL(input.manifest.engineModule, input.baseUrl).href) as { default?: EngineModuleShape }
-        tag(input.manifest.id, mod.default ?? (mod as EngineModuleShape))
-      }
-      continue
-    }
-    tag(input.id, input.engine)
-  }
-  return { rules, variants, preflights, sources }
 }
 
 /**
@@ -197,11 +158,15 @@ export function tagSelection(tags: readonly string[], inputs: readonly GranumPro
 }
 
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {
-  const engine = createConfiguredEngine(config)
+  const engine = config.engine
   const loaded = loadProviderInputs(config, root)
   const appScan = scanAppSources(config.appSources, root, engine)
   const warnings: PreparedWarning[] = []
-  const { resolver: inputs, engineSources } = await scanProviderInputs(loaded, engine, warnings)
+  const { resolver: scanned, engineSources } = await scanProviderInputs(loaded, engine, warnings)
+  // Сверка диалектов и отпечатков идёт ДО резолюции: она может заменить список
+  // классов провайдера, а резолюция уже считает его данностью (A-E3).
+  const reconciled = await reconcileProviderEngines(scanned, engineSources, engine)
+  const inputs = reconciled.inputs
 
   let components: ComponentSelection | undefined
   if (config.components === 'imports') {
@@ -230,7 +195,9 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     resolution,
     engine,
     appScan,
-    engineContribution: await loadEngineContribution(engineSources),
+    engineContribution: reconciled.contribution,
+    engineDecisions: reconciled.decisions,
+    reextractLost: reconciled.lost,
     warnings,
   }
 }

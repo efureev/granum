@@ -26,7 +26,12 @@ describe('entry points', () => {
   })
 
   it('engine, build, vite, node, runtime and codegen expose their APIs', () => {
-    expect(typeof engine.createEngine).toBe('function')
+    // Ядро отдаёт контракт и хелперы, но не реализацию движка (INV-ENG-9, AC-E2).
+    expect(typeof engine.extractClasses).toBe('function')
+    expect(typeof engine.vocabularyFingerprint).toBe('function')
+    expect(typeof engine.parseDialect).toBe('function')
+    expect(Object.keys(engine)).not.toContain('createEngine')
+    expect(Object.keys(engine)).not.toContain('miniEngine')
     expect(typeof build.granumProvider).toBe('function')
     expect(typeof vite.granum).toBe('function')
     expect(typeof vite.defineGranumConfig).toBe('function')

@@ -1,15 +1,43 @@
 /**
- * Встроенный движок (E-4): вендоренное ядро UnoCSS + preset-mini + доп-правила.
- * Генератор создаётся на набор (правила, варианты, preflights, тема) и
- * переиспользуется, пока эти ссылки не меняются; классы на входе сортируются,
- * поэтому вывод не зависит от порядка (INV-ENG-1, INV-DET-2).
+ * Движок `@feugene/granum-engine-mini` (E-8): вендоренное ядро UnoCSS +
+ * preset-mini + доп-правила. Генератор создаётся на набор (правила, варианты,
+ * preflights, тема) и переиспользуется, пока эти ссылки не меняются; классы на
+ * входе сортируются, поэтому вывод не зависит от порядка (INV-ENG-1, INV-DET-2).
+ *
+ * Диалект и отпечаток словаря — два разных обещания (E-1, E-4). Диалект
+ * называет словарь: доп-правила добавляют к preset-mini `divide-y`, `space-x-4`
+ * и `tabular-nums`, поэтому с ними и без них это разные словари. Отпечаток
+ * считается по фактическому набору правил, включая переданные приложением:
+ * приложение с собственным правилом знает больше имён, чем знала сборка
+ * пакета, и списку классов её манифеста верить уже нельзя.
  */
-import type { CreateEngineOptions, EngineInput, EngineMatch, EngineOutput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from './types'
+import type { EngineInput, EngineMatch, EngineOutput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from '@feugene/granum/engine'
 import type { Preflight, Rule, UnoGenerator, Variant } from './vendor/core/index.js'
-import { extractClasses } from './extract'
+import { vocabularyFingerprint } from '@feugene/granum/engine'
+import { extractMiniClasses } from './extract'
 import { builtinExtraPreflights, builtinExtraRules, builtinExtraVariants } from './rules/index'
 import { createGenerator } from './vendor/core/index.js'
 import { presetMini } from './vendor/preset-mini/index.js'
+
+/** Словарь preset-mini с нашими доп-правилами. */
+export const MINI_DIALECT_EXTRA = 'unocss/preset-mini+granum@66'
+/** Словарь чистого preset-mini, без доп-правил. */
+export const MINI_DIALECT_BASE = 'unocss/preset-mini@66'
+/** Версия вендоренного апстрима; в решениях не участвует (E-5). */
+export const MINI_UPSTREAM_VERSION = '66.7.5'
+
+export interface MiniEngineOptions {
+  /** Preflight встроенного пресета (`*,::before,::after{--un-rotate:0;…}`). По умолчанию `true`. */
+  readonly preflight?: boolean
+  /** Префикс кастомных свойств встроенных правил (`--un-` по умолчанию). */
+  readonly variablePrefix?: string
+  /** Подключать ли дополнительные правила поверх preset-mini (E-2). По умолчанию `true`. */
+  readonly extraRules?: boolean
+  /** Правила приложения: тот же диалект, другой отпечаток (E-10, E-4). */
+  readonly rules?: readonly GranumRule[]
+  readonly variants?: readonly GranumVariant[]
+  readonly preflights?: readonly GranumPreflight[]
+}
 
 interface Prepared {
   readonly uno: UnoGenerator<any>
@@ -27,8 +55,9 @@ type CacheKey = readonly [
 /** Сколько последних множеств классов помнить на генератор. */
 const OUTPUT_CACHE_SIZE = 8
 
-export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
+export function miniEngine(options: MiniEngineOptions = {}): GranumEngine {
   let last: { key: CacheKey, prepared: Promise<Prepared> } | undefined
+  const extra = options.extraRules !== false
 
   const prepare = (input: EngineInput): Promise<Prepared> => {
     const key: CacheKey = [input.rules, input.variants, input.preflights, input.theme, input.sources]
@@ -41,8 +70,11 @@ export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
 
   const outputs = new WeakMap<object, Map<string, EngineOutput>>()
   return {
-    name: 'builtin',
-    extract: extractClasses,
+    name: 'granum-engine-mini',
+    version: MINI_UPSTREAM_VERSION,
+    dialect: extra ? MINI_DIALECT_EXTRA : MINI_DIALECT_BASE,
+    vocabulary: miniVocabulary(options),
+    extract: extractMiniClasses,
     async generate(input: EngineInput): Promise<EngineOutput> {
       const { uno, sourceOf } = await prepare(input)
       const classes = [...new Set(input.classes)].sort()
@@ -90,7 +122,7 @@ export function createEngine(options: CreateEngineOptions = {}): GranumEngine {
   }
 }
 
-async function buildGenerator(options: CreateEngineOptions, input: EngineInput): Promise<Prepared> {
+async function buildGenerator(options: MiniEngineOptions, input: EngineInput): Promise<Prepared> {
   const extra = options.extraRules !== false
   const sourceOf = new WeakMap<object, string>()
   const rules: Rule<any>[] = []
@@ -112,14 +144,20 @@ async function buildGenerator(options: CreateEngineOptions, input: EngineInput):
   }
   for (const rule of input.rules ?? [])
     tag(rule as unknown as Rule<any>, input.sources?.get(rule) ?? 'app')
+  // Правила из фабрики — последние: приложение перекрывает и встроенное, и
+  // правила провайдеров (INV-ENG-3).
+  for (const rule of options.rules ?? [])
+    tag(rule as unknown as Rule<any>, 'app')
 
   const variants: Variant<any>[] = [
     ...(extra ? builtinExtraVariants : []),
     ...((input.variants ?? []) as unknown as readonly Variant<any>[]),
+    ...((options.variants ?? []) as unknown as readonly Variant<any>[]),
   ]
   const preflights: Preflight<any>[] = [
     ...(extra ? builtinExtraPreflights : []),
     ...(input.preflights ?? []).map(toPreflight),
+    ...(options.preflights ?? []).map(toPreflight),
   ]
 
   const uno = await createGenerator({
@@ -162,6 +200,30 @@ function toPreflight(preflight: GranumPreflight): Preflight<any> {
       : preflight.css,
     ...(preflight.layer !== undefined ? { layer: preflight.layer } : {}),
   }
+}
+
+/**
+ * Отпечаток словаря движка (E-4): правила и варианты пресета, доп-правила и
+ * правила из фабрики. Опции `preflight` и `variablePrefix` в него не входят —
+ * они меняют вывод, а не множество имён.
+ *
+ * `presetMini()` здесь вызывается ради одного списка матчеров и не переиспользует
+ * инстанс генератора: ядро пишет `meta.__index` прямо в правило, и общий пресет
+ * между двумя генераторами получил бы чужой индекс.
+ */
+function miniVocabulary(options: MiniEngineOptions): string {
+  const preset = presetMini({})
+  const rules = [
+    ...((preset.rules ?? []) as unknown as readonly GranumRule[]),
+    ...(options.extraRules !== false ? (builtinExtraRules as unknown as readonly GranumRule[]) : []),
+    ...(options.rules ?? []),
+  ]
+  const variants = [
+    ...((preset.variants ?? []) as unknown as readonly GranumVariant[]),
+    ...(options.extraRules !== false ? (builtinExtraVariants as unknown as readonly GranumVariant[]) : []),
+    ...(options.variants ?? []),
+  ]
+  return vocabularyFingerprint({ rules, variants })
 }
 
 export type { GranumRule, GranumVariant }

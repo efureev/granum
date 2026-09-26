@@ -9,7 +9,7 @@ import { relative, resolve } from 'node:path'
 import { DEFAULT_APP_EXTENSIONS, listSourceFiles } from '../appSources'
 import { resolveProviderPath } from '../inlinedCss'
 
-export type WhyCssVia = 'manifest-classes' | 'safelist' | 'component-css' | 'app-source'
+export type WhyCssVia = 'manifest-classes' | 'safelist' | 'component-css' | 'app-source' | 'manifest-lost'
 
 export interface WhyCssHit {
   readonly via: WhyCssVia
@@ -23,6 +23,23 @@ export interface WhyCssReport {
   /** Правило движка, породившее утилиту; `null` — правила нет. */
   readonly rule: EngineMatch | null
   readonly found: boolean
+  /**
+   * Почему правила нет, через словари (D-E3): чем отфильтрован артефакт пакета,
+   * откуда взялся класс и что у движка приложения. Заполняется только когда
+   * правила нет и класс пришёл из пакета.
+   */
+  readonly dialects: {
+    readonly appDialect: string
+    readonly appVocabulary: string
+    readonly appEngine: string
+    readonly providers: readonly {
+      readonly id: string
+      readonly dialect: string | null
+      readonly engineName: string | null
+      readonly rulesSkipped: boolean
+      readonly lost: boolean
+    }[]
+  } | null
 }
 
 function escapeRegExp(s: string): string {
@@ -71,8 +88,33 @@ export async function granumWhyCss(app: PreparedApp, className: string): Promise
       }
     }
   }
+  // Класс, который был в манифесте и потерялся при пересчёте, источником тоже
+  // считается: иначе ответ «источников не найдено» прячет самое важное.
+  for (const decision of app.engineDecisions) {
+    if (decision.lost.includes(className))
+      hits.push({ via: 'manifest-lost', component: decision.providerId })
+  }
+
   const out = await app.engine.generate({ classes: new Set([className]), ...app.engineContribution })
-  return { className, hits, rule: out.matched.get(className) ?? null, found: hits.length > 0 }
+  const rule = out.matched.get(className) ?? null
+  const fromProviders = new Set(hits.filter(h => h.via !== 'app-source').map(h => (h.component ?? '').split(':')[0]))
+  const dialects = rule === null && fromProviders.size > 0
+    ? {
+        appDialect: app.engine.dialect,
+        appVocabulary: app.engine.vocabulary,
+        appEngine: app.engine.name,
+        providers: app.engineDecisions
+          .filter(d => fromProviders.has(d.providerId))
+          .map(d => ({
+            id: d.providerId,
+            dialect: d.dialect,
+            engineName: d.engineName,
+            rulesSkipped: d.rulesSkipped,
+            lost: d.lost.includes(className),
+          })),
+      }
+    : null
+  return { className, hits, rule, found: hits.length > 0, dialects }
 }
 
 const VIA_TEXT: Record<WhyCssVia, string> = {
@@ -80,6 +122,7 @@ const VIA_TEXT: Record<WhyCssVia, string> = {
   'safelist': 'component safelist',
   'component-css': 'selector in a component CSS file',
   'app-source': 'application source',
+  'manifest-lost': 'class from the package manifest that the application engine could not re-extract',
 }
 
 export function formatWhyCssReport(report: WhyCssReport): string {
@@ -100,5 +143,18 @@ export function formatWhyCssReport(report: WhyCssReport): string {
   push(`Sources (${report.hits.length}):`)
   for (const hit of report.hits)
     push(`  • ${VIA_TEXT[hit.via]}: ${hit.component ?? ''}${hit.file ? ` — ${hit.file}` : ''}`)
+  if (report.dialects) {
+    const d = report.dialects
+    push()
+    push(`Vocabularies: the application runs '${d.appEngine}' speaking '${d.appDialect}' (vocabulary ${d.appVocabulary}).`)
+    for (const provider of d.providers) {
+      push(`  • ${provider.id}: built by '${provider.engineName ?? 'unknown engine'}' for dialect '${provider.dialect ?? 'none'}'`
+        + `${provider.rulesSkipped ? ', its engine rules were NOT loaded (foreign dialect)' : ''}`
+        + `${provider.lost ? ', this class survived only as a manifest entry' : ''}`)
+    }
+    push()
+    push('Fix it one of two ways: run an engine of the package dialect, or add a rule for this class to your engine factory')
+    push('(for example miniEngine({ rules: [[…]] })) — granum will then find it on the next build.')
+  }
   return lines.join('\n')
 }

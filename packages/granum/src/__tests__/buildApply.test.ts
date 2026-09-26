@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { expandApply, hasApply } from '../build/apply'
 import { ApplyExpansionError } from '../core/errors'
-import { createEngine } from '../engine/builtin'
+import { testEngine } from './testEngine'
 
-const engine = createEngine()
+const engine = testEngine()
 
 describe('expandApply (B-11, ADR-3)', () => {
   it('раскрывает @apply в плоском правиле декларациями движка', async () => {

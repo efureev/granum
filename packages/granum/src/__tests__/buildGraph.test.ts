@@ -2,9 +2,9 @@ import type { BundleLike } from '../build/graph'
 import { describe, expect, it } from 'vitest'
 import { analyzeBundle, findUndeclaredEdges } from '../build/graph'
 import { defineGranumComponent } from '../contract'
-import { createEngine } from '../engine/builtin'
+import { testEngine } from './testEngine'
 
-const engine = createEngine()
+const engine = testEngine()
 const root = 'file:///pkg/src/components'
 
 function chunk(fileName: string, code: string, imports: string[] = [], extra: Partial<BundleLike[string]> = {}): BundleLike[string] {

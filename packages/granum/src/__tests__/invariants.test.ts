@@ -41,7 +41,7 @@ describe('реестр инвариантов (AC-11)', () => {
 
   it('каждый идентификатор упомянут в тесте, скрипте проверки или ожиданиях', () => {
     const files = [
-      ...walk(join(REPO, 'packages/granum/src'), name => /\.test\.ts$/.test(name)),
+      ...walk(join(REPO, 'packages'), name => /\.test\.ts$/.test(name)),
       ...walk(join(REPO, 'scripts'), name => /\.mjs$/.test(name)),
       ...walk(join(REPO, 'fixtures'), name => /^expected.*\.mjs$/.test(name)),
       ...walk(join(REPO, 'apps'), name => /^expected.*\.mjs$/.test(name)),

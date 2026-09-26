@@ -8,8 +8,9 @@ import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { BoundaryViolationError, CssReadError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { readManifestSync } from '../node/manifest'
+import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
  * Интеграция плагина с настоящим Vite (B-1…B-17): временный провайдер из двух
@@ -32,9 +33,11 @@ function makeFixture(options: {
   nodeImport?: boolean
   brokenCss?: boolean
   engineRules?: boolean
+  /** Пакет без утилит вовсе: ни классов, ни safelist — только свой CSS. */
+  plain?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false } = options
 
   write(root, 'package.json', JSON.stringify({
     name: '@t/kit',
@@ -47,14 +50,18 @@ function makeFixture(options: {
   write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n`)
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-bg:#fff}\n@supports (x:1){:root{--t-fallback:1}}')
   write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
-  write(root, 'src/components/Card/Card.vue', `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}</script>\n<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
+  write(root, 'src/components/Card/Card.vue', plain
+    ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
+    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}</script>\n<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
-  write(root, 'src/components/Panel/Panel.vue', `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n`)
+  write(root, 'src/components/Panel/Panel.vue', plain
+    ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
+    : `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n`)
   write(root, 'src/components/Panel/index.ts', `export { default as Panel } from './Panel.vue'\n`)
   if (!brokenCss)
     write(root, 'src/components/Panel/styles.css', '.t-panel{color:var(--t-fg, red)}\n')
 
-  const card = defineGranumComponent(pathToFileURL(join(root, 'src/components/Card/config.ts')).href, { name: 'Card', safelist: ['p-4', 'shadow-legacy'] })
+  const card = defineGranumComponent(pathToFileURL(join(root, 'src/components/Card/config.ts')).href, { name: 'Card', ...(plain ? {} : { safelist: ['p-4', 'shadow-legacy'] }) })
   const panel = defineGranumComponent(pathToFileURL(join(root, 'src/components/Panel/config.ts')).href, {
     name: 'Panel',
     ...(declareDependency ? { dependencies: ['Card'] } : {}),
@@ -66,7 +73,7 @@ function makeFixture(options: {
     contractVersion: 1,
     components: [card, panel],
     theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light'] },
-    ...(engineRules ? { engine: { rules: [['kit-reset', { appearance: 'none' }] as const] } } : {}),
+    ...(engineRules ? { engine: { dialect: TEST_DIALECT, rules: [['kit-reset', { appearance: 'none' }] as const] } } : {}),
   })
   return { root, provider }
 }
@@ -77,7 +84,7 @@ async function run(fixture: Fixture, pluginOptions: Partial<Parameters<typeof gr
     root: fixture.root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granumProvider({ provider: fixture.provider, log: l => logs.push(l), ...pluginOptions })],
+    plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: l => logs.push(l), ...pluginOptions })],
     build: { minify: false, rolldownOptions: { external: ['vue'] } },
   })
   const dist = join(fixture.root, 'dist')
@@ -90,13 +97,13 @@ describe('granumProvider с настоящим Vite', () => {
     // ссылается на модуль, и без пути приложение их не получит.
     const { manifest, logs } = await run(makeFixture({ engineRules: true }))
 
-    expect(manifest.engineModule).toBeNull()
+    expect(manifest.engine.module).toBeNull()
     expect(manifest.warnings.map(w => w.code)).toContain('engine-module-missing')
     expect(logs.some(line => line.includes('engineModule') && line.includes('warning'))).toBe(true)
 
     // С переданным путём предупреждения нет, а путь уезжает в манифест.
     const withModule = await run(makeFixture({ engineRules: true }), { engineModule: 'engine.js' })
-    expect(withModule.manifest.engineModule).toBe('engine.js')
+    expect(withModule.manifest.engine.module).toBe('engine.js')
     expect(withModule.manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
   })
 
@@ -116,7 +123,7 @@ describe('granumProvider с настоящим Vite', () => {
      */
     const fixture = makeFixture({ nodeImport: true })
     const logs: string[] = []
-    const plugin = granumProvider({ provider: fixture.provider, boundaryCheck: 'warn', log: l => logs.push(l) })
+    const plugin = granumProvider({ provider: fixture.provider, engine: testEngine(), boundaryCheck: 'warn', log: l => logs.push(l) })
     const rebuild = async (): Promise<void> => {
       await build({
         root: fixture.root,
@@ -138,10 +145,32 @@ describe('granumProvider с настоящим Vite', () => {
     expect(logs.filter(line => line.includes('node:fs'))).toEqual([])
   })
 
+  it('движок артефакта — факт: блок engine и отказ приписать чужой словарь (INV-ENG-10, M-E5)', async () => {
+    const engine = testEngine()
+    const { manifest } = await run(makeFixture())
+    expect(manifest.engine).toEqual({ dialect: engine.dialect, vocabulary: engine.vocabulary, name: engine.name, module: null })
+
+    // Провайдер утверждает один словарь, а собирают его другим — записать в
+    // манифест чужой диалект нельзя. Падает на создании плагина, до первого
+    // хука: раньше некуда (INV-ERR-1).
+    const provider = { ...makeFixture().provider, engine: { dialect: 'other/atoms@1' } }
+    expect(() => granumProvider({ provider, engine, log: () => {} })).toThrow(EngineDialectMismatchError)
+  })
+
+  it('пакет без утилит получает dialect: null (E-3, M-E5)', async () => {
+    // Компонент без классов и без safelist ни от какого словаря не зависит:
+    // писать в манифест диалект было бы догадкой, а не фактом.
+    const plain = makeFixture({ plain: true })
+    const { manifest } = await run(plain)
+    expect(Object.values(manifest.components).every(c => c.classes.length === 0 && c.safelist.length === 0)).toBe(true)
+    expect(manifest.engine.dialect).toBeNull()
+    expect(manifest.engine.vocabulary).toBeNull()
+  })
+
   it('провайдер без правил движка предупреждения не получает', async () => {
     const { manifest } = await run(makeFixture())
 
-    expect(manifest.engineModule).toBeNull()
+    expect(manifest.engine.module).toBeNull()
     expect(manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
   })
 

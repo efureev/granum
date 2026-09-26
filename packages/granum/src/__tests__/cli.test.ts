@@ -7,6 +7,37 @@ import { ConfigLoadError, loadGranumConfigFile } from '../cli/loadConfig'
 import { serializeManifest } from '../node/manifest'
 import { makeManifest } from './helpers'
 
+/**
+ * Движок приложения для CLI-фикстуры: конфиг обязан передать инстанс (A-E1), а
+ * `.mjs`-конфиг грузится нативно — значит, движок тоже обычный `.mjs`-модуль
+ * рядом. Знает ровно `p-4`: этого хватает, чтобы `p-4` попал в `matched`, а
+ * `no-such-rule` из safelist остался мёртвым.
+ */
+const ENGINE_MJS = `export function engine() {
+  return {
+    name: 'cli-test-engine',
+    dialect: 'granum-tests/mini@1',
+    vocabulary: 'fnv64-clitestengine01',
+    extract: code => new Set(code.split(/[\\s"'\`;{}]+/).filter(Boolean)),
+    generate: async (input) => {
+      const matched = new Map()
+      const unmatched = []
+      let css = ''
+      for (const cls of [...input.classes].sort()) {
+        if (cls === 'p-4') {
+          matched.set(cls, { rule: 'p-4', selector: '.p-4', source: 'builtin', layer: 'default' })
+          css += '.p-4{padding:1rem;}'
+        }
+        else {
+          unmatched.push(cls)
+        }
+      }
+      return { css, matched, unmatched }
+    },
+  }
+}
+`
+
 interface Io { out: string[], err: string[], io: { stdout: (l: string) => void, stderr: (l: string) => void, cwd: string } }
 
 function io(cwd = '/'): Io {
@@ -26,9 +57,15 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   writeFileSync(join(dist, 'components/Card/index.js'), 'export const Card = 1\n')
   const { manifest } = makeManifest('@x/kit', {
     Card: { classes: ['p-4'], css: ['components/Card/styles.css'], safelist: ['no-such-rule'], tokens: { declares: {}, consumes: ['--space'], dynamic: [] } },
-  }, { theme: { themes: {}, defaultThemes: [], tokenDefinitions: { light: { tokens: { space: '8px' } } }, declares: ['--space'] } })
+  }, {
+    theme: { themes: {}, defaultThemes: [], tokenDefinitions: { light: { tokens: { space: '8px' } } }, declares: ['--space'] },
+    // Пакет собран тем же движком, что стоит в конфиге: отпечатки совпадают,
+    // классы берутся из манифеста без пересчёта (A-E3).
+    engine: { dialect: 'granum-tests/mini@1', vocabulary: 'fnv64-clitestengine01', name: 'cli-test-engine', module: null },
+  })
   writeFileSync(join(dist, 'granum.manifest.json'), serializeManifest(manifest))
-  writeFileSync(join(root, 'granum.config.mjs'), patch.config ?? `export default { providers: ['@x/kit'], components: ['@x/kit:Card'] }\n`)
+  writeFileSync(join(root, 'granum.engine.mjs'), ENGINE_MJS)
+  writeFileSync(join(root, 'granum.config.mjs'), patch.config ?? `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'] }\n`)
   writeFileSync(join(root, 'dist/granum-report.json'), JSON.stringify({
     generatedBy: '@feugene/granum@test',
     selection: [{ key: '@x/kit:Card', dependencies: [] }],
@@ -127,7 +164,7 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
   })
 
   it('prune: 0 всегда, 1 с --strict при наличии удаляемых', async () => {
-    const root = appDir({ config: `export default { providers: ['@x/kit'], components: ['@x/kit:Card'], themes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], themes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
     const t = io(root)
     expect(await runGranumCli(['prune', 'granum.config.mjs', '--json'], t.io)).toBe(0)
     expect(JSON.parse(t.out[0]!).mode).toBe('off')
@@ -208,7 +245,7 @@ describe('granum codegen', () => {
 
 describe('loadGranumConfigFile', () => {
   it('принимает default, granum и config; проверяет форму конфига', async () => {
-    const root = appDir({ config: `export const granum = { providers: ['@x/kit'] }\n` })
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport const granum = { providers: ['@x/kit'], engine: engine() }\n` })
     const loaded = await loadGranumConfigFile('granum.config.mjs', root)
     expect(loaded.root).toBe(root)
     expect(loaded.config.providers).toEqual(['@x/kit'])
@@ -218,7 +255,7 @@ describe('loadGranumConfigFile', () => {
 
   it('ts-конфиг без vite в корне грузится нативно', async () => {
     const root = appDir()
-    writeFileSync(join(root, 'granum.config.ts'), `const providers: string[] = ['@x/kit']\nexport default { providers }\n`)
+    writeFileSync(join(root, 'granum.config.ts'), `import { engine } from './granum.engine.mjs'\nconst providers: string[] = ['@x/kit']\nexport default { providers, engine: engine() }\n`)
     const loaded = await loadGranumConfigFile('granum.config.ts', root)
     expect(loaded.config.providers).toEqual(['@x/kit'])
   })

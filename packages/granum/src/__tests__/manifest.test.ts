@@ -21,7 +21,7 @@ type Draft = Omit<GranumManifest, 'hash'>
 
 function draft(patch: Partial<Draft> = {}): Draft {
   return {
-    granum: 1,
+    granum: 2,
     contractVersion: 1,
     id: '@x/heavy',
     version: '0.1.0',
@@ -34,7 +34,7 @@ function draft(patch: Partial<Draft> = {}): Draft {
       tokenDefinitions: { dark: { selector: '.dark', tokens: { bg: '#000' } } },
       declares: ['--xh-bg', '--xh-accent'],
     },
-    engineModule: null,
+    engine: { dialect: 'unocss/preset-mini+granum@66', vocabulary: 'fnv64-0123456789abcdef', name: 'granum-engine-mini', version: '66.7.5', module: null },
     components: {
       XhPanel: {
         entry: 'components/XhPanel/index.js',
@@ -74,7 +74,7 @@ describe('каноническая сериализация (INV-DET-1, manifest
   it('корень в фиксированном порядке, вложенные ключи и массивы строк отсортированы, семантичные массивы — нет', () => {
     const text = serializeManifest(draft())
     const m = parsed(text)
-    expect(Object.keys(m)).toEqual(['granum', 'contractVersion', 'id', 'version', 'generatedBy', 'hash', 'dependencies', 'theme', 'engineModule', 'components', 'warnings'])
+    expect(Object.keys(m)).toEqual(['granum', 'contractVersion', 'id', 'version', 'generatedBy', 'hash', 'dependencies', 'theme', 'engine', 'components', 'warnings'])
     expect(Object.keys(m.components)).toEqual(['XhCard', 'XhPanel'])
     expect(m.components.XhPanel!.classes).toEqual(['flex', 'gap-2'])
     expect(m.components.XhPanel!.dependencies).toEqual(['@x/simple:XTest1', 'XhCard'])
@@ -127,12 +127,12 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     expect(() => parseManifest('{', BASE)).toThrow(InvalidManifestError)
     expect(() => parseManifest('[]', BASE)).toThrow(InvalidManifestError)
     try {
-      parseManifest(ok.replace('"granum": 1', '"granum": 2'), BASE, 'f.json')
+      parseManifest(ok.replace('"granum": 2', '"granum": 1'), BASE, 'f.json')
       throw new Error('should have thrown')
     }
     catch (e) {
       expect(e).toBeInstanceOf(UnsupportedManifestVersionError)
-      expect((e as UnsupportedManifestVersionError).version).toBe(2)
+      expect((e as UnsupportedManifestVersionError).version).toBe(1)
       expect((e as Error).message).toContain('f.json')
     }
   })
@@ -142,7 +142,8 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
       [ok.replace('"version": "0.1.0"', '"version": 1'), 'version'],
       [ok.replace('"entry": "components/XhCard/index.js"', '"entry": 7'), 'components.XhCard.entry'],
       [ok.replace('"consumes": []', '"consumes": [1]'), 'components.XhCard.tokens.consumes'],
-      [ok.replace('"engineModule": null', '"engineModule": 3'), 'engineModule'],
+      [ok.replace('"module": null', '"module": 3'), 'engine.module'],
+      [ok.replace('"name": "granum-engine-mini"', '"name": 3'), 'engine.name'],
       [ok.replace('"warnings": [', '"warnings": [{},'), 'warnings.0.code'],
     ]
     for (const [text, path] of cases) {
@@ -155,6 +156,33 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
         expect((e as InvalidManifestError).reason).toBe('schema')
         expect((e as InvalidManifestError).path).toBe(path)
       }
+    }
+  })
+
+  it('блок engine обязателен и согласован (INV-MAN-9, M-E2, M-E3)', () => {
+    // Без блока `engine` приложение не знает, чем отфильтрован список классов, и
+    // догадываться не имеет права — чтение падает.
+    const noBlock = ok.replace(/ {2}"engine": \{[^}]*\},\n/, '')
+    expect(noBlock).not.toContain('"engine"')
+    expect(() => parseManifest(noBlock, BASE)).toThrow(InvalidManifestError)
+
+    const halfNull = ok.replace('"dialect": "unocss/preset-mini+granum@66"', '"dialect": null')
+    try {
+      parseManifest(halfNull, BASE)
+      throw new Error('should have thrown')
+    }
+    catch (e) {
+      expect((e as InvalidManifestError).reason).toBe('dialect-vocabulary-mismatch')
+    }
+
+    // Диалект `null` при непустых классах — потерянная запись о движке (E-3).
+    const bothNull = halfNull.replace('"vocabulary": "fnv64-0123456789abcdef"', '"vocabulary": null')
+    try {
+      parseManifest(bothNull, BASE)
+      throw new Error('should have thrown')
+    }
+    catch (e) {
+      expect((e as InvalidManifestError).reason).toBe('dialect-without-classes')
     }
   })
 

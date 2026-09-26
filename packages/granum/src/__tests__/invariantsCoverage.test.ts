@@ -9,10 +9,9 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { collectDonorIds, findMissingPeers } from '../build/peers'
 import { resolveGranum } from '../core/resolve'
-import { createEngine } from '../engine/builtin'
 import { emitCss } from '../node/emit'
-import { prepareApp } from '../node/prepare'
-import { component, makeManifest, makeProvider } from './helpers'
+import { component, makeManifest, makeProvider, prepareTestApp } from './helpers'
+import { testEngine } from './testEngine'
 
 describe('инвариант INV-CON-8: зависимость провайдера не выбирает компоненты донора', () => {
   it('в селекции только явно выбранный компонент', () => {
@@ -39,7 +38,7 @@ describe('инвариант INV-CON-9: кросс-провайдерный до
 
 describe('инвариант INV-CSS-7: одно правило эмитируется один раз', () => {
   it('класс из нескольких источников даёт один селектор', async () => {
-    const engine = createEngine({ preflight: false, extraRules: false })
+    const engine = testEngine()
     const out = await engine.generate({ classes: new Set(['p-4', 'p-4', 'flex']) })
     expect(out.css.match(/\.p-4\{/g)).toHaveLength(1)
     expect(out.matched.size).toBe(2)
@@ -56,7 +55,7 @@ describe('инвариант INV-MAN-8: приложение не читает J
     writeFileSync(js, 'export const Card = { classes: "p-9 m-9" }\n')
     const loaded = makeManifest('@x/kit', { Card: { classes: ['p-4'], css: ['components/Card/styles.css'] } })
     const provider = { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` }
-    const build = async () => (await emitCss(await prepareApp({ providers: [provider], components: ['@x/kit:Card'] }, root))).css
+    const build = async () => (await emitCss(await prepareTestApp({ providers: [provider], components: ['@x/kit:Card'] }, root))).css
     const withJs = await build()
     writeFileSync(js, '')
     const withoutJs = await build()

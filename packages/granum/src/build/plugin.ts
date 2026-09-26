@@ -7,7 +7,7 @@
  */
 import type { Plugin, ResolvedConfig, UserConfig } from 'vite'
 import type { GranumComponentDescriptor, GranumManifest, GranumManifestWarning, GranumProvider } from '../contract'
-import type { CreateEngineOptions, GranumEngine } from '../engine/types'
+import type { GranumEngine } from '../engine/types'
 import type { BoundaryViolation, BundleAnalysis, BundleLike } from './graph'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -15,10 +15,10 @@ import { builtinModules } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
-import { BoundaryViolationError, CssReadError, InvalidProviderError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
-import { createEngine } from '../engine/builtin'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { MANIFEST_FILE_NAME, writeManifestSync } from '../node/manifest'
 import { materializeProviderRefs } from '../node/materializeRefs'
@@ -44,8 +44,13 @@ export interface GranumProviderPluginOptions {
   readonly boundaryCheck?: 'error' | 'warn'
   /** Проверка `package.json#exports` (B-13). По умолчанию `error`. */
   readonly exportsCheck?: 'error' | 'warn' | 'off'
-  readonly engine?: CreateEngineOptions
-  /** Модуль с правилами движка провайдера — путь относительно `dist` для манифеста (M-7). */
+  /**
+   * Движок утилит — инстанс (C-E4). Им фильтруются классы манифеста, и его
+   * диалект с отпечатком уезжают в блок `engine`: список классов — факт о
+   * конкретной реализации, а не о пакете.
+   */
+  readonly engine: GranumEngine
+  /** Модуль с правилами движка провайдера — путь относительно `dist` для манифеста (M-E4). */
   readonly engineModule?: string | null
   readonly manifestFile?: string
   /** Дополнительный внешний список для rolldown (`vue` и т.п. провайдер задаёт сам). */
@@ -58,10 +63,44 @@ interface ComponentSourceEntry {
   readonly entry: string
 }
 
+/**
+ * Блок `engine` манифеста (M-E5). `null/null` пишется ровно тогда, когда
+ * артефакт ни от какого словаря не зависит и ни одного не расширяет: ни класса,
+ * ни записи safelist, ни модуля правил. Иначе — диалект и отпечаток движка
+ * сборки: именно он отфильтровал список классов, и это факт, а не догадка.
+ */
+function engineBlock(
+  engine: GranumEngine,
+  module: string | null,
+  components: Readonly<Record<string, GranumManifest['components'][string]>>,
+): GranumManifest['engine'] {
+  const usesVocabulary = module !== null
+    || Object.values(components).some(c => c.classes.length > 0 || c.safelist.length > 0)
+  return {
+    dialect: usesVocabulary ? engine.dialect : null,
+    vocabulary: usesVocabulary ? engine.vocabulary : null,
+    name: engine.name,
+    ...(engine.version !== undefined ? { version: engine.version } : {}),
+    module,
+  }
+}
+
 export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   const provider = options.provider
   validateProvider(provider)
-  const engine: GranumEngine = createEngine(options.engine)
+  const engine: GranumEngine = options.engine
+  if (typeof engine?.generate !== 'function' || typeof engine.dialect !== 'string') {
+    throw new InvalidProviderError(
+      provider.id,
+      'invalid-dialect',
+      `granumProvider({ engine }) requires a GranumEngine instance (e.g. miniEngine() from '@feugene/granum-engine-mini').`,
+    )
+  }
+  // Утверждение провайдера о словаре сверяется до первой генерации: записать в
+  // манифест чужой диалект нельзя (C-E2, INV-ENG-10).
+  const declaredDialect = provider.engine?.dialect
+  if (declaredDialect !== undefined && declaredDialect !== engine.dialect)
+    throw new EngineDialectMismatchError(provider.id, declaredDialect, engine.dialect, engine.name)
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
   const manifestFile = options.manifestFile ?? MANIFEST_FILE_NAME
 
@@ -210,11 +249,11 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
 
       /*
        * Правила движка в манифест не встраиваются — он ссылается на модуль
-       * (M-7), и путь задаёт автор опцией `engineModule`. Провайдер, который
+       * (M-E4), и путь задаёт автор опцией `engineModule`. Провайдер, который
        * объявил `engine`, но опцию не передал, отгрузил бы манифест с
-       * `engineModule: null`: свои классы он извлечёт (правила известны
-       * сборке), а приложению правила не достанутся, и его CSS молча
-       * разойдётся с пакетным. Молчать здесь нельзя (INV-DIAG-3).
+       * `module: null`: свои классы он извлечёт (правила известны сборке), а
+       * приложению правила не достанутся, и его CSS молча разойдётся с
+       * пакетным. Молчать здесь нельзя (INV-DIAG-3).
        */
       const engineContribution = provider.engine
       const hasEngineRules = Boolean(
@@ -226,7 +265,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         warnings.push({ code: 'engine-module-missing' })
         log(
           `warning: provider declares engine rules but granumProvider({ engineModule }) is not set — `
-          + `the manifest ships 'engineModule: null' and applications will not get them`,
+          + `the manifest ships 'engine.module: null' and applications will not get them`,
         )
       }
 
@@ -357,7 +396,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       // 6. Манифест.
       const dependencyIds = sortedUnique((provider.dependencies ?? []).map(d => (typeof d === 'string' ? d : d.id)))
       writeManifestSync(join(outDir, manifestFile), {
-        granum: 1,
+        granum: GRANUM_MANIFEST_VERSION,
         contractVersion: 1,
         id: provider.id,
         version: pkg.version ?? '0.0.0',
@@ -371,7 +410,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           tokenDefinitions: materialized.theme?.tokenDefinitions ?? {},
           declares: sortedUnique(declaredByTheme),
         },
-        engineModule: options.engineModule ?? null,
+        engine: engineBlock(engine, options.engineModule ?? null, components),
         components,
         warnings: warnings.sort((a, b) => `${a.code}\0${a.component ?? ''}`.localeCompare(`${b.code}\0${b.component ?? ''}`, 'en')),
       })

@@ -5,8 +5,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
-import { prepareApp } from '../node/prepare'
-import { makeManifest } from './helpers'
+import { makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
 
 interface Fixture {
   root: string
@@ -41,14 +40,29 @@ function fixture(patch: { cardCss?: string, cardJs?: string, warnings?: any[] } 
 }
 
 async function app(f: Fixture, config: Partial<GranumConfig> = {}) {
-  return prepareApp({ providers: [f.manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, ...config }, f.root)
+  return prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, ...config }, f.root)
 }
 
 describe('granum doctor (D-2)', () => {
   it('чистая конфигурация: ok, предупреждения только по делу', async () => {
     const report = await granumDoctor(await app(fixture()))
     expect(report.ok).toBe(true)
-    expect(report.providers).toEqual([{ id: '@x/kit', form: 'manifest', version: '0.0.0', components: 2, hasTheme: true, hasEngine: false }])
+    // Диалект и отпечаток пакета совпали с движком приложения — быстрый путь,
+    // классы из манифеста, правил пакет не привозил (A-E3).
+    expect(report.providers).toEqual([{
+      id: '@x/kit',
+      form: 'manifest',
+      version: '0.0.0',
+      components: 2,
+      hasTheme: true,
+      hasEngine: false,
+      dialect: TEST_ENGINE.dialect,
+      vocabulary: TEST_ENGINE.vocabulary,
+      engineName: TEST_ENGINE.name,
+      classSource: 'manifest',
+      rulesLoaded: false,
+    }])
+    expect(report.engine).toEqual({ name: TEST_ENGINE.name, dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary })
     expect(report.components.map(c => c.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.themes.names).toEqual(['light', 'dark'])
     expect(report.files.missing).toEqual([])
@@ -107,7 +121,7 @@ describe('granum doctor (D-2)', () => {
     expect(codes).toContain('unused-provider')
     const g = fixture()
     writeFileSync(join(g.dist, 'components/Card/styles.css'), '')
-    const missing = await granumDoctor(await prepareApp({ providers: [{ ...g.manifest, manifest: { ...g.manifest.manifest, components: { ...g.manifest.manifest.components, Card: { ...g.manifest.manifest.components.Card!, css: ['components/Card/gone.css'] } } } }], components: ['@x/kit:Card'] }, g.root))
+    const missing = await granumDoctor(await prepareTestApp({ providers: [{ ...g.manifest, manifest: { ...g.manifest.manifest, components: { ...g.manifest.manifest.components, Card: { ...g.manifest.manifest.components.Card!, css: ['components/Card/gone.css'] } } } }], components: ['@x/kit:Card'] }, g.root))
     expect(missing.ok).toBe(false)
     expect(missing.files.missing).toHaveLength(1)
     expect(missing.diagnostics[0]).toMatchObject({ level: 'error', code: 'missing-file', subject: '@x/kit:Card' })

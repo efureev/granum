@@ -16,6 +16,7 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['CssSourceError', () => new errors.CssSourceError('https://x/y.css', 'unsupported-protocol')],
   ['DuplicateComponentNameError', () => new errors.DuplicateComponentNameError('p', 'X')],
   ['DuplicateProviderIdError', () => new errors.DuplicateProviderIdError('p', ['a', 'p'])],
+  ['EngineDialectMismatchError', () => new errors.EngineDialectMismatchError('p', 'a/b@1', 'c/d@2', 'engine')],
   ['GranumCodegenError', () => new errors.GranumCodegenError('missing-open-marker', 'a.ts has no marker', 'a.ts')],
   ['InvalidComponentKeyError', () => new errors.InvalidComponentKeyError('bad')],
   ['InvalidComponentNameError', () => new errors.InvalidComponentNameError('p', 'bad name')],

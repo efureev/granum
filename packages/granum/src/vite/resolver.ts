@@ -14,6 +14,12 @@ import process from 'node:process'
 import { resolveGranum } from '../core/resolve'
 import { loadProviderInputs } from '../node/prepare'
 
+/**
+ * Резолверу нужен только список провайдеров: он строит индекс имён по
+ * манифестам и не генерирует CSS, а значит и движок ему не нужен.
+ */
+export type GranumResolverConfig = Pick<GranumConfig, 'providers'>
+
 export interface GranumResolverOptions {
   /** Корень приложения, от которого ищутся манифесты. По умолчанию `process.cwd()`. */
   readonly root?: string
@@ -36,7 +42,7 @@ export interface GranumComponentResolver {
 }
 
 /** Имя → subpath; неоднозначное имя (у двух провайдеров) не резолвится. */
-export function buildComponentIndex(config: GranumConfig, root: string, options: GranumResolverOptions = {}): ReadonlyMap<string, GranumResolvedComponent> {
+export function buildComponentIndex(config: GranumResolverConfig, root: string, options: GranumResolverOptions = {}): ReadonlyMap<string, GranumResolvedComponent> {
   const inputs = loadProviderInputs(config, root)
   const registry = resolveGranum({ providers: inputs, components: [] }).registry
   const allowed = options.providers ? new Set(options.providers) : undefined
@@ -56,7 +62,7 @@ export function buildComponentIndex(config: GranumConfig, root: string, options:
   return index
 }
 
-export function granumResolver(config: GranumConfig, options: GranumResolverOptions = {}): GranumComponentResolver {
+export function granumResolver(config: GranumResolverConfig, options: GranumResolverOptions = {}): GranumComponentResolver {
   let index: ReadonlyMap<string, GranumResolvedComponent> | undefined
   const load = (): ReadonlyMap<string, GranumResolvedComponent> => {
     index ??= buildComponentIndex(config, options.root ?? process.cwd(), options)

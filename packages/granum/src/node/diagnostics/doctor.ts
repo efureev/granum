@@ -5,6 +5,7 @@
  * только под `--strict` (INV-ERR-3).
  */
 import type { ResolvedThemeWarning, ThemeNamesSource } from '../../core/resolveThemes'
+import type { ProviderClassSource } from '../dialects'
 import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
 import { isLoadedManifest } from '../../contract/manifest'
@@ -21,6 +22,15 @@ export interface DoctorProviderInfo {
   readonly components: number
   readonly hasTheme: boolean
   readonly hasEngine: boolean
+  /** Словарь артефакта; `null` — пакет ни от какого словаря не зависит (D-E2). */
+  readonly dialect: string | null
+  /** Отпечаток словаря артефакта: по нему принято решение о доверии списку классов. */
+  readonly vocabulary: string | null
+  /** Реализация, собравшая пакет. */
+  readonly engineName: string | null
+  /** Откуда взят список классов: из манифеста или пересчитан движком приложения. */
+  readonly classSource: ProviderClassSource
+  readonly rulesLoaded: boolean
 }
 
 export interface DoctorComponentInfo {
@@ -58,6 +68,10 @@ export type DoctorDiagnosticCode
     | 'provider-without-manifest'
     | 'provider-scanned'
     | 'unused-provider'
+    | 'provider-dialect-mismatch'
+    | 'provider-classes-recovered'
+    | 'provider-classes-dropped'
+    | 'engine-rules-skipped'
 
 export interface DoctorDiagnostic {
   readonly level: 'error' | 'warn'
@@ -67,6 +81,13 @@ export interface DoctorDiagnostic {
 }
 
 export interface DoctorReport {
+  /** Движок приложения: реализация, словарь и его отпечаток (D-E1). */
+  readonly engine: {
+    readonly name: string
+    readonly version?: string
+    readonly dialect: string
+    readonly vocabulary: string
+  }
   readonly providers: readonly DoctorProviderInfo[]
   readonly components: readonly DoctorComponentInfo[]
   readonly themes: {
@@ -120,14 +141,65 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     diagnostics.push({ level: 'error', code, subject, message })
   }
 
-  const providers: DoctorProviderInfo[] = resolution.providers.map(p => ({
-    id: p.id,
-    form: p.form,
-    ...(isLoadedManifest(p.source) ? { version: p.source.manifest.version } : {}),
-    components: p.components.length,
-    hasTheme: Object.keys(p.theme.themes).length > 0 || p.theme.tokensCss !== undefined || p.theme.baseCss !== undefined || Object.keys(p.theme.tokenDefinitions).length > 0,
-    hasEngine: p.engine !== undefined || p.engineModule !== null,
-  }))
+  const decisions = new Map(app.engineDecisions.map(d => [d.providerId, d]))
+  const providers: DoctorProviderInfo[] = resolution.providers.map((p) => {
+    const decision = decisions.get(p.id)
+    return {
+      id: p.id,
+      form: p.form,
+      ...(isLoadedManifest(p.source) ? { version: p.source.manifest.version } : {}),
+      components: p.components.length,
+      hasTheme: Object.keys(p.theme.themes).length > 0 || p.theme.tokensCss !== undefined || p.theme.baseCss !== undefined || Object.keys(p.theme.tokenDefinitions).length > 0,
+      hasEngine: p.engine !== undefined || (p.engineArtifact?.module ?? null) !== null,
+      dialect: decision?.dialect ?? p.engineArtifact?.dialect ?? null,
+      vocabulary: decision?.vocabulary ?? p.engineArtifact?.vocabulary ?? null,
+      engineName: decision?.engineName ?? p.engineArtifact?.name ?? null,
+      classSource: decision?.classes ?? 'manifest',
+      rulesLoaded: decision?.rulesLoaded ?? false,
+    }
+  })
+
+  /*
+   * Расхождение словарей (D-E2). Совпавший диалект при разошедшихся отпечатках
+   * сам по себе не предупреждение: так выглядит любое приложение с собственным
+   * правилом в фабрике движка. Предупреждает только РАЗНИЦА наборов — класс,
+   * которого приложение не знает (`dropped`), и класс, потерянный сборкой
+   * пакета (`recovered`). Второй опаснее: без отпечатка он молчал бы.
+   */
+  for (const decision of app.engineDecisions) {
+    if (decision.reason === 'dialect') {
+      warn(
+        'provider-dialect-mismatch',
+        decision.providerId,
+        `package was built by '${decision.engineName ?? 'unknown engine'}' for dialect '${decision.dialect}', the application engine speaks '${engine.dialect}' — `
+        + `its classes were re-extracted by the application engine instead of trusted`,
+      )
+    }
+    if (decision.rulesSkipped) {
+      warn(
+        'engine-rules-skipped',
+        decision.providerId,
+        `package ships engine rules for dialect '${decision.dialect}', which the application engine does not speak — the rules are not loaded, `
+        + `and classes that relied on them will show up as unmatched`,
+      )
+    }
+    if (decision.gained.length > 0) {
+      warn(
+        'provider-classes-recovered',
+        decision.providerId,
+        `${decision.gained.length} classes the application engine knows were missing from the manifest: ${decision.gained.slice(0, 8).join(', ')}`
+        + `${decision.gained.length > 8 ? ', …' : ''} — the package build dropped them, the application got them back`,
+      )
+    }
+    if (decision.lost.length > 0) {
+      warn(
+        'provider-classes-dropped',
+        decision.providerId,
+        `${decision.lost.length} classes from the manifest have no rule in the application engine: ${decision.lost.slice(0, 8).join(', ')}`
+        + `${decision.lost.length > 8 ? ', …' : ''} — they stay in the engine input and show up as unmatched`,
+      )
+    }
+  }
 
   const components: DoctorComponentInfo[] = resolution.selection.entries.map(({ provider, component }) => ({
     key: `${provider.id}:${component.name}`,
@@ -288,6 +360,12 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
 
   const ordered = [...diagnostics.filter(d => d.level === 'error'), ...diagnostics.filter(d => d.level === 'warn')]
   return {
+    engine: {
+      name: engine.name,
+      ...(engine.version !== undefined ? { version: engine.version } : {}),
+      dialect: engine.dialect,
+      vocabulary: engine.vocabulary,
+    },
     providers,
     components,
     themes: { names: resolution.themes.names, namesSource: resolution.themes.namesSource, blocks, warnings: resolution.themes.warnings },

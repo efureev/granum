@@ -11,6 +11,7 @@ import {
   InvalidTokenKeyError,
   UnsupportedContractVersionError,
 } from '../core/errors'
+import { isDialect } from '../engine/dialect'
 import { GRANUM_CONTRACT_VERSION } from './types'
 
 /** Имя компонента — сегмент пути `components/<Name>/` (INV-CON-2). */
@@ -56,6 +57,8 @@ export function validateProvider(provider: GranumProvider): void {
     }
   }
 
+  validateEngineContribution(provider)
+
   const names = new Set<string>()
   for (const descriptor of provider.components) {
     if (!isValidComponentName(descriptor.name))
@@ -80,6 +83,35 @@ export function validateProvider(provider: GranumProvider): void {
   }
 
   validateTokenSets(provider.id, provider.theme?.tokenDefinitions)
+}
+
+/**
+ * Вклад в движок (C-E1): правила без объявленного словаря непригодны к проверке,
+ * а диалект, не проходящий E-1, нельзя сравнить равенством с чужим.
+ */
+function validateEngineContribution(provider: GranumProvider): void {
+  const engine = provider.engine
+  if (engine === undefined)
+    return
+  const hasRules = Boolean(engine.rules?.length || engine.variants?.length || engine.preflights?.length)
+  if (engine.dialect === undefined) {
+    if (hasRules) {
+      throw new InvalidProviderError(
+        provider.id,
+        'rules-without-dialect',
+        `'engine' declares rules, variants or preflights without 'engine.dialect'. `
+        + `A rule is written against one vocabulary of class names — name it, so applications can tell whether they may run it.`,
+      )
+    }
+    return
+  }
+  if (!isDialect(engine.dialect)) {
+    throw new InvalidProviderError(
+      provider.id,
+      'invalid-dialect',
+      `'engine.dialect' must look like '<vendor>/<vocabulary>@<major>' (got ${JSON.stringify(engine.dialect)}).`,
+    )
+  }
 }
 
 export function validateBaseUrl(providerId: string, baseUrl: string): void {

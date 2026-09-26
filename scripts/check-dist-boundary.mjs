@@ -8,7 +8,10 @@
  *      они импортируют относительными путями, не содержат `node:`-импортов,
  *      голых имён встроенных модулей Node и запрещённых пакетов;
  *   3. ни один файл `dist` не импортирует `unocss`, `@unocss/*`, `magic-string`,
- *      `css-tree` — рантайма UnoCSS в пакете быть не должно.
+ *      `css-tree` — рантайма UnoCSS в пакете быть не должно;
+ *   4. в `dist` нет реализации движка: ни вендоренного кода апстрима, ни правил
+ *      (INV-ENG-9). Движок живёт в `@feugene/granum-engine-mini`, и ядро не
+ *      имеет права протащить его обратно ни копией, ни импортом.
  *
  * Использование: node scripts/check-dist-boundary.mjs   # 0 — чисто, 1 — нарушения
  */
@@ -104,6 +107,29 @@ for (const file of listJs(dist)) {
   for (const spec of collectImportSpecifiers(readFileSync(file, 'utf8'))) {
     if (!isRelative(spec) && FORBIDDEN_EVERYWHERE.some(re => re.test(spec)))
       fail(`${relative(root, file)}: запрещённый импорт '${spec}' (INV-DEP-1)`)
+  }
+}
+
+// 4. в ядре нет реализации движка (INV-ENG-9, AC-E2) ----------------------
+
+/*
+ * Опознаётся по следам вендоренного апстрима в тексте: имена `createGenerator`,
+ * `presetMini` и `defaultSplitRE` встречаются только в нём. Проверять размером
+ * ненадёжно, а списком файлов — недостаточно: копия могла уехать под другим
+ * именем в общий чанк.
+ */
+const ENGINE_MARKERS = [/\bcreateGenerator\b/, /\bpresetMini\b/, /\bdefaultSplitRE\b/, /@unocss-skip-arbitrary-brackets/]
+for (const file of listJs(dist)) {
+  const text = readFileSync(file, 'utf8')
+  for (const marker of ENGINE_MARKERS) {
+    if (marker.test(text))
+      fail(`${relative(root, file)}: след реализации движка (${marker.source}) — ядро не содержит движка (INV-ENG-9)`)
+  }
+}
+for (const spec of ['granum-engine-mini']) {
+  for (const file of listJs(dist)) {
+    if (collectImportSpecifiers(readFileSync(file, 'utf8')).some(s => s.includes(spec)))
+      fail(`${relative(root, file)}: импорт '${spec}' — ядро не зависит от реализации движка (INV-ENG-9)`)
   }
 }
 

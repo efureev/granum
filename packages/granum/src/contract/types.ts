@@ -98,8 +98,19 @@ export interface GranumThemeContribution {
   readonly defaultThemes?: readonly string[]
 }
 
-/** Правила движка от провайдера в типах granum (C-7). */
+/**
+ * Правила движка от провайдера в типах granum (C-7) плюс объявление словаря,
+ * против которого они написаны (C-E1, C-E2).
+ *
+ * `dialect` обязателен, если есть хоть одно правило: правило без объявленного
+ * словаря нечем проверить, и приложение не узнает, можно ли его исполнять.
+ * Провайдер вправе объявить только `dialect` — как утверждение о словаре своих
+ * классов; сборка сверит его с диалектом движка, которым её запустили.
+ * Отпечаток словаря провайдер не объявляет: это свойство не пакета, а
+ * реализации, собравшей его (C-E2).
+ */
 export interface GranumEngineContribution {
+  readonly dialect?: string
   readonly rules?: readonly GranumRule[]
   readonly variants?: readonly GranumVariant[]
   readonly preflights?: readonly GranumPreflight[]

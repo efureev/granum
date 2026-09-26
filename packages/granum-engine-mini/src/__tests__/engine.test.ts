@@ -1,12 +1,13 @@
-import type { GranumRule } from '../types'
+import type { GranumRule } from '@feugene/granum/engine'
+import { stripComments } from '@feugene/granum/engine'
 import { describe, expect, it } from 'vitest'
-import { createEngine } from '../builtin'
-import { extractClasses, stripComments } from '../extract'
+import { extractMiniClasses } from '../extract'
+import { MINI_DIALECT_BASE, MINI_DIALECT_EXTRA, miniEngine } from '../mini'
 import { GOLDEN_CLASSES } from './fixtures/classes'
 
-const engine = createEngine()
+const engine = miniEngine()
 
-describe('createEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', () => {
+describe('miniEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', () => {
   it('каждый класс входа либо в matched, либо в unmatched; объединение равно входу', async () => {
     const out = await engine.generate({ classes: new Set(GOLDEN_CLASSES) })
     const all = new Set([...out.matched.keys(), ...out.unmatched])
@@ -19,7 +20,7 @@ describe('createEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', (
   it('вывод не зависит от порядка входа и одинаков между вызовами', async () => {
     const a = await engine.generate({ classes: new Set(GOLDEN_CLASSES) })
     const b = await engine.generate({ classes: new Set([...GOLDEN_CLASSES].reverse()) })
-    const c = await createEngine().generate({ classes: new Set(GOLDEN_CLASSES) })
+    const c = await miniEngine().generate({ classes: new Set(GOLDEN_CLASSES) })
     expect(b.css).toBe(a.css)
     expect(c.css).toBe(a.css)
     expect([...b.matched.keys()]).toEqual([...a.matched.keys()])
@@ -42,13 +43,13 @@ describe('createEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', (
     expect(withPreflight.css).toContain('--un-rotate:0')
     expect(withPreflight.css).toContain('@keyframes granularity-spin')
     expect(withPreflight.css).toContain('--un-numeric-spacing')
-    const bare = await createEngine({ preflight: false }).generate({ classes: new Set(['p-4']) })
+    const bare = await miniEngine({ preflight: false }).generate({ classes: new Set(['p-4']) })
     expect(bare.css).not.toContain('--un-rotate:0')
     expect(bare.css).toContain('.p-4{padding:1rem;}')
   })
 })
 
-describe('createEngine: правила провайдеров и приложения (E-3, INV-ENG-3)', () => {
+describe('miniEngine: правила провайдеров и приложения (E-3, INV-ENG-3)', () => {
   it('правило с тем же именем, добавленное позже, перекрывает встроенное и помечается источником', async () => {
     const override: GranumRule = ['uppercase', { 'text-transform': 'uppercase', 'letter-spacing': '0.1em' }]
     const own: GranumRule = [/^tone-(\w+)$/, ([, tone]) => ({ '--tone': tone })]
@@ -72,20 +73,20 @@ describe('createEngine: правила провайдеров и приложе�
   })
 
   it('variablePrefix переименовывает переменные и во встроенных preflights', async () => {
-    const out = await createEngine({ variablePrefix: 'ds-' }).generate({ classes: new Set(['tabular-nums']) })
+    const out = await miniEngine({ variablePrefix: 'ds-' }).generate({ classes: new Set(['tabular-nums']) })
     expect(out.css).toContain('--ds-numeric-spacing')
     expect(out.css).not.toContain('--un-numeric-spacing')
   })
 
   it('extraRules: false — доп-правила не подключаются', async () => {
-    const out = await createEngine({ extraRules: false }).generate({ classes: new Set(['uppercase', 'p-4']) })
+    const out = await miniEngine({ extraRules: false }).generate({ classes: new Set(['uppercase', 'p-4']) })
     expect(out.unmatched).toEqual(['uppercase'])
   })
 
   it('общие кортежи правил не портятся между генераторами', async () => {
-    const a = await createEngine().generate({ classes: new Set(['uppercase', 'sr-only']) })
-    const b = await createEngine({ extraRules: false }).generate({ classes: new Set(['p-4']) })
-    const c = await createEngine().generate({ classes: new Set(['uppercase', 'sr-only']) })
+    const a = await miniEngine().generate({ classes: new Set(['uppercase', 'sr-only']) })
+    const b = await miniEngine({ extraRules: false }).generate({ classes: new Set(['p-4']) })
+    const c = await miniEngine().generate({ classes: new Set(['uppercase', 'sr-only']) })
     expect(b.unmatched).toEqual([])
     expect(c.css).toBe(a.css)
   })
@@ -95,7 +96,7 @@ describe('extract (E-6, INV-ENG-5)', () => {
   it('извлекает классы из разметки, строк и шаблонных литералов', () => {
     const code = `<template><div class="p-4 hover:bg-red bg-[var(--x)]" :class="ok ? 'border-red' : 'border-green'"></div></template>
 <script setup>const cls = \`rounded-[var(--r,4px)] \${x}\`; const s = 'space-x-4 object-[50%_20%]'</script>`
-    const set = extractClasses(code, '/x/A.vue')
+    const set = extractMiniClasses(code, '/x/A.vue')
     for (const c of ['p-4', 'hover:bg-red', 'bg-[var(--x)]', 'border-red', 'border-green', 'rounded-[var(--r,4px)]', 'space-x-4', 'object-[50%_20%]'])
       expect(set, c).toContain(c)
   })
@@ -110,7 +111,7 @@ describe('extract (E-6, INV-ENG-5)', () => {
 // ml-9 в строке
 const url = 'https://example.test/mr-9' // хвостовой комментарий не режется
 </script>`
-    const set = extractClasses(code, '/x/B.vue')
+    const set = extractMiniClasses(code, '/x/B.vue')
     expect(set).toContain('p-1')
     expect(set).not.toContain('p-9')
     expect(set).not.toContain('mt-9')
@@ -120,7 +121,7 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
 
   it('комментарий скомпилированного шаблона Vue (createCommentVNode) не даёт классов', () => {
     const code = `const _hoisted = _createCommentVNode(" p-9 mt-9 "); const c = "p-1"; createCommentVNode('m-9')`
-    const set = extractClasses(code, 'chunks/Panel-abc.js')
+    const set = extractMiniClasses(code, 'chunks/Panel-abc.js')
     expect(set).toContain('p-1')
     expect(set).not.toContain('p-9')
     expect(set).not.toContain('mt-9')
@@ -131,5 +132,46 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
     expect(stripComments('<!-- p-9 --> a', 'x.vue')).not.toContain('p-9')
     expect(stripComments('<!-- p-9 --> a', 'x.ts')).toContain('p-9')
     expect(stripComments(`const u = 'https://a/b' // c`, 'x.ts')).toContain('https://a/b')
+  })
+})
+
+describe('miniEngine: кэш вывода и словарь (A-17, E-1, E-4, INV-ENG-7, INV-ENG-12)', () => {
+  it('вывод для того же множества классов отдаётся из кэша, для другого — нет', async () => {
+    const cached = miniEngine({ preflight: false, extraRules: false })
+    const a = await cached.generate({ classes: new Set(['p-4', 'flex']) })
+    const b = await cached.generate({ classes: new Set(['flex', 'p-4']) })
+    expect(b).toBe(a)
+    const c = await cached.generate({ classes: new Set(['flex']) })
+    expect(c).not.toBe(a)
+    expect(c.css).not.toContain('.p-4')
+  })
+
+  it('доп-правила — другой диалект и другой отпечаток; префикс переменных — ни то, ни другое', () => {
+    const extra = miniEngine()
+    const bare = miniEngine({ extraRules: false })
+    expect(extra.dialect).toBe(MINI_DIALECT_EXTRA)
+    expect(bare.dialect).toBe(MINI_DIALECT_BASE)
+    expect(bare.vocabulary).not.toBe(extra.vocabulary)
+    const prefixed = miniEngine({ variablePrefix: 'ds-', preflight: false })
+    expect(prefixed.dialect).toBe(extra.dialect)
+    expect(prefixed.vocabulary).toBe(extra.vocabulary)
+  })
+
+  it('правило приложения не меняет диалект, но меняет отпечаток (E-4, E-10)', async () => {
+    const withRule = miniEngine({ rules: [['zz-extra', { color: 'red' }]] })
+    expect(withRule.dialect).toBe(miniEngine().dialect)
+    expect(withRule.vocabulary).not.toBe(miniEngine().vocabulary)
+    const out = await withRule.generate({ classes: new Set(['zz-extra']) })
+    expect(out.css).toContain('.zz-extra{color:red;}')
+    expect(out.unmatched).toEqual([])
+    // Тот же набор правил — тот же отпечаток: два инстанса сравнимы (INV-ENG-12).
+    expect(miniEngine({ rules: [['zz-extra', { color: 'red' }]] }).vocabulary).toBe(withRule.vocabulary)
+  })
+
+  it('отпечаток одинаков между вызовами и не зависит от порядка правил', () => {
+    const a = miniEngine({ rules: [['zz-a', { color: 'red' }], ['zz-b', { color: 'blue' }]] })
+    const b = miniEngine({ rules: [['zz-b', { color: 'blue' }], ['zz-a', { color: 'red' }]] })
+    expect(b.vocabulary).toBe(a.vocabulary)
+    expect(a.vocabulary).toMatch(/^fnv64-[0-9a-f]{16}$/)
   })
 })

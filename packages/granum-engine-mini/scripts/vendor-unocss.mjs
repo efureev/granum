@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Вендоринг ядра UnoCSS в `packages/granum/src/engine/vendor/` (ADR-2, E-4).
+ * Вендоринг ядра UnoCSS в `packages/granum-engine-mini/src/vendor/` (ADR-2, E-8).
  *
  * Источник — собранные `dist` четырёх пакетов из `node_modules`, версия
  * зафиксирована в `VENDOR_VERSION` и обязана совпадать с devDependencies.
@@ -19,16 +19,17 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
-import { collectImportSpecifiers, isRelative } from './lib/importSpecifiers.mjs'
+import { collectImportSpecifiers, isRelative } from '../../../scripts/lib/importSpecifiers.mjs'
 
 const VENDOR_VERSION = '66.7.5'
 const PACKAGES = ['core', 'rule-utils', 'extractor-arbitrary-variants', 'preset-mini']
 
-const root = fileURLToPath(new URL('../', import.meta.url))
-const pkgDir = join(root, 'packages/granum')
-const target = join(pkgDir, 'src/engine/vendor')
+// Скрипт живёт в пакете движка, а `@unocss/*` лежат в devDependencies корня
+// воркспейса: yarn 1 поднимает их в общий `node_modules`.
+const pkgDir = fileURLToPath(new URL('../', import.meta.url))
+const root = fileURLToPath(new URL('../../../', import.meta.url))
+const target = join(pkgDir, 'src/vendor')
 
 /**
  * Патчи: [пакет, файл, что, чем, зачем]. `magic-string` — единственная внешняя
@@ -141,7 +142,7 @@ for (const rel of written)
 writeFileSync(join(pkgDir, 'THIRD_PARTY_NOTICES.md'), `# Third-party notices
 
 \`@feugene/granum\` bundles the following packages of [UnoCSS](https://github.com/unocss/unocss),
-copied verbatim from their published builds into \`src/engine/vendor/\` by
+copied verbatim from their published builds into \`src/vendor/\` by
 \`scripts/vendor-unocss.mjs\` (with the patches listed there):
 
 ${PACKAGES.map(name => `- \`@unocss/${name}\` ${VENDOR_VERSION}`).join('\n')}

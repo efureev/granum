@@ -5,7 +5,7 @@
 import type { GranumProviderInput } from './contract'
 import type { GranumThemesInput } from './core/resolve'
 import type { ComponentSelection } from './core/resolveSelection'
-import type { CreateEngineOptions, GranumEngine } from './engine/types'
+import type { GranumEngine } from './engine/types'
 
 export type GranumPruneMode = 'off' | 'report' | 'on'
 
@@ -50,7 +50,13 @@ export interface GranumConfig {
   /** `'all'`, список или `'imports'` — по импортам в `appSources` (A-3). По умолчанию `'all'`. */
   readonly components?: ComponentSelection | 'imports'
   readonly themes?: GranumThemesInput
-  readonly engine?: 'builtin' | GranumEngine | CreateEngineOptions
+  /**
+   * Движок утилит — инстанс, а не имя и не опции (A-E1). Выбор реализации и её
+   * настройка принадлежат приложению: `miniEngine()` из
+   * `@feugene/granum-engine-mini` или свой. Правила приложения передаются
+   * фабрике движка, у конфига поля для правил нет (E-10).
+   */
+  readonly engine: GranumEngine
   readonly css?: GranumCssOptions
   readonly appSources?: GranumAppSources
   readonly pruneTokens?: GranumPruneTokensOptions

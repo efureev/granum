@@ -8,11 +8,10 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { defineGranumProvider } from '../contract'
-import { createEngine } from '../engine/builtin'
 import { emitCss } from '../node/emit'
-import { prepareApp } from '../node/prepare'
 import { collectProviderInstances, scanObjectProvider } from '../node/scanProvider'
-import { makeProvider } from './helpers'
+import { makeProvider, prepareTestApp } from './helpers'
+import { TEST_DIALECT, testEngine } from './testEngine'
 
 function distFixture(): { root: string, dist: string } {
   const root = mkdtempSync(join(tmpdir(), 'granum-scan-'))
@@ -39,7 +38,7 @@ describe('scanObjectProvider (R-6)', () => {
       components: [{ name: 'Card', dependencies: ['Table'], safelist: ['p-4', 'sr-only'] }, { name: 'Table' }],
       theme: { tokensCss: 'theme/tokens.css', tokenDefinitions: { light: { tokens: { accent: 'red' } } } },
     })
-    const loaded = (await scanObjectProvider(provider, createEngine()))!
+    const loaded = (await scanObjectProvider(provider, testEngine()))!
     const card = loaded.manifest.components.Card!
     // Чужая директория компонента — ребро, не файл; общий чанк — файл.
     expect(card.files).toEqual(['chunks/shared.js', 'components/Card/index.js'])
@@ -56,14 +55,14 @@ describe('scanObjectProvider (R-6)', () => {
 
   it('baseUrl не каталог — undefined; в prepareApp остаётся provider-without-manifest', async () => {
     const fake = makeProvider('@x/fake', { components: [{ name: 'A' }] })
-    expect(await scanObjectProvider(fake, createEngine())).toBeUndefined()
-    const app = await prepareApp({ providers: [fake], components: ['@x/fake:A'] }, tmpdir())
+    expect(await scanObjectProvider(fake, testEngine())).toBeUndefined()
+    const app = await prepareTestApp({ providers: [fake], components: ['@x/fake:A'] }, tmpdir())
     expect(app.warnings.map(w => w.kind)).toEqual(['provider-without-manifest'])
   })
 
   it('prepareApp: объектный провайдер даёт классы в CSS и предупреждение provider-scanned; донор-инстанс сканируется тоже', async () => {
     const { root, dist } = distFixture()
-    const donor = defineGranumProvider({ id: '@x/base', contractVersion: 1, baseUrl: `${pathToFileURL(dist).href}/`, components: [{ name: 'Table' }], engine: { rules: [['kit-reset', { appearance: 'none' }]] } })
+    const donor = defineGranumProvider({ id: '@x/base', contractVersion: 1, baseUrl: `${pathToFileURL(dist).href}/`, components: [{ name: 'Table' }], engine: { dialect: TEST_DIALECT, rules: [['kit-reset', { appearance: 'none' }]] } })
     const provider = defineGranumProvider({
       id: '@x/kit',
       contractVersion: 1,
@@ -72,7 +71,7 @@ describe('scanObjectProvider (R-6)', () => {
       dependencies: [donor],
     })
     expect([...collectProviderInstances(provider).keys()]).toEqual(['@x/base'])
-    const app = await prepareApp({ providers: [provider], components: ['@x/kit:Card'] }, root)
+    const app = await prepareTestApp({ providers: [provider], components: ['@x/kit:Card'] }, root)
     expect(app.warnings.map(w => `${w.kind}:${'providerId' in w ? w.providerId : ''}`).sort()).toEqual(['provider-scanned:@x/base', 'provider-scanned:@x/kit'])
     expect(app.resolution.selection.order).toEqual(['@x/base:Table', '@x/kit:Card'])
     expect(app.resolution.providers.every(p => p.form === 'manifest')).toBe(true)

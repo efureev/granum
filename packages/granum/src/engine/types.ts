@@ -98,16 +98,22 @@ export interface EngineOutput {
 }
 
 export interface GranumEngine {
+  /** Реализация: для диагностики. */
   readonly name: string
+  /** Версия реализации. Только для чтения человеком: в решениях не участвует (E-5). */
+  readonly version?: string
+  /**
+   * Имя словаря классов (E-1). По нему грузятся правила провайдеров: правило,
+   * написанное для словаря, переживает смену реализации внутри мажора.
+   */
+  readonly dialect: string
+  /**
+   * Отпечаток фактического множества генерируемых имён (E-4). По нему решается,
+   * верить списку классов манифеста или пересчитать его. Считается
+   * `vocabularyFingerprint` либо объявляется движком самостоятельно, если он
+   * гарантирует правило изменения сам.
+   */
+  readonly vocabulary: string
   extract: (code: string, id: string) => ReadonlySet<string>
   generate: (input: EngineInput) => Promise<EngineOutput>
-}
-
-export interface CreateEngineOptions {
-  /** Preflight встроенного пресета (`*,::before,::after{--un-rotate:0;…}`). По умолчанию `true`. */
-  readonly preflight?: boolean
-  /** Префикс кастомных свойств встроенных правил (`--un-` по умолчанию). */
-  readonly variablePrefix?: string
-  /** Подключать ли дополнительные правила поверх preset-mini (E-4). По умолчанию `true`. */
-  readonly extraRules?: boolean
 }

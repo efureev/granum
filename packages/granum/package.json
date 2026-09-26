@@ -1,7 +1,7 @@
 {
   "name": "@feugene/granum",
   "description": "Build pipeline for granular UI packages: components, styles, design tokens and themes flow from provider manifests to the application bundle through one resolution. Framework-agnostic, zero dependencies.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "author": {
     "name": "Evgeniy Fureev",
@@ -101,21 +101,16 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.1.0",
-    "@feugene/unocss-mini-extra-rules": "0.8.1",
+    "@feugene/granum-engine-mini": "0.2.0",
     "@types/node": "^26.1.1",
-    "@unocss/core": "66.7.5",
-    "@unocss/extractor-arbitrary-variants": "66.7.5",
-    "@unocss/preset-mini": "66.7.5",
-    "@unocss/rule-utils": "66.7.5",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
     "typescript": "^6.0.3",
-    "unocss": "66.7.5",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
   },
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.build.json && node ../../scripts/copy-vendor-types.mjs",
+    "build": "vite build && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint --fix .",
     "lint:check": "eslint .",

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { InvalidConfigError, validateGranumConfig } from '../vite/validateConfig'
+import { testEngine } from './testEngine'
+
+/** Валидный движок для форм, где проверяется не он (A-E1). */
+const engine = testEngine()
 
 describe('validateGranumConfig (A-1)', () => {
   it('валидные формы проходят', () => {
-    expect(() => validateGranumConfig({ providers: ['@x/a'] })).not.toThrow()
-    expect(() => validateGranumConfig({ providers: ['@x/a'], components: 'imports', appSources: { dirs: ['src'] }, themes: { names: ['light'] }, pruneTokens: { mode: 'on' }, js: { guard: 'warn' }, css: { layerPrefix: 'ds' } })).not.toThrow()
+    expect(() => validateGranumConfig({ providers: ['@x/a'], engine })).not.toThrow()
+    expect(() => validateGranumConfig({ providers: ['@x/a'], engine, components: 'imports', appSources: { dirs: ['src'] }, themes: { names: ['light'] }, pruneTokens: { mode: 'on' }, js: { guard: 'warn' }, css: { layerPrefix: 'ds' } })).not.toThrow()
   })
 
   it.each([
@@ -12,13 +16,20 @@ describe('validateGranumConfig (A-1)', () => {
     [{}, 'providers'],
     [{ providers: [] }, 'providers'],
     [{ providers: [''] }, 'providers.0'],
-    [{ providers: ['a'], components: 42 }, 'components'],
-    [{ providers: ['a'], components: 'imports' }, 'components'],
-    [{ providers: ['a'], themes: { names: 'light' } }, 'themes.names'],
-    [{ providers: ['a'], pruneTokens: { mode: 'maybe' } }, 'pruneTokens.mode'],
-    [{ providers: ['a'], appSources: { dirs: 'src' } }, 'appSources'],
-    [{ providers: ['a'], js: { guard: 'loud' } }, 'js.guard'],
-    [{ providers: ['a'], css: { layerPrefix: '1x' } }, 'css.layerPrefix'],
+    // Движок обязателен и только инстансом (A-E2): ни строки, ни объекта опций.
+    [{ providers: ['a'] }, 'engine'],
+    [{ providers: ['a'], engine: 'builtin' }, 'engine'],
+    [{ providers: ['a'], engine: { extraRules: false } }, 'engine.extract'],
+    [{ providers: ['a'], engine: { ...engine, name: '' } }, 'engine.name'],
+    [{ providers: ['a'], engine: { ...engine, dialect: 'preset-mini' } }, 'engine.dialect'],
+    [{ providers: ['a'], engine: { ...engine, vocabulary: '' } }, 'engine.vocabulary'],
+    [{ providers: ['a'], engine, components: 42 }, 'components'],
+    [{ providers: ['a'], engine, components: 'imports' }, 'components'],
+    [{ providers: ['a'], engine, themes: { names: 'light' } }, 'themes.names'],
+    [{ providers: ['a'], engine, pruneTokens: { mode: 'maybe' } }, 'pruneTokens.mode'],
+    [{ providers: ['a'], engine, appSources: { dirs: 'src' } }, 'appSources'],
+    [{ providers: ['a'], engine, js: { guard: 'loud' } }, 'js.guard'],
+    [{ providers: ['a'], engine, css: { layerPrefix: '1x' } }, 'css.layerPrefix'],
   ])('%j → InvalidConfigError at %s', (config, path) => {
     try {
       validateGranumConfig(config)

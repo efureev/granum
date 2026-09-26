@@ -178,6 +178,9 @@ interface GranumComponentDescriptor {
 | `baseUrl` не URL / без `/` | `InvalidProviderError` (`invalid-base-url`, `base-url-not-a-directory`) | регистрация |
 | запись `dependencies` не инстанс и не непустая строка | `InvalidProviderError` (`invalid-dependency`) | регистрация |
 | `cssFiles` дескриптора вне `components/<Name>/` | `InvalidProviderError` (`css-file-escapes-component`) | регистрация |
+| `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
+| правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |
+| объявленный диалект ≠ диалект движка сборки | `EngineDialectMismatchError` | сборка провайдера |
 | ключ токена с `--` | `InvalidTokenKeyError` | регистрация |
 | два инстанса с одним `id` | `DuplicateProviderIdError` | регистрация |
 | два компонента с одним именем | `DuplicateComponentNameError` | регистрация |

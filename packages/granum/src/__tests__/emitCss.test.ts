@@ -7,9 +7,8 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CssReadError, TokenRefError } from '../core/errors'
 import { emitCss, LAYER_NAMES, wrapLayers } from '../node/emit'
-import { prepareApp } from '../node/prepare'
 import { buildReport } from '../node/report'
-import { makeManifest, makeProvider } from './helpers'
+import { makeManifest, makeProvider, prepareTestApp } from './helpers'
 
 /** Провайдер-манифест с файлами на диске: tokens, base, тема, CSS компонента. */
 function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } {
@@ -33,9 +32,9 @@ function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } 
   return { root, manifest }
 }
 
-async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<ReturnType<typeof emitCss>>, app: Awaited<ReturnType<typeof prepareApp>> }> {
+async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<ReturnType<typeof emitCss>>, app: Awaited<ReturnType<typeof prepareTestApp>> }> {
   const { root, manifest } = fixture()
-  const app = await prepareApp({ providers: [manifest], ...config }, root)
+  const app = await prepareTestApp({ providers: [manifest], ...config }, root)
   return { css: await emitCss(app), app }
 }
 
@@ -81,7 +80,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
   it('отсутствующий файл — CssReadError с провайдером и секцией', async () => {
     const { root, manifest } = fixture()
     const broken = { ...manifest, manifest: { ...manifest.manifest, theme: { ...manifest.manifest.theme, baseCss: 'theme/nope.css' } } }
-    const app = await prepareApp({ providers: [broken] }, root)
+    const app = await prepareTestApp({ providers: [broken] }, root)
     await expect(emitCss(app)).rejects.toBeInstanceOf(CssReadError)
     await expect(emitCss(app)).rejects.toMatchObject({ providerId: '@x/kit', section: 'base' })
   })
@@ -109,7 +108,7 @@ describe('emitCss: обрезка токенов (INV-TOK-1, INV-TOK-2)', () => 
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/App.vue'), '<template><div class="text-[var(--unused)] mx-auto"></div></template>')
-    const app = await prepareApp({ providers: [manifest], components: ['@x/kit:Card'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'on' } }, root)
+    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Card'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'on' } }, root)
     const css = await emitCss(app)
     expect(css.layers.tokens).toContain('--unused')
     expect(css.layers.utilities).toContain('.mx-auto{')
@@ -122,7 +121,7 @@ describe('buildReport (A-19, A-20)', () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/App.vue'), '<template><div class="bg-[var(--ghost)]"></div></template>')
-    const app = await prepareApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' } }, root)
+    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' } }, root)
     const css = await emitCss(app)
     const report = buildReport(app, css)
     expect(report.selection.map(s => s.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
@@ -142,7 +141,7 @@ describe('prepareApp: tokensRef тем приложения', () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src/themes'), { recursive: true })
     writeFileSync(join(root, 'src/themes/crimson.css'), ':root{--app-bg:#111;--app-fg:#eee}')
-    const app = await prepareApp({
+    const app = await prepareTestApp({
       providers: [manifest],
       themes: { define: { crimson: { tokensRef: { url: 'src/themes/crimson.css', as: '.crimson' }, tokens: { 'app-fg': '#fff' } } } },
     }, root)
@@ -150,7 +149,7 @@ describe('prepareApp: tokensRef тем приложения', () => {
     expect(blocks[0]!.selector).toBe('.crimson')
     expect(blocks[0]!.tokens.get('app-bg')!.effective).toBe('#111')
     expect(blocks[0]!.tokens.get('app-fg')!.effective).toBe('#fff')
-    await expect(prepareApp({ providers: [manifest], themes: { define: { x: { tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
+    await expect(prepareTestApp({ providers: [manifest], themes: { define: { x: { tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
   })
 })
 
@@ -158,12 +157,12 @@ describe('prepareApp: провайдеры и селекция (A-2, A-3, R-6)',
   it('объектная форма — предупреждение; imports — селекция из исходников', async () => {
     const { root, manifest } = fixture()
     const object = makeProvider('obj', { components: [{ name: 'Z' }] })
-    const app = await prepareApp({ providers: [manifest, object] }, root)
+    const app = await prepareTestApp({ providers: [manifest, object] }, root)
     expect(app.warnings).toContainEqual({ kind: 'provider-without-manifest', providerId: 'obj' })
 
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/main.ts'), `import { Panel } from '@x/kit/components/Panel'`)
-    const byImports = await prepareApp({ providers: [manifest], components: 'imports', appSources: { dirs: ['src'] } }, root)
+    const byImports = await prepareTestApp({ providers: [manifest], components: 'imports', appSources: { dirs: ['src'] } }, root)
     expect(byImports.resolution.selection.order).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(byImports.appScan.componentImports).toEqual(['@x/kit:Panel'])
   })

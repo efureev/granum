@@ -10,6 +10,7 @@ import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { ComponentOutsideSelectionError } from '../core/errors'
 import { granum } from '../vite/plugin'
+import { testEngine } from './testEngine'
 
 /**
  * Сквозная интеграция (A-2…A-20): провайдер собирается плагином `granumProvider`
@@ -50,13 +51,13 @@ async function buildProvider(): Promise<string> {
     ],
     theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light', 'dark'], tokenDefinitions: { light: { tokens: { 't-bg': '#fff' } } } },
   })
-  await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
+  await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
   return root
 }
 
 interface AppBuild { root: string, css: string, js: string, report: Record<string, any> | undefined, logs: string[] }
 
-async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers'> & { providers?: GranumConfig['providers'] }, appCode: string, entry = `import 'virtual:granum.css'`): Promise<AppBuild> {
+async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`): Promise<AppBuild> {
   const root = mkdtempSync(join(tmpdir(), 'granum-app-'))
   mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
   symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
@@ -72,7 +73,7 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granum({ providers: ['@t/kit'], appSources: { dirs: ['src'] }, ...config }, { log: l => logs.push(l) })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, ...config }, { log: l => logs.push(l) })],
     build: { minify: false },
   })
   const assets = join(root, 'dist/assets')

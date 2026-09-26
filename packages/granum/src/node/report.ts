@@ -1,3 +1,4 @@
+import type { ProviderClassSource, ReextractReason } from './dialects'
 /**
  * Отчёт сборки приложения (A-19, A-20, INV-DIAG-1, INV-DIAG-2): считается
  * теми же функциями, что и эмиссия, поэтому не может назвать значение,
@@ -21,6 +22,25 @@ export interface LayerSize {
 
 export interface GranumBuildReport {
   readonly generatedBy: string
+  /** Движок приложения: реализация, словарь и его отпечаток (D-E1). */
+  readonly engine: {
+    readonly name: string
+    readonly version?: string
+    readonly dialect: string
+    readonly vocabulary: string
+  }
+  /** По провайдеру: чем собран, откуда взяты классы и что дал пересчёт (D-E1). */
+  readonly providers: readonly {
+    readonly id: string
+    readonly dialect: string | null
+    readonly vocabulary: string | null
+    readonly engineName: string | null
+    readonly classes: ProviderClassSource
+    readonly reason: ReextractReason
+    readonly rulesLoaded: boolean
+    readonly lost: readonly string[]
+    readonly gained: readonly string[]
+  }[]
   readonly selection: readonly { readonly key: string, readonly dependencies: readonly string[] }[]
   readonly themes: { readonly names: readonly string[], readonly namesSource: string }
   readonly classes: {
@@ -69,12 +89,18 @@ function sizeOf(text: string): LayerSize {
 }
 
 export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
-  const { resolution } = app
+  const { resolution, engine } = app
   const sourcesOf = (className: string): string[] => {
     const out: string[] = []
     for (const { provider, component } of resolution.selection.entries) {
       if (component.classes.includes(className) || component.safelist.includes(className))
         out.push(`${provider.id}:${component.name}`)
+    }
+    // Класс, потерянный пересчётом, в списках компонентов уже не лежит — но
+    // источник у него есть, и без него он выпал бы из `unmatched` (A-E7).
+    for (const decision of app.engineDecisions) {
+      if (decision.lost.includes(className))
+        out.push(decision.providerId)
     }
     if (app.appScan.classes.includes(className))
       out.push('app')
@@ -132,6 +158,23 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
 
   return {
     generatedBy: `@feugene/granum@${GRANUM_VERSION}`,
+    engine: {
+      name: engine.name,
+      ...(engine.version !== undefined ? { version: engine.version } : {}),
+      dialect: engine.dialect,
+      vocabulary: engine.vocabulary,
+    },
+    providers: app.engineDecisions.map(d => ({
+      id: d.providerId,
+      dialect: d.dialect,
+      vocabulary: d.vocabulary,
+      engineName: d.engineName,
+      classes: d.classes,
+      reason: d.reason,
+      rulesLoaded: d.rulesLoaded,
+      lost: d.lost,
+      gained: d.gained,
+    })),
     selection: resolution.selection.entries.map(({ provider, component }) => ({
       key: `${provider.id}:${component.name}`,
       dependencies: sortedUnique(component.dependencies.map(d => (typeof d === 'string' ? (d.includes(':') ? d : `${provider.id}:${d}`) : d.components.map(n => `${d.provider}:${n}`).join(',')))),

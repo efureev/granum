@@ -1,10 +1,10 @@
 /**
- * Форма `granum.manifest.json` версии 1 (ТЗ §7, `docs/manifest.md`).
- * Только типы: писатель и читатель появляются на этапе 3.
+ * Форма `granum.manifest.json` версии 2 (ТЗ §7, `docs/manifest.md`).
+ * Только типы: писатель и читатель живут в `./node`.
  */
 import type { GranumTokenSet } from './types'
 
-export const GRANUM_MANIFEST_VERSION = 1 as const
+export const GRANUM_MANIFEST_VERSION = 2 as const
 
 export interface GranumManifestTheme {
   readonly tokensCss?: string
@@ -35,6 +35,24 @@ export interface GranumManifestComponent {
   readonly hash: string
 }
 
+/**
+ * Движок, которым порождён артефакт (M-E2). Записывается фактом, а не
+ * пожеланием: список классов каждого компонента отфильтрован именно им, и без
+ * этой записи приложение не может ни доверять списку, ни объяснить пропуск.
+ */
+export interface GranumManifestEngine {
+  /** Имя словаря (E-1) либо `null`, если артефакт ни от какого словаря не зависит. */
+  readonly dialect: string | null
+  /** Отпечаток фактического набора имён (E-4); `null` тогда и только тогда, когда `dialect` равен `null`. */
+  readonly vocabulary: string | null
+  /** Реализация, собравшая пакет. */
+  readonly name: string
+  /** Версия реализации — только для чтения человеком (E-5). */
+  readonly version?: string
+  /** Путь к ESM-модулю с правилами провайдера относительно манифеста, либо `null` (M-E4). */
+  readonly module: string | null
+}
+
 export interface GranumManifestWarning {
   readonly code: string
   readonly component?: string
@@ -50,7 +68,7 @@ export interface GranumManifest {
   readonly hash: string
   readonly dependencies: readonly string[]
   readonly theme: GranumManifestTheme
-  readonly engineModule: string | null
+  readonly engine: GranumManifestEngine
   readonly components: Readonly<Record<string, GranumManifestComponent>>
   readonly warnings: readonly GranumManifestWarning[]
 }

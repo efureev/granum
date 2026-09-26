@@ -6,6 +6,7 @@ import type {
   GranumComponentDependency,
   GranumEngineContribution,
   GranumLoadedManifest,
+  GranumManifestEngine,
   GranumProvider,
   GranumProviderInput,
   GranumTokenRef,
@@ -50,8 +51,13 @@ export interface ProviderNode {
   readonly baseUrl: string | undefined
   readonly components: readonly ComponentNode[]
   readonly theme: ThemeNode
+  /** Вклад в движок, объявленный объектом контракта; у манифестной формы `undefined`. */
   readonly engine: GranumEngineContribution | undefined
-  readonly engineModule: string | null
+  /**
+   * Движок, которым порождён артефакт (M-E2). Только у манифестной формы: у
+   * объектной артефакта нет — её классы считает движок приложения здесь и сейчас.
+   */
+  readonly engineArtifact: GranumManifestEngine | undefined
   /** Исходные зависимости: инстансы тянутся в граф, строки — мягкие. */
   readonly dependencies: readonly (GranumProvider | string)[]
   readonly source: GranumProviderInput
@@ -93,7 +99,7 @@ function fromObject(provider: GranumProvider): ProviderNode {
       declares: EMPTY,
     },
     engine: provider.engine,
-    engineModule: null,
+    engineArtifact: undefined,
     dependencies: provider.dependencies ?? EMPTY,
     source: provider,
   }
@@ -128,7 +134,7 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
       declares: manifest.theme.declares,
     },
     engine: undefined,
-    engineModule: manifest.engineModule,
+    engineArtifact: manifest.engine,
     dependencies: manifest.dependencies,
     source: loaded,
   }

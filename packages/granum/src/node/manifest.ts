@@ -3,7 +3,7 @@
  * Node-only: `node:crypto` для хеша, `node:fs` для файлов, `node:module` для
  * поиска манифеста через `exports` пакета.
  */
-import type { GranumLoadedManifest, GranumManifest, GranumTokenSet } from '../contract'
+import type { GranumLoadedManifest, GranumManifest, GranumManifestEngine, GranumTokenSet } from '../contract'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
 import { InvalidManifestError, ManifestNotFoundError, UnsupportedContractVersionError, UnsupportedManifestVersionError } from '../core/errors'
+import { isDialect } from '../engine/dialect'
 
 export const MANIFEST_FILE_NAME = 'granum.manifest.json'
 
@@ -24,7 +25,7 @@ const ROOT_KEY_ORDER = [
   'hash',
   'dependencies',
   'theme',
-  'engineModule',
+  'engine',
   'components',
   'warnings',
 ] as const
@@ -100,6 +101,7 @@ export function parseManifest(text: string, baseUrl: string, file?: string): Gra
     throw new UnsupportedContractVersionError(manifest.id, manifest.contractVersion, GRANUM_CONTRACT_VERSION)
 
   validatePaths(manifest, file)
+  validateDialectScope(manifest, file)
 
   const expected = computeManifestHash(manifest)
   if (manifest.hash !== expected) {
@@ -251,8 +253,7 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
   const id = expectString(raw.id, 'id', file)
   const theme = expectRecord(raw.theme, 'theme', file)
   const components = expectRecord(raw.components, 'components', file)
-  if (raw.engineModule !== null)
-    expectString(raw.engineModule, 'engineModule', file)
+  const engine = validateEngineBlock(raw.engine, file)
   if (!Array.isArray(raw.warnings))
     throw schema('warnings', `expected an array, got ${describe(raw.warnings)}`, file)
   for (const [i, warning] of raw.warnings.entries())
@@ -294,9 +295,68 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
     hash: expectString(raw.hash, 'hash', file),
     dependencies: expectStringArray(raw.dependencies, 'dependencies', file),
     theme: theme as unknown as GranumManifest['theme'],
-    engineModule: raw.engineModule as string | null,
+    engine,
     components: components as unknown as GranumManifest['components'],
     warnings: raw.warnings as GranumManifest['warnings'],
+  }
+}
+
+/**
+ * Блок `engine` (M-E2, M-E3). Диалект и отпечаток обязаны быть `null`
+ * одновременно: отпечаток без словаря нечему ключевать, а словарь без отпечатка
+ * не даёт решить, верить ли списку классов.
+ */
+function validateEngineBlock(value: unknown, file?: string): GranumManifestEngine {
+  const engine = expectRecord(value, 'engine', file)
+  if (engine.dialect !== null) {
+    const dialect = expectString(engine.dialect, 'engine.dialect', file)
+    if (!isDialect(dialect))
+      throw schema('engine.dialect', `expected '<vendor>/<vocabulary>@<major>', got ${JSON.stringify(dialect)}`, file)
+  }
+  if (engine.vocabulary !== null && expectString(engine.vocabulary, 'engine.vocabulary', file).length === 0)
+    throw schema('engine.vocabulary', 'expected a non-empty string', file)
+  if ((engine.dialect === null) !== (engine.vocabulary === null)) {
+    throw new InvalidManifestError(
+      'dialect-vocabulary-mismatch',
+      `'engine.dialect' and 'engine.vocabulary' must both be null or both be set (dialect ${JSON.stringify(engine.dialect)}, vocabulary ${JSON.stringify(engine.vocabulary)})`,
+      'engine',
+      file,
+    )
+  }
+  if (expectString(engine.name, 'engine.name', file).length === 0)
+    throw schema('engine.name', 'expected a non-empty string', file)
+  if (engine.version !== undefined)
+    expectString(engine.version, 'engine.version', file)
+  if (engine.module !== null)
+    expectString(engine.module, 'engine.module', file)
+  return engine as unknown as GranumManifestEngine
+}
+
+/**
+ * E-3: диалект `null` означает «артефакт ни от какого словаря не зависит и ни
+ * одного не расширяет». Классы, safelist или модуль правил это опровергают, и
+ * тогда `null` — не факт, а потерянная запись о движке.
+ */
+function validateDialectScope(manifest: GranumManifest, file?: string): void {
+  if (manifest.engine.dialect !== null)
+    return
+  if (manifest.engine.module !== null) {
+    throw new InvalidManifestError(
+      'dialect-without-classes',
+      `'engine.dialect' is null, but 'engine.module' ships rules — rules belong to a vocabulary, so name it`,
+      'engine.module',
+      file,
+    )
+  }
+  for (const [name, component] of Object.entries(manifest.components)) {
+    if (component.classes.length === 0 && component.safelist.length === 0)
+      continue
+    throw new InvalidManifestError(
+      'dialect-without-classes',
+      `'engine.dialect' is null, but component '${name}' has ${component.classes.length} classes and ${component.safelist.length} safelist entries — a class list was filtered by some engine, and the manifest must say which`,
+      `components.${name}`,
+      file,
+    )
   }
 }
 
@@ -316,8 +376,8 @@ function validatePaths(manifest: GranumManifest, file?: string): void {
   check(manifest.theme.baseCss, 'theme.baseCss')
   for (const [theme, path] of Object.entries(manifest.theme.themes))
     check(path, `theme.themes.${theme}`)
-  if (manifest.engineModule !== null)
-    check(manifest.engineModule, 'engineModule')
+  if (manifest.engine.module !== null)
+    check(manifest.engine.module, 'engine.module')
   for (const [name, component] of Object.entries(manifest.components)) {
     check(component.entry, `components.${name}.entry`)
     component.files.forEach((p, i) => check(p, `components.${name}.files.${i}`))

@@ -6,12 +6,12 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createEngine } from '../engine/builtin'
 import { scanAppSources } from '../node/appSources'
 import { clearManifestCache, loadPackageManifest, serializeManifest } from '../node/manifest'
-import { prepareApp, tagSelection } from '../node/prepare'
+import { tagSelection } from '../node/prepare'
 import { buildComponentIndex, granumResolver } from '../vite/resolver'
-import { component as makeComponent, makeManifest, makeProvider } from './helpers'
+import { component as makeComponent, makeManifest, makeProvider, prepareTestApp } from './helpers'
+import { testEngine } from './testEngine'
 
 function appWithManifest(): { root: string, dist: string } {
   const root = mkdtempSync(join(tmpdir(), 'granum-autoimport-'))
@@ -44,11 +44,11 @@ describe('granumResolver (A-8)', () => {
   it('теги разметки без импорта попадают в селекцию при components: imports', async () => {
     const { root } = appWithManifest()
     writeFileSync(join(root, 'src/App.vue'), '<template>\n  <Panel class="gap-2">\n    <my-widget /><Unknown/>\n  </Panel>\n</template>\n')
-    const engine = createEngine()
+    const engine = testEngine()
     const scan = scanAppSources({ dirs: ['src'] }, root, engine)
     expect(scan.componentTags).toEqual(['Panel', 'Unknown'])
     expect(scan.componentImports).toEqual([])
-    const app = await prepareApp({ providers: ['@x/kit'], components: 'imports', appSources: { dirs: ['src'] } }, root)
+    const app = await prepareTestApp({ providers: ['@x/kit'], components: 'imports', appSources: { dirs: ['src'] } }, root)
     expect(app.resolution.selection.order).toEqual(['@x/kit:Card', '@x/kit:Panel'])
   })
 
@@ -75,15 +75,5 @@ describe('кэши подготовки (A-17)', () => {
     expect(second.manifest.components.Card?.classes).toEqual(['p-8'])
     // require.resolve отдаёт realpath: на macOS /var → /private/var.
     expect(second.baseUrl.endsWith('/node_modules/@x/kit/dist/')).toBe(true)
-  })
-
-  it('вывод движка для того же множества классов отдаётся из кэша', async () => {
-    const engine = createEngine({ preflight: false, extraRules: false })
-    const a = await engine.generate({ classes: new Set(['p-4', 'flex']) })
-    const b = await engine.generate({ classes: new Set(['flex', 'p-4']) })
-    expect(b).toBe(a)
-    const c = await engine.generate({ classes: new Set(['flex']) })
-    expect(c).not.toBe(a)
-    expect(c.css).not.toContain('.p-4')
   })
 })
