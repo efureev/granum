@@ -37,7 +37,8 @@ UI-пакетов (компоненты, стили, токены, темы) о�
 | `yarn build:all` | пакет → фикстуры → приложения |
 | `yarn verify:fixtures` | round-trip и сверка манифестов собранных фикстур с `expected-manifest.mjs` |
 | `yarn check:determinism` | повторная сборка фикстур: манифест побайтно стабилен |
-| `yarn test:all` | всё, что гоняет CI |
+| `yarn e2e` | браузерные проверки каскада и HMR на dev-сервере `apps/app-1` (нужен `yarn playwright install chromium`) |
+| `yarn test:all` | всё, что гоняет CI, кроме `e2e`: тот тянет браузер и живёт своей джобой |
 
 ## Общение
 

@@ -110,10 +110,35 @@ jobs:
       - name: Verify size budget of benchmark stands
         run: yarn sizes:check
 
-  # Публикация в npm по тегу `v<semver>`; зависит и от `contract`: пакет,
-  # ломающий провайдеров или приложения, публиковать нельзя.
+  # e2e на dev-сервере: INV-CSS-6 (утилита приложения перебивает базовый стиль
+  # компонента) и AC-9 (правка разметки приезжает по HMR без перезагрузки). Оба
+  # утверждения наблюдаемы только в браузере — ни снапшот CSS, ни отчёт сборки
+  # их не подтверждают.
+  e2e:
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      # Dev-серверу нужен собранный пакет (приложение импортирует `./vite` из
+      # `dist`) и манифесты фикстур; сами приложения собирать не нужно.
+      - name: Build package and fixtures
+        run: yarn build && yarn build:fixtures
+      - name: Install Chromium
+        run: yarn playwright install --with-deps chromium
+      - name: Run e2e on the dev server
+        run: yarn e2e
+
+  # Публикация в npm по тегу `v<semver>`; зависит и от `contract`, и от `e2e`:
+  # пакет, ломающий провайдеров, приложения или каскад в браузере, публиковать
+  # нельзя.
   publish-npm:
-    needs: [ build, contract, docs-parity ]
+    needs: [ build, contract, docs-parity, e2e ]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

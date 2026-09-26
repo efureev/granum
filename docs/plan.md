@@ -126,7 +126,7 @@ granum/
 | 7.6 `docs/ru` + `docs/en`: getting-started, authoring-providers, usage-in-apps, themes-and-tokens, architecture, cli, troubleshooting, measuring-weight, `MIGRATION.md` | N-8, AC-10 |
 | 7.7 `SPEC.md` пакета из `spec.md` §5–§8, §14 (нормативная часть) | N-8 |
 | 7.8 Релиз `0.1.0` (версия, CHANGELOG, `SPEC.md`, `MIGRATION.md` в пакете). Заметка в README v1 не внесена: репозиторий v1 по решению автора не изменяется | ADR-7 |
-| 7.9 e2e в браузере на dev-сервере `apps/app-1` (проведено 2026-09-25, Chrome): `gap` у `.x-sp-test` из слоя `components` — 12px; после правки `App.vue` (`<XTest1 class="gap-0">`) правило `.gap-0` пришло по HMR без перезагрузки (маркер `window` сохранён, `navigation.type === 'navigate'`), computed `gap` — 0px: утилита приложения перебивает базовый стиль компонента | INV-CSS-6, AC-9 |
+| 7.9 e2e в браузере на dev-сервере `apps/app-1` — автоматизирован: `scripts/e2e-dev.mjs` на playwright, девять проверок (порядок слоёв, базовый `gap` компонента, утилита `p-4`, раскрытый `@apply`, появление правила `.gap-0` по HMR, сохранность маркера в `window`, отсутствие перезагрузок, `gap` после правки). Своя джоба CI `e2e`, в `test:all` не входит: локальный прогон не должен тянуть браузер | INV-CSS-6, AC-9 |
 
 ## Порядок и зависимости этапов
 
