@@ -1,0 +1,21 @@
+{
+  "name": "@granum-fixtures/atoms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Granum provider on its own vocabulary: dialect granum-fixtures/atoms@1, own engine rules shipped as a module.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/AtBox": "./dist/components/AtBox/index.js",
+    "./components/AtChip": "./dist/components/AtChip/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=At --exports=import"
+  }
+}

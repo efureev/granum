@@ -1,4 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 /**
  * Тот же стенд, что `bench-one`, с одним отличием: обрезка токенов включена.
@@ -10,6 +11,7 @@ import { defineGranumConfig } from '@feugene/granum/vite'
  * само, без этой строки уедет из CSS при зелёной сборке.
  */
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
   themes: { names: ['light', 'dark'] },

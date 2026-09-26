@@ -1,0 +1,14 @@
+{
+  "name": "@granum-engines/atoms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Toy GranumEngine for the granum-fixtures/atoms@1 dialect: proves the engine contract is implementable outside granum itself.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "vite build"
+  }
+}

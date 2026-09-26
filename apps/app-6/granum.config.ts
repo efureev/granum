@@ -1,10 +1,12 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 /**
  * Набор тем принадлежит приложению: провайдер поставляет `light`/`dark`,
  * в сборке — три темы приложения, унаследовавшие `light` через `extends`.
  */
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@granum-fixtures/simple'],
   components: ['@granum-fixtures/simple:XTokenized'],
   themes: {

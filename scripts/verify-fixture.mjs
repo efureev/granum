@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { createEngine } from '@feugene/granum/engine'
+import { miniEngine } from '@feugene/granum-engine-mini'
 import { readManifestSync, scanTokenConsumption } from '@feugene/granum/node'
 import { readFileSync } from 'node:fs'
 
@@ -29,9 +29,16 @@ const check = (condition, message) => {
     problems.push(message)
 }
 
-// Round-trip (INV-MAN-5, INV-MAN-6): извлечение по файлам из dist даёт ровно
-// то, что записано в манифесте — классы с правилом у движка и потребляемые токены.
-const engine = createEngine()
+/*
+ * Round-trip (INV-MAN-5, INV-MAN-6): извлечение по файлам из dist даёт ровно
+ * то, что записано в манифесте — классы с правилом у движка и потребляемые
+ * токены.
+ *
+ * Движок берётся тот, которым пакет собран: фикстура на своём словаре
+ * экспортирует `engine` из `expected-manifest.mjs`. Проверять чужим движком
+ * бессмысленно — он не знает ни одного имени этого словаря.
+ */
+const engine = typeof expected.engine === 'function' ? expected.engine() : miniEngine()
 for (const [name, component] of Object.entries(loaded.manifest.components)) {
   const candidates = new Set()
   const consumes = new Set()

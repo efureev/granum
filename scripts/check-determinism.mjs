@@ -16,6 +16,10 @@ const problems = []
 
 for (const entry of readdirSync(base, { withFileTypes: true }).filter(e => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
   const dir = join(base, entry.name)
+  // Не всякая фикстура — провайдер: `atoms-engine` это движок, манифеста у него
+  // нет и быть не должно. Отличаем по наличию скрипта `verify`, а не по имени.
+  if (!JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).scripts?.verify)
+    continue
   const manifest = join(dir, 'dist', 'granum.manifest.json')
   if (!existsSync(manifest)) {
     problems.push(`${entry.name}: нет манифеста — сначала yarn build:fixtures`)

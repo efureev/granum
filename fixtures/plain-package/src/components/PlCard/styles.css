@@ -1,0 +1,7 @@
+.pl-card {
+  display: flow-root;
+  padding: var(--pl-gap);
+  border-radius: var(--pl-radius);
+  background: var(--pl-surface);
+  color: var(--pl-ink);
+}
