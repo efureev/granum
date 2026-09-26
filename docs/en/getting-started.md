@@ -11,11 +11,13 @@ manifests. Below is the shortest path for each side. Details live in the
 ## Install
 
 ```bash
-yarn add -D @feugene/granum vite
+yarn add -D @feugene/granum @feugene/granum-engine-mini vite
 ```
 
-The package has no dependencies; `vite` is the only peer and is needed only by
-the `./build` and `./vite` entry points. Node ≥ 22, ESM.
+The core has no dependencies; `vite` is the only peer and is needed only by
+the `./build` and `./vite` entry points. Node ≥ 22, ESM. The utility engine
+lives in its own package because the application picks it, not granum — see
+[engines and dialects](./engines-and-dialects.md) for the details.
 
 ## A provider in three steps
 
@@ -50,12 +52,13 @@ export default defineGranumProvider({
 ```ts
 // vite.config.ts
 import { granumProvider } from '@feugene/granum/build'
+import { miniEngine } from '@feugene/granum-engine-mini'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import provider from './src/granum-provider/index.ts'
 
 export default defineConfig({
-  plugins: [vue(), granumProvider({ provider })],
+  plugins: [vue(), granumProvider({ provider, engine: miniEngine() })],
   build: { rolldownOptions: { external: ['vue'] } },
 })
 ```
@@ -65,6 +68,10 @@ and `granum.manifest.json`. `package.json#exports` must list
 `./granum.manifest.json` and `./components/XhCard` — the build checks that
 and points to codegen.
 
+The build requires an engine: its dialect and vocabulary fingerprint go into
+the manifest's `engine` block. The class list there is a fact about one
+implementation, not about the package, and applications read it as such.
+
 ## An application in two steps
 
 1. The config:
@@ -72,13 +79,19 @@ and points to codegen.
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@acme/ui'],
   components: ['@acme/ui:XhCard'],
   appSources: { dirs: ['src'] },
 })
 ```
+
+`engine` is required and takes an instance: choosing an implementation and
+configuring it belong to the application. Its own rules go to the engine
+factory (`miniEngine({ rules: […] })`), not to the config.
 
 2. The plugin and a single CSS import:
 

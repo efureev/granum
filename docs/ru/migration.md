@@ -23,7 +23,8 @@ granum — преемник пресета v1 с тем же контракто�
 | `packageBaseUrl` обязателен | не нужен: база — директория манифеста, найденного через `exports` | класс ошибок с `data:`-URL исчезает |
 | `cssFiles` абсолютные URL + `cssFileAssetNames` | один относительный путь в манифесте | fallback компенсировал отсутствие манифеста |
 | `styleAssetFileName` | удалено | было deprecated |
-| `unocss: { rules, variants, preflights }` | `engine: { rules, variants, preflights }` | независимость от UnoCSS |
+| `unocss: { rules, variants, preflights }` | `engine: { dialect, rules, variants, preflights }` | правило непортируемо: словарь, против которого оно написано, обязан быть назван |
+| движок — часть пресета, настраивается `uno.config.ts` | инстанс в `engine` конфига приложения | выбор реализации принадлежит тому, кто отвечает за результат |
 | `tokenDefinitionsRef` читает приложение | материализуется в манифест на сборке провайдера | считать один раз там, где данные родились |
 | safelist ∩ статика не проверяется | предупреждение `safelist-redundant` | молчаливых поломок нет |
 | `undeclared-dependency` по тексту, `warn` | по графу модулей бандлера, `error` | точность |
@@ -37,11 +38,12 @@ granum — преемник пресета v1 с тем же контракто�
    `@feugene/granum/contract`; `defineGranularComponent` →
    `defineGranumComponent`; `defineGranularProvider` → `defineGranumProvider`.
 2. Убрать `packageBaseUrl`, `cssFileAssetNames`, `styleAssetFileName`;
-   `unocss` переименовать в `engine`; файлы темы объявлять путями
-   относительно `dist` (`theme/base.css`), исходники держать в `src/theme/`.
+   `unocss` переименовать в `engine` и добавить в него `dialect` — имя словаря,
+   против которого написаны правила; файлы темы объявлять путями относительно
+   `dist` (`theme/base.css`), исходники держать в `src/theme/`.
 3. В `vite.config.ts` заменить `granularChunkFileNames`,
    `granularAssetFileNames`, `granularCssAssetsPlugin` и ручные entry одним
-   `granumProvider({ provider })`.
+   `granumProvider({ provider, engine: miniEngine() })`.
 4. Добавить `codegenTargets.manifestExport()` в codegen, чтобы
    `package.json#exports` содержал `./granum.manifest.json`.
 5. `vite build`, затем `granum doctor --strict` в приложении-потребителе.
@@ -62,9 +64,12 @@ granum — преемник пресета v1 с тем же контракто�
 ## Приложение
 
 1. Удалить `uno.config.ts`, зависимости `unocss` и `@unocss/*`, импорты
-   `virtual:uno.css` и `virtual:uno:granular.css`.
-2. Создать `granum.config.ts` с `providers`, `components`, `themes`,
-   `appSources`; добавить `granum(config)` в `vite.config.ts`.
+   `virtual:uno.css` и `virtual:uno:granular.css`; поставить движок:
+   `yarn add -D @feugene/granum-engine-mini`.
+2. Создать `granum.config.ts` с обязательным `engine: miniEngine()`,
+   `providers`, `components`, `themes`, `appSources`; добавить `granum(config)`
+   в `vite.config.ts`. Правила, которые приложение писало себе в `uno.config.ts`,
+   переезжают в фабрику движка: `miniEngine({ rules: […] })`.
 3. Заменить два импорта CSS одним `import 'virtual:granum.css'`.
 4. Собрать и проверить `dist/granum-report.json`: `classes.unmatched` должен
    быть пуст или объяснён; `tokens.undefined` — пуст.
@@ -84,6 +89,12 @@ granum — преемник пресета v1 с тем же контракто�
 `themes.names/define/tokenOverrides/strictTokens`, `pruneTokens` — те же
 имена; `pruneTokens.appSources` стал `appSources` верхнего уровня, потому что
 теперь он питает и извлечение классов приложения.
+
+Одного соответствия в v1 нет вовсе: движка. В пресете он был частью пакета и
+настраивался `uno.config.ts`; в granum его выбирает приложение и передаёт
+инстансом, а пакеты записывают в манифест диалект и отпечаток словаря той
+реализации, которой собраны. Что это меняет на практике — в
+[движках и диалектах](./engines-and-dialects.md).
 
 ## Проверка эквивалентности
 

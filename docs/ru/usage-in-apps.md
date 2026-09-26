@@ -10,8 +10,10 @@
 
 ```ts
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@acme/ui', '@acme/base'],
   components: [{ provider: '@acme/ui', names: ['XhPanel'] }, '@acme/base:XBox'],
   themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
@@ -25,6 +27,7 @@ export default defineGranumConfig({
 
 | Поле | Значение по умолчанию | Смысл |
 |---|---|---|
+| `engine` | — (обязательно) | инстанс движка утилит: `miniEngine()` из `@feugene/granum-engine-mini` или свой; строка `'builtin'` и объект опций не принимаются |
 | `providers` | — | имена пакетов (манифест ищется через `exports["./granum.manifest.json"]`) или объекты контракта; объект с `baseUrl` на существующий `dist` сканируется приложением само (медленный путь, `provider-scanned`) |
 | `components` | `'all'` | список ключей `id:Name` / `{ provider, names }` либо `'imports'` — по импортам в `appSources` |
 | `themes.names` | по `define` → `defaultThemes` провайдеров → `['light']` | активный набор тем |
@@ -61,6 +64,21 @@ Guard в `resolveId` ловит импорт компонента, которо�
 [granum] ComponentOutsideSelectionError: '@acme/ui:XhTable' is imported by
 src/App.vue but is not part of the selection [@acme/ui:XhPanel, …]
 ```
+
+## Движок и классы пакетов
+
+`engine` в конфиге — инстанс движка утилит: своего у granum нет, выбор делает
+приложение. Правила приложения передаются фабрике движка
+(`miniEngine({ rules: […] })`), у конфига поля для правил нет.
+
+Списку классов в манифесте granum верит только при равенстве отпечатков
+словаря: в блоке `engine` манифеста записан отпечаток той реализации, которая
+список отфильтровала. При различии классы пакета пересчитываются движком
+приложения из файлов манифеста, и разница называется — `gained` (сборка пакета
+потеряла, приложение вернуло) и `lost` (правила нет у приложения; класс
+остаётся во входе движка и виден в `unmatched`). Модуль правил пакета грузится
+по равенству диалектов, а не отпечатков; полностью таблица решений — в
+[движках и диалектах](./engines-and-dialects.md).
 
 ## CSS-канал
 

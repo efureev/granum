@@ -2,8 +2,8 @@
 
 > 🇬🇧 English version: [`../en/architecture.md`](../en/architecture.md).
 
-Визуальная схема конвейера: https://claude.ai/artifact/41CJUc18uAaaCdm23xWezq
-(исходник — [`../architecture-pipeline.html`](../architecture-pipeline.html)).
+Визуальная схема конвейера — [`../architecture-pipeline.html`](../architecture-pipeline.html)
+(откройте файл в браузере).
 Нормативные требования — в [ТЗ](../spec.md), инварианты — в
 [реестре](../invariants.md).
 
@@ -11,14 +11,15 @@
 
 ```
 СБОРКА ПРОВАЙДЕРА (один раз, при публикации)
-  исходники ──► ./build ──► dist/components/<Name>/{index.js, chunks/, styles.css}
-                            dist/theme/*.css
-                            dist/granum.manifest.json          ← точка передачи
+  исходники ──► ./build + движок ──► dist/components/<Name>/{index.js, chunks/, styles.css}
+                                     dist/theme/*.css
+                                     dist/granum.manifest.json          ← точка передачи
+                                     (в манифесте — диалект и отпечаток движка сборки)
 
 СБОРКА ПРИЛОЖЕНИЯ (vite build / dev)
-  granum.config.ts ──► резолвер ──► Resolution ──► ./vite ──┬─► JS:     virtual:granum/components, guard
-        ▲                                                   ├─► CSS:    ./engine + сборщик @layer → virtual:granum.css
-  манифесты провайдеров (через exports пакета)              └─► токены: prune, манифест тем → virtual:granum/themes → ./runtime
+  granum.config.ts + инстанс движка ──► резолвер ──► Resolution ──► ./vite ──┬─► JS:  virtual:granum/components, guard
+        ▲                                                                    ├─► CSS: движок + сборщик @layer → virtual:granum.css
+  манифесты провайдеров (через exports пакета)                               └─► токены: prune, манифест тем → virtual:granum/themes → ./runtime
 ```
 
 Три принципа, из которых следует всё остальное:
@@ -36,7 +37,7 @@
 |---|---|---|
 | `.` | browser + node | контракт и резолвер: `resolveGranum`, типы `GranumResolution`, ошибки |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
-| `./engine` | browser + node | `createEngine`, интерфейс `GranumEngine`, типы правил |
+| `./engine` | browser + node | интерфейс `GranumEngine`, типы правил, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
 | `./runtime` | browser | `createThemeController`, `resolveThemeActivation` |
 | `./build` | node, peer `vite` | плагин `granumProvider()` |
 | `./vite` | node, peer `vite` | плагин `granum()`, `defineGranumConfig` |
@@ -62,13 +63,20 @@
 
 ## Движок утилит
 
-Вендоренное ядро UnoCSS 66.7.5 (`@unocss/core`, `preset-mini`, `rule-utils`
-без `magic-string`, `extractor-arbitrary-variants`) плюс перенесённые правила
-`unocss-mini-extra-rules` — за структурным интерфейсом `GranumEngine`:
+Реализации движка в ядре нет вовсе: `./engine` отдаёт контракт и хелперы
+авторам движков, а инстанс приходит из `granum.config.*`. Штатная реализация —
+`@feugene/granum-engine-mini`: вендоренное ядро UnoCSS 66.7.5 (`@unocss/core`,
+`preset-mini`, `rule-utils` без `magic-string`,
+`extractor-arbitrary-variants`) плюс перенесённые правила
+`unocss-mini-extra-rules`; golden-тест против живого `unocss@66.7.5` живёт там
+же, рядом с вендоренным кодом.
 
 ```ts
 interface GranumEngine {
   name: string
+  version?: string
+  dialect: string      // имя словаря: по нему грузятся правила провайдеров
+  vocabulary: string   // отпечаток набора имён: по нему решается доверие манифесту
   extract: (code: string, id: string) => ReadonlySet<string>
   generate: (input: EngineInput) => Promise<EngineOutput>   // { css, matched, unmatched }
 }
@@ -76,8 +84,14 @@ interface GranumEngine {
 
 Движок чист и детерминирован; каждый класс входа попадает либо в `matched`
 (с правилом, источником и слоем), либо в `unmatched` — молча не отбрасывается
-ничего. Код движка живёт на сборке и в клиентский бандл приложения не
-попадает. Golden-тест сверяет вывод с живым `unocss@66.7.5`.
+ничего. Код движка живёт на сборке и в клиентский бандл приложения не попадает.
+
+Место движка в потоке данных изменилось: он больше не часть пакета. Сборка
+провайдера прогоняет тот движок, которым её запустили, и пишет в манифест его
+диалект и отпечаток словаря — как факт о происхождении списка классов.
+Приложение до генерации CSS сверяет с ними свой движок и решает: верить списку
+или пересчитать классы из файлов манифеста. Модель целиком — в
+[движках и диалектах](./engines-and-dialects.md).
 
 ## CSS: каскадные слои
 

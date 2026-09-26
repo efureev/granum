@@ -18,6 +18,29 @@ The component's classes did not reach the CSS. Check the chain:
    in the descriptor's `safelist` — the provider build does not collect
    literals.
 
+## A package class produced no CSS: the application engine speaks another dialect
+
+granum neither runs the rules of a foreign vocabulary nor invents them.
+`granum doctor` then reports `provider-dialect-mismatch` (plus
+`engine-rules-skipped` if the package ships a rule module), and
+`granum why-css granum.config.ts <class>` prints a `Vocabularies` section: which
+engine built the package and for which vocabulary, and which dialect the
+application runs. There are two ways out — run an engine of the package dialect,
+or add the rule to your own factory (`miniEngine({ rules: […] })`). Two
+vocabularies cannot be mixed in one build. The classes themselves never vanish
+silently: they are named in `provider-classes-dropped` and in `unmatched`.
+
+## Why granum re-extracts package classes
+
+The class list in a manifest was filtered by the engine of the package build,
+and `vocabulary` in the `engine` block is the fingerprint of that very
+implementation. Any rule of your own in the factory changes the application
+fingerprint, so the list can no longer be trusted: the engine knows names the
+package build did not, and would have found more classes in the same files.
+Hence the re-extraction. It is the norm, not an error: a warning appears only on
+a set difference (`provider-classes-recovered`, `provider-classes-dropped`).
+The whole model is in [engines and dialects](./engines-and-dialects.md).
+
 ## `UndeclaredDependencyError` in the provider build
 
 Component code imports a file from another component's directory and

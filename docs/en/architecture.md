@@ -2,8 +2,8 @@
 
 > 🇷🇺 Русская версия: [`../ru/architecture.md`](../ru/architecture.md).
 
-Visual pipeline diagram: https://claude.ai/artifact/41CJUc18uAaaCdm23xWezq
-(source — [`../architecture-pipeline.html`](../architecture-pipeline.html)).
+Visual pipeline diagram — [`../architecture-pipeline.html`](../architecture-pipeline.html)
+(open the file in a browser).
 Normative requirements are in the [specification](../spec.md), invariants in
 the [registry](../invariants.md).
 
@@ -11,14 +11,15 @@ the [registry](../invariants.md).
 
 ```
 PROVIDER BUILD (once, at publish time)
-  sources ──► ./build ──► dist/components/<Name>/{index.js, chunks/, styles.css}
-                          dist/theme/*.css
-                          dist/granum.manifest.json          ← hand-over point
+  sources ──► ./build + engine ──► dist/components/<Name>/{index.js, chunks/, styles.css}
+                                   dist/theme/*.css
+                                   dist/granum.manifest.json          ← hand-over point
+                                   (in the manifest — dialect and fingerprint of the build engine)
 
 APPLICATION BUILD (vite build / dev)
-  granum.config.ts ──► resolver ──► Resolution ──► ./vite ──┬─► JS:     virtual:granum/components, guard
-        ▲                                                   ├─► CSS:    ./engine + @layer assembler → virtual:granum.css
-  provider manifests (via package exports)                  └─► tokens: prune, theme manifest → virtual:granum/themes → ./runtime
+  granum.config.ts + engine instance ──► resolver ──► Resolution ──► ./vite ──┬─► JS:  virtual:granum/components, guard
+        ▲                                                                     ├─► CSS: engine + @layer assembler → virtual:granum.css
+  provider manifests (via package exports)                                    └─► tokens: prune, theme manifest → virtual:granum/themes → ./runtime
 ```
 
 Three principles from which everything else follows:
@@ -36,7 +37,7 @@ Three principles from which everything else follows:
 |---|---|---|
 | `.` | browser + node | contract and resolver: `resolveGranum`, `GranumResolution` types, errors |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
-| `./engine` | browser + node | `createEngine`, the `GranumEngine` interface, rule types |
+| `./engine` | browser + node | the `GranumEngine` interface, rule types, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
 | `./runtime` | browser | `createThemeController`, `resolveThemeActivation` |
 | `./build` | node, peer `vite` | the `granumProvider()` plugin |
 | `./vite` | node, peer `vite` | the `granum()` plugin, `defineGranumConfig` |
@@ -62,14 +63,20 @@ by config identity.
 
 ## Utility engine
 
-A vendored UnoCSS 66.7.5 core (`@unocss/core`, `preset-mini`, `rule-utils`
-without `magic-string`, `extractor-arbitrary-variants`) plus the ported rules
-of `unocss-mini-extra-rules` — behind the structural `GranumEngine`
-interface:
+The core carries no engine implementation at all: `./engine` ships the contract
+and the helpers for engine authors, while the instance arrives from
+`granum.config.*`. The stock implementation is `@feugene/granum-engine-mini`: a
+vendored UnoCSS 66.7.5 core (`@unocss/core`, `preset-mini`, `rule-utils`
+without `magic-string`, `extractor-arbitrary-variants`) plus the ported rules of
+`unocss-mini-extra-rules`; the golden test against a live `unocss@66.7.5` lives
+there too, next to the vendored code.
 
 ```ts
 interface GranumEngine {
   name: string
+  version?: string
+  dialect: string      // vocabulary name: provider rules are loaded by it
+  vocabulary: string   // fingerprint of the name set: manifest trust is decided by it
   extract: (code: string, id: string) => ReadonlySet<string>
   generate: (input: EngineInput) => Promise<EngineOutput>   // { css, matched, unmatched }
 }
@@ -77,9 +84,14 @@ interface GranumEngine {
 
 The engine is pure and deterministic; every input class lands either in
 `matched` (with its rule, source and layer) or in `unmatched` — nothing is
-dropped silently. Engine code lives at build time and never reaches the
-application's client bundle. A golden test compares the output with a live
-`unocss@66.7.5`.
+dropped silently. Engine code lives at build time and never reaches the client.
+
+The engine's place in the data flow changed: it is no longer part of a package.
+A provider build runs the engine it was started with and writes its dialect and
+vocabulary fingerprint into the manifest — as a fact about where the class list
+came from. Before generating CSS the application compares its own engine with
+those and decides: trust the list, or re-extract the classes from the manifest
+files. The whole model is in [engines and dialects](./engines-and-dialects.md).
 
 ## CSS: cascade layers
 

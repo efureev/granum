@@ -11,11 +11,13 @@
 ## Установка
 
 ```bash
-yarn add -D @feugene/granum vite
+yarn add -D @feugene/granum @feugene/granum-engine-mini vite
 ```
 
-Пакет не имеет зависимостей; `vite` — единственный peer, и нужен он только
-точкам входа `./build` и `./vite`. Node ≥ 22, ESM.
+Ядро не имеет зависимостей; `vite` — единственный peer, и нужен он только
+точкам входа `./build` и `./vite`. Node ≥ 22, ESM. Движок утилит лежит в
+отдельном пакете, потому что выбирает его приложение, а не granum — подробно
+в [движках и диалектах](./engines-and-dialects.md).
 
 ## Провайдер за три шага
 
@@ -50,12 +52,13 @@ export default defineGranumProvider({
 ```ts
 // vite.config.ts
 import { granumProvider } from '@feugene/granum/build'
+import { miniEngine } from '@feugene/granum-engine-mini'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import provider from './src/granum-provider/index.ts'
 
 export default defineConfig({
-  plugins: [vue(), granumProvider({ provider })],
+  plugins: [vue(), granumProvider({ provider, engine: miniEngine() })],
   build: { rolldownOptions: { external: ['vue'] } },
 })
 ```
@@ -65,6 +68,10 @@ export default defineConfig({
 `./granum.manifest.json` и `./components/XhCard` — сборка проверит это и
 подскажет запустить codegen.
 
+Движок сборке обязателен: его диалект и отпечаток словаря уезжают в блок
+`engine` манифеста. Список классов там — факт о конкретной реализации, а не о
+пакете, и приложение читает его именно так.
+
 ## Приложение за два шага
 
 1. Конфиг:
@@ -72,13 +79,19 @@ export default defineConfig({
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@acme/ui'],
   components: ['@acme/ui:XhCard'],
   appSources: { dirs: ['src'] },
 })
 ```
+
+`engine` обязателен и принимает инстанс: выбор реализации и её настройка
+принадлежат приложению. Свои правила приложение отдаёт фабрике движка
+(`miniEngine({ rules: […] })`), а не конфигу.
 
 2. Плагин и один импорт CSS:
 

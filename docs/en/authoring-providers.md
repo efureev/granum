@@ -75,7 +75,7 @@ export default defineGranumProvider({
     defaultThemes: ['light'],
     tokenDefinitions: { light: { tokens: { 'xh-accent': '#0a7' } } },
   },
-  engine: { rules: [['btn-reset', { appearance: 'none' }]] },
+  engine: { dialect: 'unocss/preset-mini+granum@66', rules: [['btn-reset', { appearance: 'none' }]] },
   dependencies: ['@acme/base'],
 })
 ```
@@ -86,15 +86,29 @@ classes with `providerId`, `component` and `reason` fields.
 
 `engine` rules are written in granum types (`GranumRule`, `GranumVariant`,
 `GranumPreflight`) — the same shape as UnoCSS rules, but without importing
-third-party packages.
+third-party packages. They come with a mandatory `dialect`, the name of the
+vocabulary they are written against (`<vendor>/<vocabulary>@<major>`): without
+it registration fails with `rules-without-dialect`, because nothing could tell
+an application whether the rule applies. Only an engine of that dialect runs it.
+
+`dialect` may also be declared without rules — as a claim about the vocabulary
+of the package classes: the build compares the claim with the dialect of its own
+engine and refuses to write a foreign one into the manifest
+(`EngineDialectMismatchError`). A package that uses no utilities at all declares
+no `engine` block — its manifest carries `null` for both dialect and
+fingerprint, and any engine reads it without re-extraction. What follows for the
+application is in [engines and dialects](./engines-and-dialects.md).
 
 ## Build
 
 ```ts
 import { granumProvider } from '@feugene/granum/build'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 granumProvider({
   provider,
+  engine: miniEngine(),
+  engineModule: 'granum-provider/engine.js',
   sourceDir: 'src',
   indexEntry: 'src/index.ts',
   dependencyCheck: 'error',
@@ -102,6 +116,13 @@ granumProvider({
   exportsCheck: 'error',
 })
 ```
+
+`engine` is required: it is what filters the manifest classes, and its dialect
+and vocabulary fingerprint go into the `engine` block — the class list is a fact
+about one implementation. Rules are never embedded into JSON, so `engineModule`
+points, relative to `dist`, at an ESM module with
+`export default { rules, variants, preflights }`; declared rules without such a
+path raise the `engine-module-missing` warning.
 
 The plugin:
 
@@ -153,6 +174,8 @@ await runRegistryCodegen({
 - `vite build` passes without `safelist-redundant` and `css-double-delivery`
   warnings, or they are explained;
 - `granum.manifest.json` is in `exports`; `sideEffects: false`;
+- a package with rules declares `engine.dialect`, is built by an engine of that
+  dialect, and `engineModule` points at the built rule module;
 - component `dependencies` cover the imports — otherwise the build fails;
 - a cross-provider donor is listed in `peerDependencies`;
 - `doctor --strict` of a consuming application exits with `0`.

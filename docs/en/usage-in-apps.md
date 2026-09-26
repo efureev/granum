@@ -10,8 +10,10 @@ provider manifests and feeds three channels with it: CSS, JS and themes.
 
 ```ts
 import { defineGranumConfig } from '@feugene/granum/vite'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 export default defineGranumConfig({
+  engine: miniEngine(),
   providers: ['@acme/ui', '@acme/base'],
   components: [{ provider: '@acme/ui', names: ['XhPanel'] }, '@acme/base:XBox'],
   themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
@@ -25,6 +27,7 @@ export default defineGranumConfig({
 
 | Field | Default | Meaning |
 |---|---|---|
+| `engine` | — (required) | a utility engine instance: `miniEngine()` from `@feugene/granum-engine-mini` or your own; the `'builtin'` string and an options object are not accepted |
 | `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects; an object whose `baseUrl` points at an existing `dist` is scanned by the application itself (slow path, `provider-scanned`) |
 | `components` | `'all'` | a list of `id:Name` keys / `{ provider, names }` or `'imports'` — from imports in `appSources` |
 | `themes.names` | by `define` → providers' `defaultThemes` → `['light']` | the active set of themes |
@@ -61,6 +64,22 @@ selection:
 [granum] ComponentOutsideSelectionError: '@acme/ui:XhTable' is imported by
 src/App.vue but is not part of the selection [@acme/ui:XhPanel, …]
 ```
+
+## The engine and package classes
+
+`engine` in the config is a utility engine instance: granum has none of its
+own, the application chooses. Application rules go to the engine factory
+(`miniEngine({ rules: […] })`); the config has no field for rules.
+
+granum trusts the class list in a manifest only when the vocabulary
+fingerprints match: the manifest's `engine` block records the fingerprint of
+the implementation that filtered that list. On any difference the package
+classes are re-extracted by the application engine from the manifest files, and
+the difference is named — `gained` (the package build lost them, the application
+got them back) and `lost` (the application has no rule; the class stays in the
+engine input and shows up in `unmatched`). A package rule module is loaded on
+equal dialects, not equal fingerprints; the full decision table lives in
+[engines and dialects](./engines-and-dialects.md).
 
 ## CSS channel
 

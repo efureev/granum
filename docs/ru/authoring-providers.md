@@ -74,7 +74,7 @@ export default defineGranumProvider({
     defaultThemes: ['light'],
     tokenDefinitions: { light: { tokens: { 'xh-accent': '#0a7' } } },
   },
-  engine: { rules: [['btn-reset', { appearance: 'none' }]] },
+  engine: { dialect: 'unocss/preset-mini+granum@66', rules: [['btn-reset', { appearance: 'none' }]] },
   dependencies: ['@acme/base'],
 })
 ```
@@ -85,15 +85,28 @@ export default defineGranumProvider({
 
 Правила `engine` пишутся в типах granum (`GranumRule`, `GranumVariant`,
 `GranumPreflight`) — форма та же, что у правил UnoCSS, но без импорта чужих
-пакетов.
+пакетов. Вместе с ними обязателен `dialect` — имя словаря, против которого они
+написаны (`<vendor>/<vocabulary>@<major>`): без него регистрация падает с
+`rules-without-dialect`, потому что пригодность правила приложению нечем
+проверить. Исполнит его только движок того же диалекта.
+
+`dialect` можно объявить и без правил — как утверждение о словаре классов
+пакета: сборка сверит утверждение с диалектом своего движка и не даст записать
+в манифест чужой (`EngineDialectMismatchError`). Пакет, не пользующийся
+утилитами вовсе, блок `engine` не объявляет — в его манифесте диалект и
+отпечаток равны `null`, и он читается любым движком без пересчёта. Что из этого
+следует приложению — в [движках и диалектах](./engines-and-dialects.md).
 
 ## Сборка
 
 ```ts
 import { granumProvider } from '@feugene/granum/build'
+import { miniEngine } from '@feugene/granum-engine-mini'
 
 granumProvider({
   provider,
+  engine: miniEngine(),
+  engineModule: 'granum-provider/engine.js',
   sourceDir: 'src',
   indexEntry: 'src/index.ts',
   dependencyCheck: 'error',
@@ -101,6 +114,13 @@ granumProvider({
   exportsCheck: 'error',
 })
 ```
+
+`engine` обязателен: именно он фильтрует классы манифеста, и его диалект с
+отпечатком словаря уезжают в блок `engine` — список классов есть факт о
+конкретной реализации. Правила в JSON не встраиваются, поэтому `engineModule`
+указывает путь относительно `dist` до ESM-модуля с
+`export default { rules, variants, preflights }`; объявленные правила без пути
+дают предупреждение `engine-module-missing`.
 
 Плагин:
 
@@ -151,6 +171,8 @@ await runRegistryCodegen({
 - `vite build` проходит без предупреждений `safelist-redundant` и
   `css-double-delivery`, либо они объяснены;
 - `granum.manifest.json` в `exports`; `sideEffects: false`;
+- пакет с правилами объявляет `engine.dialect` и собран движком того же
+  диалекта, а `engineModule` указывает на собранный модуль правил;
 - `dependencies` компонентов покрывают импорты — сборка иначе не пройдёт;
 - кросс-провайдерный донор перечислен в `peerDependencies`;
 - `doctor --strict` приложения-потребителя выходит с кодом `0`.

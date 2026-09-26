@@ -58,6 +58,10 @@ legal but suspicious.
 | `override-skipped` | warn | `strictTokens` dropped an override |
 | `provider-without-manifest` | warn | the provider is passed as an object and its `baseUrl` is not a directory on disk: classes and consumption are unknown |
 | `provider-scanned` | warn | the provider is passed as an object: classes and tokens were scanned from its `dist` by the application (slow path, no bundle graph) |
+| `provider-dialect-mismatch` | warn | the package was built by an engine of another vocabulary: its classes were re-extracted instead of trusted |
+| `engine-rules-skipped` | warn | the package ships rules of a foreign vocabulary — they are not loaded, classes relying on them end up `unmatched` |
+| `provider-classes-recovered` | warn | the application engine knows classes missing from the manifest: the package build lost them |
+| `provider-classes-dropped` | warn | classes from the manifest have no rule in the application engine; they stay in the engine input and in `unmatched` |
 | `unused-provider` | warn | the provider contributes nothing to the build |
 
 ```
@@ -77,6 +81,11 @@ Diagnostics (errors: 0, warnings: 1):
 ✓ OK — no errors; warnings: 1 (they only fail with --strict).
 ```
 
+`--json` adds, next to every provider, its dialect, vocabulary fingerprint,
+class source (`manifest` or `re-extracted`) and whether its rules were loaded,
+and at the root the application engine with its dialect and fingerprint. Why
+there are two decisions — [engines and dialects](./engines-and-dialects.md).
+
 ## `explain`
 
 Why a component is in the build (`selected`, `dependency`, `not-selected`,
@@ -87,9 +96,15 @@ tokens.
 ## `why-css`
 
 Through which channel a class reached the CSS — manifest statics, safelist, a
-selector in component CSS, application sources — and which engine rule
-generated it (source, layer, selector). `Rule: none` means a hook class or a
-typo.
+selector in component CSS, application sources, plus `manifest-lost` (a class
+from the manifest the application engine could not re-extract) — and which
+engine rule generated it (source, layer, selector). `Rule: none` means a hook
+class, a typo or a foreign vocabulary.
+
+For an uncovered class coming from a package the `Vocabularies` section is
+printed: which engine built the package and for which vocabulary, which engine
+and dialect the application runs, whether the package rules were loaded — and
+the two ways out: an engine of the same dialect, or your own factory rule.
 
 ## `tokens`
 

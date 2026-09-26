@@ -308,8 +308,14 @@ interface EngineOutput {
   `theme-extends-unresolved`, `theme-extends-cycle`;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
-  `token-undefined`, `token-conflict`, `unused-provider` плюс всё, что доносится
-  из манифеста и резолюции.
+  `token-undefined`, `token-conflict`, `unused-provider`, `provider-dialect-mismatch`,
+  `provider-classes-recovered`, `provider-classes-dropped`, `engine-rules-skipped`
+  плюс всё, что доносится из манифеста и резолюции.
+
+Расхождение отпечатков словаря само по себе предупреждением НЕ является: так
+выглядит любое приложение с собственным правилом в фабрике движка. Предупреждает
+разница наборов после пересчёта, а факт пересчёта виден полями отчёта
+`providers[].reason` и `providers[].classes`.
 
 Классы без правила и план обрезки токенов именованными предупреждениями НЕ
 являются: это поля отчёта сборки — `classes.unmatched` (с источниками) и

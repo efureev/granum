@@ -23,7 +23,8 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 | `packageBaseUrl` is required | not needed: the base is the directory of the manifest found via `exports` | the `data:`-URL class of errors disappears |
 | absolute `cssFiles` URLs + `cssFileAssetNames` | one relative path in the manifest | the fallback compensated for the missing manifest |
 | `styleAssetFileName` | removed | was deprecated |
-| `unocss: { rules, variants, preflights }` | `engine: { rules, variants, preflights }` | independence from UnoCSS |
+| `unocss: { rules, variants, preflights }` | `engine: { dialect, rules, variants, preflights }` | a rule is not portable: the vocabulary it is written against must be named |
+| the engine is part of the preset, configured in `uno.config.ts` | an instance in the application config's `engine` | picking the implementation belongs to whoever owns the result |
 | `tokenDefinitionsRef` read by the application | materialised into the manifest at provider build | compute once, where the data is born |
 | safelist ∩ statics not checked | `safelist-redundant` warning | no silent breakage |
 | `undeclared-dependency` by text, `warn` | by the bundler module graph, `error` | precision |
@@ -36,12 +37,13 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 1. Imports: `@feugene/unocss-preset-granular/contract` →
    `@feugene/granum/contract`; `defineGranularComponent` →
    `defineGranumComponent`; `defineGranularProvider` → `defineGranumProvider`.
-2. Remove `packageBaseUrl`, `cssFileAssetNames`, `styleAssetFileName`;
-   rename `unocss` to `engine`; declare theme files as paths relative to
+2. Remove `packageBaseUrl`, `cssFileAssetNames`, `styleAssetFileName`; rename
+   `unocss` to `engine` and add a `dialect` to it — the name of the vocabulary
+   the rules are written against; declare theme files as paths relative to
    `dist` (`theme/base.css`) and keep the sources in `src/theme/`.
 3. In `vite.config.ts` replace `granularChunkFileNames`,
    `granularAssetFileNames`, `granularCssAssetsPlugin` and manual entries
-   with a single `granumProvider({ provider })`.
+   with a single `granumProvider({ provider, engine: miniEngine() })`.
 4. Add `codegenTargets.manifestExport()` to codegen so that
    `package.json#exports` lists `./granum.manifest.json`.
 5. `vite build`, then `granum doctor --strict` in a consuming application.
@@ -62,9 +64,12 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 ## Application
 
 1. Delete `uno.config.ts`, the `unocss` and `@unocss/*` dependencies, the
-   `virtual:uno.css` and `virtual:uno:granular.css` imports.
-2. Create `granum.config.ts` with `providers`, `components`, `themes`,
-   `appSources`; add `granum(config)` to `vite.config.ts`.
+   `virtual:uno.css` and `virtual:uno:granular.css` imports; install an engine:
+   `yarn add -D @feugene/granum-engine-mini`.
+2. Create `granum.config.ts` with the mandatory `engine: miniEngine()`, plus
+   `providers`, `components`, `themes`, `appSources`; add `granum(config)` to
+   `vite.config.ts`. Rules the application wrote for itself in `uno.config.ts`
+   move into the engine factory: `miniEngine({ rules: […] })`.
 3. Replace the two CSS imports with one `import 'virtual:granum.css'`.
 4. Build and check `dist/granum-report.json`: `classes.unmatched` must be
    empty or explained; `tokens.undefined` — empty.
@@ -84,6 +89,12 @@ The v1 preset options move almost one to one: `providers`, `components`,
 `themes.names/define/tokenOverrides/strictTokens`, `pruneTokens` keep their
 names; `pruneTokens.appSources` became a top-level `appSources` because it
 now also feeds the extraction of application classes.
+
+One thing has no v1 counterpart at all: the engine. In the preset it was part
+of the package and configured through `uno.config.ts`; in granum the application
+picks it and passes an instance, while packages record in the manifest the
+dialect and vocabulary fingerprint of the implementation that built them. What
+that changes in practice — [engines and dialects](./engines-and-dialects.md).
 
 ## Checking equivalence
 
