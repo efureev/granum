@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — 2026-09-25
+## 0.1.0 — 2026-09-26
 
 First release of the successor of `@feugene/unocss-preset-granular`. The
 package has no dependencies (peer `vite ^8`), runs on Node ≥ 22, and ships

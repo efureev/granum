@@ -42,6 +42,7 @@
   "files": [
     "dist",
     "docs/SPEC.md",
+    "LICENSE",
     "CHANGELOG.md",
     "MIGRATION.md",
     "THIRD_PARTY_NOTICES.md"
