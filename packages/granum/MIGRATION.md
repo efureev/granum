@@ -14,12 +14,17 @@ Step-by-step guides, mirrored in two languages:
 
 Provider: `defineGranularComponent` → `defineGranumComponent`,
 `defineGranularProvider` → `defineGranumProvider`; drop `packageBaseUrl`,
-`cssFileAssetNames`, `styleAssetFileName`; rename `unocss` to `engine`;
+`cssFileAssetNames`, `styleAssetFileName`; rename `unocss` to `engine` and name
+the vocabulary its rules are written against (`engine: { dialect, rules }`);
 replace the three layout helpers and manual entries with
-`granumProvider({ provider })`; export `./granum.manifest.json`.
+`granumProvider({ provider, engine })`; export `./granum.manifest.json`.
 
-Application: delete `uno.config.ts`, `unocss` and `@unocss/*`; create
-`granum.config.ts` and add `granum(config)` to `vite.config.ts`; replace
-`virtual:uno.css` + `virtual:uno:granular.css` with `virtual:granum.css`;
+Application: delete `uno.config.ts`, `unocss` and `@unocss/*`; install
+`@feugene/granum-engine-mini` and pass `engine: miniEngine()` in
+`granum.config.ts` — the application picks the engine, granum ships none; add
+`granum(config)` to `vite.config.ts`; replace `virtual:uno.css` +
+`virtual:uno:granular.css` with `virtual:granum.css`; put your own utility rules
+into the engine factory (`miniEngine({ rules })`), not into the granum config;
 check `dist/granum-report.json` — `classes.unmatched` and `tokens.undefined`
-must be empty or explained.
+must be empty or explained, and `providers[].lost` must be empty unless you
+deliberately run an engine of another dialect.

@@ -123,7 +123,7 @@ https://claude.ai/artifact/41CJUc18uAaaCdm23xWezq — исходник стра�
 |---|---|---|---|---|
 | `.` | browser + node | MUST NOT | нет | реэкспорт `./contract` и резолвера (`resolveGranum`, типы `Resolution`, ошибки) |
 | `./contract` | browser + node | MUST NOT | нет | типы контракта, `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
-| `./engine` | browser + node | MUST NOT | нет | `createEngine`, интерфейс `GranumEngine`, встроенные правила |
+| `./engine` | browser + node | MUST NOT | нет | контракт `GranumEngine`, `extractClasses`, `stripComments`, `parseDialect`, `vocabularyFingerprint`; реализации движка здесь нет (INV-ENG-9) |
 | `./runtime` | browser | MUST NOT | нет | `createThemeController`, `resolveThemeActivation` |
 | `./build` | node (vite.config провайдера) | MAY | `vite` (peer) | плагин `granumProvider()` |
 | `./vite` | node (vite.config приложения) | MAY | `vite` (peer) | плагин `granum()`, `defineGranumConfig` |
@@ -162,7 +162,7 @@ interface GranumProvider {
   contractVersion: 1
   components: readonly GranumComponentDescriptor[]
   theme?: GranumThemeContribution
-  engine?: GranumEngineContribution            // правила/варианты для движка (бывш. `unocss`)
+  engine?: GranumEngineContribution            // словарь классов пакета и правила для движка
   dependencies?: readonly (GranumProvider | string)[]
   baseUrl?: string                             // только для объектной формы (тесты, локальная разработка); у манифеста база — его директория
 }
@@ -177,6 +177,9 @@ interface GranumProvider {
 | C-5 | Провайдер, ссылающийся на компоненты другого провайдера, MUST перечислить донора в `peerDependencies` (допустимы также `dependencies` и `optionalDependencies`). Сборка провайдера сверяет это с `package.json` и пишет в манифест предупреждение `peer-missing`. |
 | C-6 | `baseUrl`, если задан, MUST быть абсолютным URL с завершающим `/`. Провайдер MUST NOT вычислять его литералом `new URL('..', import.meta.url)` (бандлер подменяет на `data:`), а MUST использовать `resolvePackageBaseUrl`. Для манифестной формы поле не используется. |
 | C-7 | Поле `engine` MUST быть выражено в типах granum (`GranumRule`, `GranumVariant`, `GranumPreflight`), без импорта чужих пакетов. |
+| C-21 | `engine` принимает форму `{ dialect?, rules?, variants?, preflights? }`. Если задано хоть одно из `rules`/`variants`/`preflights`, `dialect` MUST быть задан: правило без объявленного словаря непригодно к проверке (`InvalidProviderError('rules-without-dialect')`). Диалект, не проходящий E-1, — `InvalidProviderError('invalid-dialect')`. |
+| C-22 | Провайдер MAY объявить `engine: { dialect }` без правил — как утверждение о словаре своих классов. Сборка сверяет утверждение с диалектом движка, которым её запустили; расхождение — `EngineDialectMismatchError`, а не молчаливая запись чужого диалекта в манифест (INV-ENG-10). Отпечаток провайдер не объявляет: это свойство не пакета, а реализации, собравшей его. |
+| C-23 | Пакет, не использующий утилиты и не расширяющий словарь, MUST иметь право не объявлять `engine` вовсе. Диалект и отпечаток его манифеста — `null` (E-3). |
 
 ### 5.2 `GranumComponentDescriptor`
 
@@ -280,10 +283,13 @@ interface GranumComponentDescriptor {
 | M-1 | Манифест MUST порождаться только сборкой; ручное редактирование запрещено и обнаруживается по хешу содержимого (INV-MAN-1). |
 | M-2 | Все пути в манифесте MUST быть относительными к директории манифеста и MUST NOT содержать `..` или абсолютных путей (INV-MAN-2). |
 | M-3 | Манифест MUST быть детерминированным: порядок корневых ключей фиксирован, ключи вложенных объектов и массивы строк отсортированы, пробелы нормализованы. Исключения — массивы, чей порядок несёт смысл: `css` (порядок эмиссии), `defaultThemes` (порядок активации), `warnings` (порядок обнаружения). Полностью — [`manifest.md`](./manifest.md) §5 (INV-DET-1). |
-| M-4 | Манифест MUST содержать версию формата (`granum`) и версию контракта (`contractVersion`); читатель MUST отклонять неизвестную версию формата ошибкой `UnsupportedManifestVersionError`. |
+| M-4 | Манифест MUST содержать версию формата (`granum`, сейчас `2`) и версию контракта (`contractVersion`); читатель MUST отклонять любую другую версию формата ошибкой `UnsupportedManifestVersionError` — громко и без попытки прочитать. |
 | M-5 | Множества `classes` и `safelist` компонента SHOULD быть дизъюнктны; пересечение записывается в `warnings` манифеста как `safelist-redundant`. |
 | M-6 | Манифест MUST публиковаться через `exports["./granum.manifest.json"]`, чтобы приложение находило его через `import.meta.resolve` без вычисления `packageBaseUrl` (INV-LAY-2). |
-| M-7 | Правила движка провайдера MUST ссылаться на JS-модуль по относительному пути (`engineModule`), а не встраиваться в JSON. Путь задаёт автор опцией `granumProvider({ engineModule })`; сам модуль плагин не эмитит. Провайдер, объявивший `engine`, но не передавший опцию, отгрузил бы правила в никуда — сборка пишет предупреждение `engine-module-missing` (INV-DIAG-3). |
+| M-7 | Правила движка провайдера MUST ссылаться на JS-модуль по относительному пути (`engine.module`), а не встраиваться в JSON. Путь задаёт автор опцией `granumProvider({ engineModule })`; сам модуль плагин не эмитит. Провайдер, объявивший `engine`, но не передавший опцию, отгрузил бы правила в никуда — сборка пишет предупреждение `engine-module-missing` (INV-DIAG-3). |
+| M-8 | Манифест MUST записывать движок, которым он порождён, блоком `engine { dialect, vocabulary, name, version?, module }`. Приложение никогда не догадывается о нём по косвенным признакам: список классов отфильтрован конкретной реализацией, и без этой записи ни доверять списку, ни объяснить пропуск нельзя (INV-MAN-9, INV-ENG-10). |
+| M-9 | Писатель MUST записывать `dialect: null, vocabulary: null` тогда и только тогда, когда артефакт ни от какого словаря не зависит по факту сборки: ни одного класса, ни одной записи `safelist`, ни модуля правил. Иначе оба поля MUST быть взяты у движка сборки. |
+| M-10 | Читатель MUST отклонять манифест, где `dialect` и `vocabulary` не равны `null` одновременно (`InvalidManifestError('dialect-vocabulary-mismatch')`), и манифест, где `dialect: null` при непустых `classes`/`safelist` или непустом `module` (`InvalidManifestError('dialect-without-classes')`). |
 
 ---
 
@@ -305,24 +311,27 @@ interface GranumComponentDescriptor {
 
 ## 9. Движок утилит (`./engine`)
 
-> Раздел описывает реализованное состояние 0.1.x. Контракт движка
-> переписывается без обратной совместимости: движок уезжает из ядра, а
-> диалект словаря становится объявленной величиной и записывается в
-> манифест — ТЗ в [`spec-engine.md`](./spec-engine.md), реализация — этап 8
-> плана, ADR-8. Нормативная часть переедет сюда в конце этапа.
+Движка в ядре нет. `./engine` отдаёт контракт и хелперы; реализацию приложение
+выбирает само и передаёт инстансом. Референсная реализация —
+`@feugene/granum-engine-mini` (вендоренный форк UnoCSS 66.7.5 с доп-правилами);
+рабочий пример движка, написанного с нуля, — `fixtures/atoms-engine`.
+Обоснование — [ADR-8](./decisions.md) и [ADR-9](./decisions.md).
 
 ### 9.1 Интерфейс
 
 ```ts
 interface GranumEngine {
-  readonly name: string
+  readonly name: string                     // реализация: для диагностики
+  readonly version?: string                 // только для чтения человеком (E-5)
+  readonly dialect: string                  // имя словаря: `<vendor>/<vocabulary>@<major>`
+  readonly vocabulary: string               // отпечаток фактического набора имён
   extract(code: string, id: string): ReadonlySet<string>
   generate(input: EngineInput): EngineOutput | Promise<EngineOutput>
 }
 interface EngineInput {
   classes: ReadonlySet<string>
   theme?: EngineTheme                       // шкалы: spacing, colors, radius…; переопределяемы приложением
-  rules?: readonly GranumRule[]             // правила провайдеров и приложения, добавляются ПОСЛЕ встроенных
+  rules?: readonly GranumRule[]             // правила провайдеров, добавляются ПОСЛЕ встроенных
   variants?: readonly GranumVariant[]
   preflights?: readonly GranumPreflight[]
 }
@@ -333,16 +342,59 @@ interface EngineOutput {
 }
 ```
 
+### 9.2 Диалект и отпечаток словаря
+
+Это две разные величины с разными потребителями, и путать их нельзя.
+
+**Диалект — имя словаря классов.** Формат `<vendor>/<vocabulary>@<major>`,
+сравнение строгим равенством строк; мажор в конце — часть имени, а не диапазон.
+Диалектом управляется ровно одно решение: грузить ли модуль правил провайдера.
+Правило написано против словаря и переживает смену реализации внутри мажора.
+
+**Отпечаток — ключ фактического множества генерируемых имён.** Им управляется
+другое решение: верить ли списку классов в манифесте пакета. Внутри одного
+мажора набор имён не постоянен — апстрим добавляет правила в минорах,
+приложение добавляет свои правила фабрике движка, — и пакет, собранный
+реализацией, знавшей меньше имён, привёз обрезанный список.
+
 | ID | Требование |
 |---|---|
-| E-1 | Движок MUST быть чистым: без FS, без сети, без глобального состояния между вызовами; повторный вызов с тем же входом даёт побайтно тот же `css` (INV-DET-2). |
-| E-2 | `unmatched` MUST перечислять каждый класс без правила; молчаливое отбрасывание запрещено (INV-DIAG-2). |
-| E-3 | Порядок правил: встроенные, затем провайдеров в порядке графа, затем приложения; при совпадении матчится последнее (как в v1), что позволяет провайдеру переопределить встроенное. |
-| E-4 | Встроенная реализация: вендоренные `@unocss/core` (генератор, парсер вариантов, экстрактор), `@unocss/preset-mini` (правила, варианты, шкала темы) версии 66.7.5, `@unocss/rule-utils` без `magic-string`, `@unocss/extractor-arbitrary-variants`; правила `@feugene/unocss-mini-extra-rules` переносятся в `src/engine/rules/extra/`. Все внешние импорты заменяются внутренними; лицензия MIT и уведомление об авторстве сохраняются в `THIRD_PARTY_NOTICES.md` (ADR-2). Генератор создаётся на набор (правила, варианты, preflights, тема) и переиспользуется, пока ссылки не меняются; кортежи правил клонируются на генератор, а `meta`, разделяемая несколькими правилами, остаётся разделяемой внутри него — от этого зависит порядок эмиссии. |
-| E-5 | Вендоренный код MUST иметь golden-тесты: для фиксированного набора классов (все классы фикстур + набор арбитражных значений и вариантов) CSS встроенного движка сравнивается с выводом `unocss@66.7.5` + `presetMini` + extra-rules, зафиксированным в снапшоте. |
-| E-6 | Экстрактор MUST понимать: пробельные разделители, кавычки, шаблонные литералы, арбитражные значения с `_` вместо пробела, префикс вариантов `hover:`, `odd:`, `dark:`; MUST NOT извлекать классы из комментариев SFC (в v1 сканировался текст файла). Границы среза комментариев: HTML-комментарии в `.vue`/`.html`/`.svelte`/`.astro`, блочные комментарии везде, строчные — только строки, начинающиеся с двух слешей, и вызовы `createCommentVNode("…")` в скомпилированных шаблонах Vue. |
-| E-7 | Движок MUST NOT знать о слоях, манифестах и Vite; всё это — забота сборщика CSS (§10.3). |
-| E-8 | Опция `engine` конфига приложения MUST принимать `'builtin'` (по умолчанию) или объект `GranumEngine`. |
+| E-1 | `dialect` MUST соответствовать `/^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/`; сравнение — равенством. Примеры: `unocss/preset-mini@66`, `unocss/preset-mini+granum@66`, `granum-fixtures/atoms@1`. |
+| E-2 | Опция движка, меняющая набор генерируемых имён качественно, MUST менять диалект; опция, меняющая только вывод (префикс кастомных свойств, preflight), диалект MUST NOT менять. |
+| E-3 | Диалект `null` в манифесте означает, что артефакт не зависит ни от одного словаря и ни одного не расширяет. Допустим тогда и только тогда, когда у всех компонентов пусты `classes` и `safelist`, а `engine.module` равен `null`. |
+| E-4 | `vocabulary` MUST быть непустой непрозрачной строкой, сравниваемой равенством, и MUST меняться всякий раз, когда меняется множество генерируемых имён — включая правила, переданные фабрике движка. `vocabulary` равен `null` тогда и только тогда, когда `dialect` равен `null`. |
+| E-5 | Ни `version` движка, ни версия его пакета MUST NOT участвовать в решениях: ни сравнением, ни диапазоном, ни вычислением подмножеств. Это поле диагностики. |
+| E-6 | Ядро MUST предоставлять `vocabularyFingerprint({ rules, variants })` — детерминированный отпечаток по идентификаторам правил (строка статического, `source` и флаги динамического) и именам вариантов, независимый от порядка. Хеш некриптографический: он ключует решение сборки, подделывать его некому. Движок MAY объявить отпечаток собственной строкой, если гарантирует E-4 сам. |
+
+### 9.3 Обязанности реализации
+
+| ID | Требование |
+|---|---|
+| E-7 | Ядро MUST NOT содержать реализации движка: ни вендоренного кода, ни правил, ни пресетов. `./engine` отдаёт типы, `extractClasses`, `stripComments`, `parseDialect` и `vocabularyFingerprint` (INV-ENG-9). |
+| E-8 | Движок MUST быть чистым: без FS, без сети, без глобального состояния между вызовами; повторный вызов с тем же входом даёт побайтно тот же `css` (INV-DET-2). |
+| E-9 | `unmatched` MUST перечислять каждый класс без правила; молчаливое отбрасывание запрещено (INV-DIAG-2). |
+| E-10 | Порядок правил: встроенные, затем провайдеров в порядке графа, затем приложения; при совпадении матчится последнее, что позволяет провайдеру переопределить встроенное (INV-ENG-3). |
+| E-11 | Правила приложения передаются фабрике его движка, а не конфигу granum: у конфига поля для правил нет. |
+| E-12 | Экстрактор движка MUST понимать словарь, который движок объявляет, и MUST NOT извлекать классы из комментариев SFC. Границы среза комментариев (хелпер `stripComments` ядра): HTML-комментарии в `.vue`/`.html`/`.svelte`/`.astro`, блочные комментарии везде, строчные — только строки, начинающиеся с двух слешей, и вызовы `createCommentVNode("…")` в скомпилированных шаблонах Vue (INV-ENG-5). |
+| E-13 | Движок MUST NOT знать о слоях, манифестах и Vite; всё это — забота сборщика CSS (§10.3). |
+| E-14 | Реализация, вендорящая чужой код, MUST держать golden-тест: для фиксированного набора классов CSS сравнивается с выводом апстрима, зафиксированным в снапшоте (INV-ENG-4), и уведомление об авторстве — в `THIRD_PARTY_NOTICES.md` (ADR-2). |
+
+### 9.4 Сверка на стороне приложения
+
+| ID | Требование |
+|---|---|
+| E-15 | Для каждого провайдера приложение MUST сравнить `manifest.engine.dialect` и `manifest.engine.vocabulary` со своим движком и действовать по таблице ниже. Решение MUST приниматься до генерации CSS. |
+| E-16 | При различии отпечатков классы каждого компонента MUST быть извлечены заново из его `files` движком приложения и сравнены со списком манифеста. Пересчёт идёт с правилами провайдера, если они загружены, и без них иначе. |
+| E-17 | `safelist` пересчёту MUST NOT подлежать: это авторское объявление, а не производная. |
+| E-18 | Модуль правил провайдера MUST загружаться при равенстве **диалектов**, независимо от отпечатков. При различии диалектов — предупреждение `engine-rules-skipped`. |
+| E-19 | Класс, который был в манифесте и потерялся при пересчёте, MUST быть подан движку вместе с остальными: он обязан остаться виден в `unmatched`. Пересчёт не имеет права делать потерю тише, чем она была (INV-DIAG-2). |
+
+| Диалект манифеста | Отпечаток | Что делает granum | Что видит разработчик |
+|---|---|---|---|
+| `null` | `null` | быстрый путь, пересчёта нет | ничего: пакет ни от какого словаря не зависит |
+| равен | равен | быстрый путь, классы из манифеста, правила загружены | ничего, это норма |
+| равен | другой | пересчёт с правилами провайдера | при разнице наборов — `provider-classes-recovered` / `provider-classes-dropped` с числами и списками |
+| другой | — | пересчёт без правил провайдера | `provider-dialect-mismatch`; плюс `engine-rules-skipped`, если пакет привёз `module` |
 
 ---
 
@@ -356,7 +408,7 @@ export default defineGranumConfig({
   providers: ['@feugene/heavy-package', localProviderObject],   // имя пакета → манифест через exports; объект → медленный путь
   components: 'all' | ComponentSelectionItem[] | 'imports',
   themes: { names?, define?, tokenOverrides?, strictTokens? },
-  engine: 'builtin' | GranumEngine,
+  engine: GranumEngine,                                         // обязателен и только инстансом: miniEngine() или свой
   css: { layers: true, layerPrefix: 'granum', split: false, expandDirectives: false },
   appSources: { dirs: ['./src'], extensions?: string[] },
   pruneTokens: { mode: 'off' | 'report' | 'on', keep?: string[] },
@@ -371,6 +423,7 @@ export default defineGranumConfig({
 | A-2 | `providers` в строковой форме MUST резолвиться в манифест через `import.meta.resolve('<pkg>/granum.manifest.json')` относительно корня приложения; отсутствие экспорта — ошибка `ManifestNotFoundError` с указанием пакета и подсказкой про codegen. |
 | A-3 | `components: 'imports'` MUST вычислять начальную селекцию статическим сканом исходников приложения на импорты вида `<providerId>/components/<Name>` (и виртуального модуля), затем — обычное замыкание. Режим SHOULD стать рекомендуемым после стабилизации (ADR-6). |
 | A-4 | Плагин MUST работать без `unocss` в `node_modules` приложения. |
+| A-4a | `engine` MUST быть обязательным полем конфига и принимать **инстанс** `GranumEngine`. Строка `'builtin'` и объект опций не принимаются: выбор реализации и её настройка — дело приложения. Отсутствие движка, объект без `dialect`/`vocabulary` или диалект, не проходящий E-1, — `InvalidConfigError` с путём до поля. |
 
 ### 10.2 JS-канал
 
@@ -534,7 +587,7 @@ export default defineGranumConfig({
 | `packageBaseUrl` обязателен, вычисляется провайдером | не нужен: база = директория манифеста, найденная через `exports` | убирает класс ошибок с `data:`-URL и «база на уровень выше» |
 | `cssFiles` абсолютные URL + `cssFileAssetNames` позиционный fallback | один относительный путь в манифесте | fallback был компенсацией отсутствия манифеста |
 | `styleAssetFileName` | удалено | было deprecated в v1 |
-| `unocss: { rules, variants, preflights }` | `engine: { rules, variants, preflights }` в типах granum | независимость от UnoCSS |
+| `unocss: { rules, variants, preflights }` | `engine: { dialect, rules, variants, preflights }` в типах granum | независимость от UnoCSS, а словарь классов пакета назван |
 | `tokenDefinitionsRef` читается приложением | материализуется на сборке провайдера в манифест | считать один раз там, где данные родились |
 | safelist ∩ статика — не проверяется | `safelist-redundant` | молчаливых поломок нет |
 | `undeclared-dependency` — эвристика по тексту, `warn` | по графу модулей бандлера, `error` | точность |
@@ -547,7 +600,7 @@ export default defineGranumConfig({
 1. Заменить импорт `@feugene/unocss-preset-granular/contract` → `@feugene/granum/contract`,
    `defineGranularComponent` → `defineGranumComponent`, `defineGranularProvider` →
    `defineGranumProvider`.
-2. Убрать `packageBaseUrl`, `cssFileAssetNames`, `styleAssetFileName`; `unocss` → `engine`.
+2. Убрать `packageBaseUrl`, `cssFileAssetNames`, `styleAssetFileName`; `unocss` → `engine` с объявленным `dialect`.
 3. В `vite.config.ts` заменить три хелпера и ручные entry на `granumProvider()`.
 4. Запустить `granum codegen` и `granum doctor --strict`.
 
@@ -570,7 +623,7 @@ export default defineGranumConfig({
 | AC-4 | Импорт компонента вне селекции при `guard: 'error'` валит сборку с `ComponentOutsideSelectionError` | интеграционный тест |
 | AC-5 | В `node_modules` приложения нет `unocss` и `@unocss/*`; сборка проходит | `apps/*` без этих зависимостей |
 | AC-6 | Повторная сборка провайдера и приложения даёт побайтно те же манифест, CSS и отчёт | тест детерминизма |
-| AC-7 | Golden-тесты движка против `unocss@66.7.5` проходят | `src/engine/__tests__` |
+| AC-7 | Golden-тесты движка против `unocss@66.7.5` проходят | `packages/granum-engine-mini/src/__tests__` |
 | AC-8 | `dependencies` ядра пусты; `dist` браузерных entry не содержит `node:` | тест на package.json и на `dist` |
 | AC-9 | HMR: правка `App.vue` с новым классом обновляет `virtual:granum/layers/utilities.css` без перезагрузки | e2e на dev-сервере |
 | AC-10 | `docs/ru` ↔ `docs/en` parity, `MIGRATION.md` присутствует | `check:docs` |

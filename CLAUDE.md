@@ -4,6 +4,10 @@ Yarn 1 workspaces-монорепо вокруг `@feugene/granum` — конве
 UI-пакетов (компоненты, стили, токены, темы) от манифеста провайдера до бандла
 приложения. Преемник `@feugene/unocss-preset-granular`; тот репозиторий не изменяется.
 
+Публикуемых пакетов два: `packages/granum` (ядро, без реализации движка) и
+`packages/granum-engine-mini` (референсный движок утилит). Версии у них общие: тег
+релиза сверяется с обоими.
+
 ## Жёсткие правила
 
 **Сначала ТЗ.** `docs/spec.md` — требования с идентификаторами, `docs/invariants.md` —
@@ -20,8 +24,16 @@ UI-пакетов (компоненты, стили, токены, темы) о�
 **Зависимостей у пакета нет**, peer — только `vite`. Тест `packageJson.test.ts` и
 `check:boundary` красные при любом отклонении.
 
-**Ничего из `unocss`/`@unocss/*` в рантайме.** Движок вендорится на этапе 2 в
-`src/engine/vendor/`; `unocss` допустим только в devDependencies для golden-тестов.
+**Реализации движка в ядре нет.** Вендоренный форк UnoCSS живёт в
+`packages/granum-engine-mini/src/vendor/`, `./engine` ядра отдаёт только контракт и
+хелперы (INV-ENG-9). `unocss` допустим лишь в devDependencies пакета движка ради
+golden-теста; `check:boundary` ловит след движка в `dist` ядра.
+
+**Приложение и провайдер передают движок инстансом.** `engine` в `granum.config.*`
+и в `granumProvider({ engine })` обязателен; правила приложения идут фабрике
+движка, не конфигу. Диалект словаря решает, грузить ли правила пакета; отпечаток
+словаря — верить ли списку классов манифеста. Версия реализации в решениях не
+участвует (ADR-8, ADR-9, `docs/spec.md` §9).
 
 **`docs/en` и `docs/ru` — зеркала**, как и корневые `README.md`/`README.ru.md`;
 `yarn check:docs` после любой правки документации.
@@ -36,11 +48,11 @@ UI-пакетов (компоненты, стили, токены, темы) о�
 |---|---|
 | `yarn lint` / `yarn typecheck` / `yarn test` | пакет |
 | `yarn test:scripts` | чистые функции `scripts/` |
-| `yarn build` | сборка пакета в `packages/granum/dist` |
+| `yarn build` | сборка обоих пакетов: ядро, затем движок (порядок важен — движок берёт хелперы у ядра) |
 | `yarn check:boundary` | зависимости и `node:`-импорты в собранных браузерных entry |
 | `yarn check:spec` | `packages/granum/docs/SPEC.md` совпадает с нормативными разделами `docs/spec.md` (`yarn generate:spec` перезаписывает) |
 | `yarn build:all` | пакет → фикстуры → приложения |
-| `yarn verify:fixtures` | round-trip и сверка манифестов собранных фикстур с `expected-manifest.mjs` |
+| `yarn verify:fixtures` | round-trip и сверка манифестов собранных фикстур с `expected-manifest.mjs` (движок берётся из `expected-manifest.mjs`, если фикстура на своём словаре) |
 | `yarn check:determinism` | повторная сборка фикстур: манифест побайтно стабилен |
 | `yarn e2e` | браузерные проверки каскада и HMR на dev-сервере `apps/app-1` (нужен `yarn playwright install chromium`) |
 | `yarn test:all` | всё, что гоняет CI, кроме `e2e`: тот тянет браузер и живёт своей джобой |

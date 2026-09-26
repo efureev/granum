@@ -72,11 +72,18 @@ jobs:
       # зафиксированным в git означает ручную правку (ADR-2).
       - name: Check vendored UnoCSS core is up to date
         run: yarn check:vendor
-      - name: Build package
+      # Оба пакета: ядро и движок. Порядок важен — движок берёт хелперы у ядра
+      # как peer, и его сборка резолвит их через `dist/types` ядра.
+      - name: Build packages
         run: yarn build
       - name: Validate package metadata (publint)
         working-directory: packages/granum
         run: npx --yes publint@latest --pack npm
+      - name: Validate engine package metadata (publint)
+        working-directory: packages/granum-engine-mini
+        run: npx --yes publint@latest --pack npm
+      # Границы проверяются на ядре: у движка вендоренный код внутри законен, а
+      # у ядра его быть не должно вовсе (INV-ENG-9).
       - name: Check dependency and browser/node boundaries on dist
         run: yarn check:boundary
       - name: Upload dist
@@ -84,6 +91,11 @@ jobs:
         with:
           name: granum-dist
           path: packages/granum/dist/
+      - name: Upload engine dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: granum-engine-mini-dist
+          path: packages/granum-engine-mini/dist/
 
   # Сквозная проверка контракта: пакет → фикстурные провайдеры → приложения,
   # затем `doctor` провайдеров, сверка CSS приложений и бюджет стендов.
@@ -154,24 +166,39 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
-      - name: Verify tag matches package version
-        working-directory: packages/granum
+      # Тег один на репозиторий, поэтому версии обоих пакетов обязаны ему
+      # соответствовать: движок объявляет ядро своим peer по мажору и минору, и
+      # разъехавшиеся версии дали бы неустановимую пару.
+      - name: Verify tag matches both package versions
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          echo "package.json version: $PKG_VERSION"
-          echo "git tag version:      $TAG_VERSION"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
-            exit 1
-          fi
+          for dir in packages/granum packages/granum-engine-mini; do
+            PKG_VERSION=$(node -p "require('./$dir/package.json').version")
+            echo "$dir: $PKG_VERSION (tag $TAG_VERSION)"
+            if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match $dir version $PKG_VERSION"
+              exit 1
+            fi
+          done
       - name: Download dist
         uses: actions/download-artifact@v8
         with:
           name: granum-dist
           path: packages/granum/dist
-      - name: Publish to npm
+      - name: Download engine dist
+        uses: actions/download-artifact@v8
+        with:
+          name: granum-engine-mini-dist
+          path: packages/granum-engine-mini/dist
+      # Ядро первым: движок ссылается на него как на peer, и порядок публикации
+      # определяет, что увидит потребитель, поставивший пару сразу после релиза.
+      - name: Publish core to npm
         run: npm publish --access public --provenance
         working-directory: packages/granum
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish engine to npm
+        run: npm publish --access public --provenance
+        working-directory: packages/granum-engine-mini
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -21,7 +21,7 @@
 
 ```json
 {
-  "granum": 1,
+  "granum": 2,
   "contractVersion": 1,
   "id": "@feugene/heavy-package",
   "version": "0.1.0",
@@ -38,7 +38,13 @@
     },
     "declares": ["--xh-accent", "--xh-bg", "--xh-space-2"]
   },
-  "engineModule": "granum-provider/engine.js",
+  "engine": {
+    "dialect": "unocss/preset-mini+granum@66",
+    "vocabulary": "fnv64-2f8975047b2c4cc5",
+    "name": "granum-engine-mini",
+    "version": "66.7.5",
+    "module": "granum-provider/engine.js"
+  },
   "components": {
     "XhPanel": {
       "entry": "components/XhPanel/index.js",
@@ -71,7 +77,7 @@
 
 | Поле | Тип | Обяз. | Описание |
 |---|---|---|---|
-| `granum` | `1` | да | версия формата манифеста; читатель отклоняет любую другую (`UnsupportedManifestVersionError`) |
+| `granum` | `2` | да | версия формата манифеста; читатель отклоняет любую другую, включая `1` (`UnsupportedManifestVersionError`) |
 | `contractVersion` | `1` | да | версия контракта провайдера |
 | `id` | `string` | да | id провайдера, совпадает с `name` пакета |
 | `version` | `string` | да | версия пакета из `package.json` |
@@ -79,9 +85,9 @@
 | `hash` | `string` | да | `sha256` от канонической сериализации манифеста без поля `hash`; читатель пересчитывает и при несовпадении бросает `InvalidManifestError` (`hash-mismatch`) — так ловится ручная правка (INV-MAN-1) |
 | `dependencies` | `string[]` | да | id провайдеров-доноров (обе формы v1 сводятся к id; инстансы доноров приложение подключает сам через свои манифесты) |
 | `theme` | объект | да | см. 3.2; может быть `{}` |
-| `engineModule` | `string \| null` | да | относительный путь к ESM-модулю с `export default { rules, variants, preflights }` в типах granum; `null`, если правил нет |
+| `engine` | объект | да | движок, которым порождён артефакт (3.4); приложение не догадывается о нём по косвенным признакам (INV-MAN-9) |
 | `components` | объект | да | имя → описание компонента (3.3); ключи отсортированы |
-| `warnings` | массив | да | предупреждения сборки провайдера, которые приложение обязано показать в отчёте (3.4) |
+| `warnings` | массив | да | предупреждения сборки провайдера, которые приложение обязано показать в отчёте (3.5) |
 
 ### 3.2 `theme`
 
@@ -113,12 +119,38 @@
 | `tokens.dynamic` | `string[]` | из `dynamicTokens` дескриптора; допускается суффикс `*` |
 | `hash` | `string` | `sha256` от содержимого `files` и `css`; ключ кэша приложения (A-17) |
 
-### 3.4 `warnings[]`
+### 3.4 `engine`
+
+Список классов каждого компонента — не свойство пакета, а результат фильтрации
+его кандидатов конкретной реализацией движка (B-6). Поэтому манифест обязан
+сказать, кто фильтровал: без этой записи приложение не может ни доверять списку,
+ни объяснить, почему класса нет.
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `dialect` | `string \| null` | имя словаря классов, `<vendor>/<vocabulary>@<major>`; `null` — артефакт ни от какого словаря не зависит и ни одного не расширяет |
+| `vocabulary` | `string \| null` | отпечаток фактического множества генерируемых имён; `null` тогда и только тогда, когда `dialect` равен `null` |
+| `name` | `string` | реализация, собравшая пакет — для диагностики |
+| `version` | `string?` | версия реализации; **в решениях не участвует**, только для чтения человеком |
+| `module` | `string \| null` | относительный путь к ESM-модулю с `export default { rules, variants, preflights }` в типах granum; `null`, если правил нет |
+
+Диалектом приложение управляет одним решением — грузить ли `module`: правило
+написано против словаря и переживает смену реализации внутри мажора. Отпечатком —
+другим: верить ли списку классов. При различии отпечатков приложение пересчитывает
+классы пакета своим движком из `files` и называет разницу; при различии диалектов
+ещё и не грузит правила. Полная таблица решений — в ТЗ §9.4.
+
+`dialect: null` при непустых `classes`/`safelist` или непустом `module` — ошибка
+чтения `dialect-without-classes`: список классов кто-то всё-таки отфильтровал.
+Несогласованность `dialect` и `vocabulary` по `null` — `dialect-vocabulary-mismatch`.
+
+### 3.5 `warnings[]`
 
 `{ code: string, component?: string, ...details }`. Коды, которые пишет сборка
 провайдера: `safelist-redundant` (`classes`), `css-double-delivery` (`files`),
 `peer-missing` (`provider` — донор, которого нет в `peerDependencies` пакета, C-5),
-`engine-module-missing` (провайдер объявил `engine`, но не передал `engineModule`,
+`engine-module-missing` (провайдер объявил правила движка, но не передал
+`granumProvider({ engineModule })`, и манифест уехал бы с `engine.module: null`,
 M-7).
 
 Предупреждения резолюции приложения (`default-theme-without-source`,
@@ -132,16 +164,21 @@ M-7).
 первой ошибке:
 
 1. JSON парсится; корень — объект.
-2. `granum === 1`; иначе `UnsupportedManifestVersionError`.
+2. `granum === 2`; иначе `UnsupportedManifestVersionError`.
 3. Схема: обязательные поля присутствуют, типы верны; иначе `InvalidManifestError`
    (`schema`, с путём до поля).
 4. Все пути относительные, без `..`, без `\`; иначе `InvalidManifestError`
    (`path-escapes-package`).
-5. `hash` совпадает с пересчитанным; иначе `InvalidManifestError` (`hash-mismatch`).
-6. `components[Name].entry === 'components/<Name>/index.js'`; иначе `InvalidManifestError`
+5. Блок `engine` согласован: `dialect` и `vocabulary` равны `null` одновременно
+   (`dialect-vocabulary-mismatch`), и при `dialect: null` у компонентов нет ни
+   классов, ни safelist, а `module` пуст (`dialect-without-classes`). Проверка
+   идёт ДО хеша намеренно: расхождение словаря конкретнее, чем «файл правили
+   руками», и разработчику полезнее увидеть его.
+6. `hash` совпадает с пересчитанным; иначе `InvalidManifestError` (`hash-mismatch`).
+7. `components[Name].entry === 'components/<Name>/index.js'`; иначе `InvalidManifestError`
    (`entry-layout`).
-7. Ключи `tokens` в `TokenSet` без `--`; иначе `InvalidManifestError` (`token-key-prefix`).
-8. Существование файлов **не** проверяется при чтении (это делает `doctor` и чтение CSS
+8. Ключи `tokens` в `TokenSet` без `--`; иначе `InvalidManifestError` (`token-key-prefix`).
+9. Существование файлов **не** проверяется при чтении (это делает `doctor` и чтение CSS
    в момент эмиссии, с `CssReadError`).
 
 ## 5. Каноническая сериализация
@@ -161,6 +198,9 @@ M-7).
 ## 6. Эволюция формата
 
 - Добавление необязательного поля — совместимое изменение, версия формата не меняется.
-- Удаление, переименование, изменение смысла — несовместимое, `granum: 2`, и
-  читатель обязан поддерживать `1` ещё один минорный релиз с предупреждением
-  `manifest-format-outdated`.
+- Удаление, переименование, изменение смысла — несовместимое: версия формата
+  растёт, и читатель отклоняет прежнюю громко.
+- Версия `2` (`0.2.0`): корневое `engineModule` заменено блоком `engine`. Прежняя
+  версия не поддерживается — `0.1.0` публиковался как проверка и потребителей не
+  имел, а тихое чтение устаревшего формата стоило бы дороже, чем пересборка
+  пакета.
