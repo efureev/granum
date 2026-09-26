@@ -101,9 +101,8 @@
 
 ### 4.1 Конвейер
 
-Визуальная схема (сейчас / цель, блоки, ожидаемый результат):
-https://claude.ai/artifact/41CJUc18uAaaCdm23xWezq — исходник страницы хранится в
-[`architecture-pipeline.html`](./architecture-pipeline.html).
+Визуальная схема конвейера — [`architecture-pipeline.html`](./architecture-pipeline.html)
+(откройте файл в браузере).
 
 ```
 СБОРКА ПРОВАЙДЕРА (один раз, при публикации)
