@@ -45,8 +45,14 @@ to the field.
 The list of components is closed transitively over the `dependencies` of
 the manifests: dependencies come before dependants (post-order DFS), and
 that order is normative for CSS and tokens. `components: 'imports'` computes
-the initial list from imports like `@acme/ui/components/XhPanel` in
-`appSources`.
+the initial list from imports like `@acme/ui/components/XhPanel` and from
+PascalCase tags in `appSources`.
+
+The recommended mode is the explicit list: it keeps the selection in one place
+where a reviewer can see it. `'imports'` fits applications whose component set
+changes often, but mind its boundary: a component rendered through a computed
+name (`<component :is="name">`) is not found by the scan, and its CSS will not
+reach the build.
 
 The guard in `resolveId` catches an import of a component outside the
 selection:
