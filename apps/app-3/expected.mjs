@@ -1,5 +1,9 @@
 export default {
   purpose: 'донор по имени пакета и кросс-пакетная зависимость компонента',
+  doctor: {
+    // Тот же `--brd` из `XTest1`, что и в app-1: цвет границы даёт приложение.
+    warnings: { 'token-undefined': 1 },
+  },
   css: {
     present: [
       { what: 'объявленный cssFiles компонента XgQuick', css: '.xg-quick' },

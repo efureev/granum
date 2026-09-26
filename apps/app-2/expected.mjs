@@ -1,6 +1,12 @@
 /** Что app-2 обязан эмитить. Проверяется `node scripts/verify-app.mjs`. */
 export default {
   purpose: 'safelist для классов, собираемых в JS, и токены приложения через tokenOverrides',
+  doctor: {
+    // `--card` и `--ds-radius-lg` приложение не переопределило — их и называет
+    // доктор; `safelist-redundant` приходит из манифеста фикстуры: строка
+    // классов `XTestStyled` видна и статически.
+    warnings: { 'token-undefined': 2, 'safelist-redundant': 1 },
+  },
   css: {
     present: [
       { what: 'блок токенов темы, созданный приложением через themes.tokenOverrides — слой themes', css: '--brd:#02f8fa' },

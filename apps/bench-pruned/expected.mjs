@@ -9,6 +9,11 @@
  */
 export default {
   purpose: 'обрезка токенов включена: что уцелело и что ушло',
+  doctor: {
+    // Те же две находки фикстуры, что и у `bench-one`: стенды отличаются
+    // одной строкой конфига, а не набором дефектов.
+    warnings: { 'safelist-dead': 1, 'safelist-redundant': 1 },
+  },
   css: {
     present: [
       // Имя собирается в рантайме из общего модуля; держит только `dynamicTokens` у XhOverlay.

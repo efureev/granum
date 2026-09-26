@@ -1,6 +1,12 @@
 /** Что app-1 обязан эмитить. Проверяется `node scripts/verify-app.mjs`. */
 export default {
   purpose: 'один компонент из манифеста: слои, CSS компонента, утилиты шаблона и приложения',
+  doctor: {
+    // `--brd` компоненту даёт приложение: фикстура объявляет только границу
+    // как форму, а цвет — дело потребителя (так делает app-2 через
+    // `themes.tokenOverrides`). Здесь его нет, и доктор честно об этом говорит.
+    warnings: { 'token-undefined': 1 },
+  },
   css: {
     present: [
       { what: 'слои каскада на месте: пустые объявлены, компоненты и утилиты — блоками (INV-CSS-1)', css: '@layer granum.tokens,granum.base,granum.themes;@layer granum.components{' },

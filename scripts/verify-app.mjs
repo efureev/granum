@@ -65,11 +65,33 @@ if (doctor.status !== 0) {
   failures.push(`granum doctor завершился кодом ${doctor.status}:\n${doctor.stderr || doctor.stdout}`)
 }
 else {
-  const selection = JSON.parse(doctor.stdout).components.map(c => c.key)
+  const report = JSON.parse(doctor.stdout)
+  const selection = report.components.map(c => c.key)
   const reportPath = join(dir, 'dist', 'granum-report.json')
   const built = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')).selection.map(s => s.key) : selection
   if (JSON.stringify(selection) !== JSON.stringify(built))
     failures.push(`granum doctor видит селекцию ${JSON.stringify(selection)}, а сборка — ${JSON.stringify(built)}`)
+
+  /*
+   * Предупреждения доктора приложение объявляет поимённо, а не гасит `--strict`.
+   *
+   * Часть находок законна и объяснима (токен, который даёт само приложение;
+   * мёртвая запись safelist в фикстуре), и списком их видно в `expected.mjs`
+   * рядом с причиной. Зато любая НОВАЯ находка роняет сверку — то, чего
+   * `--strict` дать не может: он либо запрещает всё, либо не проверяет ничего.
+   */
+  const counted = {}
+  for (const diagnostic of report.diagnostics)
+    counted[diagnostic.code] = (counted[diagnostic.code] ?? 0) + 1
+  const declared = expected.doctor?.warnings ?? {}
+  for (const code of [...new Set([...Object.keys(counted), ...Object.keys(declared)])].sort()) {
+    const got = counted[code] ?? 0
+    const want = declared[code] ?? 0
+    if (got !== want) {
+      const messages = report.diagnostics.filter(d => d.code === code).map(d => `${d.subject}: ${d.message}`)
+      failures.push(`doctor: находок \`${code}\` — ${got}, объявлено в expected.doctor — ${want}${messages.length ? `\n      ${messages.join('\n      ')}` : ''}`)
+    }
+  }
 }
 }
 

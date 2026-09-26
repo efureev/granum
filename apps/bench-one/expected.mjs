@@ -7,6 +7,11 @@
  */
 export default {
   purpose: 'подопытный стенд замера: один компонент поверх полного фундамента',
+  doctor: {
+    // Намеренные дефекты фикстуры heavy: `shadow-legacy` без правила движка и
+    // строки тонов `XhButton`, видимые и статически.
+    warnings: { 'safelist-dead': 1, 'safelist-redundant': 1 },
+  },
   css: {
     present: [
       { what: 'токен фундамента из tokensCss — приезжает независимо от селекции', css: '--xh-space-4' },
