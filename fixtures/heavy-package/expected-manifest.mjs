@@ -36,8 +36,14 @@ export default function ({ manifest, distDir, check }) {
 
   // Safelist: собранные в рантайме классы, включая намеренно мёртвый `shadow-legacy` (INV-CON-4).
   check(c.XhButton.safelist.includes('shadow-legacy') && c.XhButton.safelist.includes('p-2'), `XhButton.safelist: ${c.XhButton.safelist}`)
-  // Строки тонов лежат литералами целиком — движок видит их и как статику: пересечение честно предупреждает.
-  check(manifest.warnings.some(w => w.code === 'safelist-redundant' && w.component === 'XhButton'), `warnings: ${JSON.stringify(manifest.warnings)}`)
+  // Запись safelist, которую извлечение и так нашло, в манифест не едет (C-8):
+  // CSS от неё не зависит, а манифест от неё пухнет. Класс тона лежит в чанке
+  // литералом, поэтому статика его видит — и в safelist его больше нет.
+  check(!c.XhButton.safelist.includes('bg-[var(--xh-btn-bg)]'), `XhButton.safelist: ${c.XhButton.safelist}`)
+  check(c.XhButton.classes.includes('bg-[var(--xh-btn-bg)]'), `XhButton.classes: ${c.XhButton.classes}`)
+  // Предупреждения `safelist-redundant` больше нет: раскладку чанков, от которой
+  // зависит видимость класса, выбирает бандлер, а не автор пакета.
+  check(!manifest.warnings.some(w => w.code === 'safelist-redundant'), `warnings: ${JSON.stringify(manifest.warnings)}`)
   // CSS: объявленный файл и стили SFC.
   check(c.XhPanel.css.includes('components/XhPanel/styles.css'), `XhPanel.css: ${c.XhPanel.css}`)
   check(c.XhCard.css.some(p => p.startsWith('components/XhCard/')) && readFileSync(join(distDir, c.XhCard.css[0]), 'utf8').includes('.xh-card'), `XhCard.css: ${c.XhCard.css}`)

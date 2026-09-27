@@ -135,6 +135,38 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     expect(report.diagnostics.map((d: { code: string }) => d.code)).toEqual(['safelist-dead'])
   })
 
+  /**
+   * `--allow` — записанный долг. Без такого шва потребитель заводит вокруг
+   * доктора свой скрипт, который фильтрует коды сам, и тот неизбежно расходится
+   * с доктором: на дизайн-системе так и было.
+   */
+  it('doctor: --allow снимает код с гейта, но не с отчёта', async () => {
+    const root = appDir()
+    const allowed = io(root)
+    expect(await runGranumCli(['doctor', 'granum.config.mjs', '--strict', '--allow=safelist-dead'], allowed.io)).toBe(0)
+    // Находка всё равно напечатана: разрешение не прячет её, а только не роняет гейт.
+    expect(allowed.out[0]).toContain('[safelist-dead] @x/kit:Card')
+
+    const other = io(root)
+    expect(await runGranumCli(['doctor', 'granum.config.mjs', '--strict', '--allow=token-undefined'], other.io)).toBe(1)
+    expect(other.err.join('\n')).toContain('1 × safelist-dead')
+  })
+
+  it('doctor: --code и --component печатают детали, --components разворачивает список', async () => {
+    const root = appDir()
+    const byCode = io(root)
+    expect(await runGranumCli(['doctor', 'granum.config.mjs', '--code=safelist-dead'], byCode.io)).toBe(0)
+    expect(byCode.out[0]).toContain('Diagnostics for code safelist-dead')
+
+    const byComponent = io(root)
+    expect(await runGranumCli(['doctor', 'granum.config.mjs', '--component=@x/kit:Card'], byComponent.io)).toBe(0)
+    expect(byComponent.out[0]).toContain('Diagnostics for component @x/kit:Card')
+
+    const expanded = io(root)
+    expect(await runGranumCli(['doctor', 'granum.config.mjs', '--components'], expanded.io)).toBe(0)
+    expect(expanded.out[0]).toContain('• @x/kit:Card —')
+  })
+
   it('doctor: ошибка манифеста (нет файла) — код 1 и без --strict', async () => {
     const root = appDir()
     writeFileSync(join(root, 'node_modules/@x/kit/dist/components/Card/styles.css'), '.card{@apply p-2}')

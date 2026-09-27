@@ -20,7 +20,7 @@ import { scanCssDeclarations } from './cssDeclarations'
 import { objectRulesAllowed } from './dialects'
 import { collectImportSpecifiers } from './imports'
 import { computeManifestHash } from './manifest'
-import { scanTokenConsumption } from './tokenScan'
+import { extractRequiredTokenUses, scanTokenConsumption } from './tokenScan'
 
 export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
 
@@ -126,6 +126,8 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     const files = walkComponentFiles(distDir, descriptor.name, componentDirs)
     const candidates = new Set<string>()
     const consumes = new Set<string>()
+    const required = new Set<string>()
+    const assigns = new Set<string>()
     for (const file of files) {
       const code = readRel(distDir, file)
       for (const token of engine.extract(code, file))
@@ -135,13 +137,22 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
         consumes.add(`--${n}`)
       for (const n of scan.literals)
         consumes.add(`--${n}`)
+      for (const n of scan.required)
+        required.add(`--${n}`)
+      for (const n of scan.assigns)
+        assigns.add(`--${n}`)
     }
     const declaredCss = descriptor.cssFiles ?? []
     const ownCss = listFiles(join(distDir, 'components', descriptor.name), f => f.endsWith('.css')).map(f => posix(relative(distDir, f)))
     const css = sortedUnique([...declaredCss, ...ownCss])
     for (const path of css) {
-      for (const n of scanTokenConsumption(readRel(distDir, path), path).uses.keys())
+      const scan = scanTokenConsumption(readRel(distDir, path), path)
+      for (const n of scan.uses.keys())
         consumes.add(`--${n}`)
+      for (const n of scan.required)
+        required.add(`--${n}`)
+      for (const n of scan.assigns)
+        assigns.add(`--${n}`)
     }
     // Правила пакета исполняются только движком объявленного словаря
     // (INV-ENG-8): чужой диалект — классы считаются без них, и они окажутся
@@ -153,10 +164,14 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       ...(rulesAllowed && provider.engine?.variants ? { variants: provider.engine.variants } : {}),
     })
     const classes = sortedUnique(generated.matched.keys())
-    const safelist = sortedUnique(descriptor.safelist ?? [])
-    const redundant = safelist.filter(c => classes.includes(c))
-    if (redundant.length > 0)
-      warnings.push({ code: 'safelist-redundant', component: descriptor.name, classes: redundant })
+    const declaredSafelist = sortedUnique(descriptor.safelist ?? [])
+    for (const klass of declaredSafelist) {
+      for (const name of extractRequiredTokenUses(klass))
+        required.add(`--${name}`)
+    }
+    // Как и на сборке провайдера: запись, которую извлечение и так нашло, в
+    // резолюцию не едет. CSS от этого не меняется, а манифест не раздувается.
+    const safelist = declaredSafelist.filter(c => !classes.includes(c))
     const digest = createHash('sha256')
     for (const file of [...files, ...css].sort())
       digest.update(file).update(readRel(distDir, file))
@@ -171,6 +186,7 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       tokens: {
         declares: descriptor.tokenDefinitions ?? {},
         consumes: sortedUnique(consumes),
+        requires: sortedUnique([...required].filter(t => !assigns.has(t))),
         dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
       },
       hash: `sha256-${digest.digest('hex')}`,

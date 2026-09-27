@@ -40,6 +40,12 @@ export interface ComponentNode {
   readonly tokenDefinitions: Readonly<Record<string, GranumTokenSet>>
   readonly tokenDefinitionsRef: Readonly<Record<string, GranumTokenRef>>
   readonly consumesTokens: readonly string[]
+  /**
+   * Подмножество `consumesTokens`, значение которого обязан дать кто-то извне
+   * (T-5). У объектной формы и у манифеста формата 2 без поля `requires` равно
+   * `consumesTokens`: разделить нечем, и диагностика ведёт себя как прежде.
+   */
+  readonly requiresTokens: readonly string[]
   readonly dynamicTokens: readonly string[]
   readonly group: string | null
 }
@@ -86,6 +92,7 @@ function fromObject(provider: GranumProvider): ProviderNode {
       tokenDefinitions: descriptor.tokenDefinitions ?? EMPTY_RECORD,
       tokenDefinitionsRef: descriptor.tokenDefinitionsRef ?? EMPTY_RECORD,
       consumesTokens: EMPTY,
+      requiresTokens: EMPTY,
       dynamicTokens: descriptor.dynamicTokens ?? EMPTY,
       group: descriptor.group ?? null,
     })),
@@ -121,6 +128,7 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
       tokenDefinitions: component.tokens.declares,
       tokenDefinitionsRef: EMPTY_RECORD,
       consumesTokens: component.tokens.consumes,
+      requiresTokens: component.tokens.requires ?? component.tokens.consumes,
       dynamicTokens: component.tokens.dynamic,
       group: component.group,
     })),

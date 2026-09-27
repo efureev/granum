@@ -129,9 +129,12 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
         declared.add(`--${chain.token}`)
     }
   }
+  // Тот же вердикт, что у доктора: «нужен извне», а не «упомянут» (T-5).
+  // Потребление с фолбэком и токен, который компонент присваивает сам, сюда не
+  // попадают — иначе отчёт и доктор говорили бы разное об одном и том же.
   const consumed = new Set<string>()
   for (const { component } of resolution.selection.entries) {
-    for (const t of component.consumesTokens)
+    for (const t of component.requiresTokens)
       consumed.add(t)
   }
   for (const t of app.appScan.consumes)

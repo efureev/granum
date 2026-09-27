@@ -8,7 +8,8 @@
 его директория.
 
 ```bash
-granum doctor  granum.config.ts [--json] [--strict]
+granum doctor  granum.config.ts [--json] [--strict] [--allow=code,code]
+               [--code=<code>] [--component=<providerId:Name>] [--components]
 granum explain granum.config.ts <providerId:Component> [--json]
 granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
@@ -51,7 +52,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `safelist-redundant` | warn | safelist дублирует статически извлечённые классы |
 | `css-double-delivery` | warn | CSS компонента и инлайнится, и импортируется его чанком |
 | `safelist-dead` | warn | запись safelist без правила у движка |
-| `token-undefined` | warn | токен потребляется, но не объявлен ни одним слоем |
+| `token-undefined` | warn | токен нужен компоненту извне, но не объявлен ни одним слоем. Потребление с fallback, токен, который компонент присваивает сам, и `dynamicTokens` находкой не считаются |
 | `token-conflict` | warn | токен пишут несколько слоёв; показана цепочка и итог |
 | `theme-warning` | warn | предупреждения резолюции тем (`extends`, неполные темы) |
 | `override-skipped` | warn | `strictTokens` отбросил override |
@@ -70,7 +71,7 @@ granum doctor
 Providers (1):
   • @granum-fixtures/heavy [manifest 0.1.0] — components: 7, theme: yes
 
-Selected components (5, order = deps → dependents):
+Selected components (5, order = deps → dependents) — classes 41, safelist 14, css 3:
   • @granum-fixtures/heavy:XhAlert — classes: 9, css: 1
   …
 
@@ -79,6 +80,48 @@ Diagnostics (errors: 0, warnings: 1):
 
 ✓ OK — no errors; warnings: 1 (they only fail with --strict).
 ```
+
+### Вывод, который не растёт вместе с находками
+
+На дизайн-системе из восьми пакетов находок бывает несколько десятков, а
+компонентов — больше сотни. Разворачивать всё подряд бессмысленно: важное
+теряется. Поэтому по умолчанию:
+
+- **ошибки печатаются целиком и первыми** — они ломают сборку, и прятать их за
+  флагом нельзя ни при каком объёме;
+- предупреждения, если их больше дюжины, сводятся в таблицу по кодам с числами,
+  в порядке серьёзности, и каждая строка подсказывает свой флаг;
+- перечисление внутри находки (классы safelist, потерянные имена) сворачивается
+  до трёх элементов и счётчика;
+- список компонентов сворачивается в одну строку с суммами.
+
+```
+Diagnostics (errors: 0, warnings: 74):
+  ⚠ token-undefined               1   --code=token-undefined
+  ⚠ important-in-provider-css     1   --code=important-in-provider-css
+  ⚠ safelist-dead                 2   --code=safelist-dead
+  ⚠ safelist-redundant           70   --code=safelist-redundant
+```
+
+Детали — по требованию: `--code=<code>` печатает все находки одного кода с
+полными перечислениями, `--component=<providerId:Name>` сужает до одного
+компонента и его находок, `--components` разворачивает список. `--json` не
+сворачивает ничего и предназначен для скриптов.
+
+### Записанный долг: `--allow`
+
+`--strict` роняет гейт на любом предупреждении. Часть их бывает осознанным
+долгом — например `safelist-redundant`, чистка которого идёт отдельной работой.
+Перечислите такие коды в `--allow`, и гейт их стерпит, продолжая печатать и
+считать:
+
+```bash
+granum doctor granum.config.ts --strict --allow=safelist-redundant,safelist-dead
+```
+
+Флаг существует, чтобы вокруг доктора не заводили скрипт-обёртку: она неизбежно
+расходится с самим доктором. Неразрешённые предупреждения печатаются в stderr со
+счётчиками по кодам, чтобы в логе CI была видна причина, а не только код выхода.
 
 `--json` отдаёт рядом с каждым провайдером его диалект, отпечаток словаря,
 источник классов (`manifest` или `re-extracted`) и факт загрузки правил, а в

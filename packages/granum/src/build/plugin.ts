@@ -22,7 +22,7 @@ import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, Inval
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { MANIFEST_FILE_NAME, writeManifestSync } from '../node/manifest'
 import { materializeProviderRefs } from '../node/materializeRefs'
-import { scanTokenConsumption } from '../node/tokenScan'
+import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
 import { analyzeBundle, findUndeclaredEdges } from './graph'
@@ -246,6 +246,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
 
       const warnings: GranumManifestWarning[] = []
+      /** Сколько записей safelist вычищено как покрытые извлечением — для лога. */
+      let safelistRedundantTotal = 0
 
       /*
        * Правила движка в манифест не встраиваются — он ссылается на модуль
@@ -342,14 +344,45 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         const declaredCss = descriptor.cssFiles ?? []
         const css = [...declaredCss, ...info.cssAssets.filter(a => !declaredCss.includes(a))]
         const consumes = new Set(info.consumes)
+        const requires = new Set(info.requires)
+        const assigns = new Set(info.assigns)
         for (const path of declaredCss) {
-          for (const name of scanTokenConsumption(copiedCss.get(path) ?? '', path).uses.keys())
+          const scan = scanTokenConsumption(copiedCss.get(path) ?? '', path)
+          for (const name of scan.uses.keys())
             consumes.add(`--${name}`)
+          for (const name of scan.required)
+            requires.add(`--${name}`)
+          for (const name of scan.assigns)
+            assigns.add(`--${name}`)
         }
-        const safelist = sortedUnique(descriptor.safelist ?? [])
-        const redundant = safelist.filter(c => info.classes.includes(c))
-        if (redundant.length > 0)
-          warnings.push({ code: 'safelist-redundant', component: descriptor.name, classes: redundant })
+        const declaredSafelist = sortedUnique(descriptor.safelist ?? [])
+        // Классы safelist — такой же источник требований: `bg-[var(--x)]` ждёт
+        // значения извне, `bg-[var(--x,red)]` нет.
+        for (const klass of declaredSafelist) {
+          for (const name of extractRequiredTokenUses(klass))
+            requires.add(`--${name}`)
+        }
+        // Присваивание закрывает требование независимо от того, где оно стоит:
+        // в чанке компонента, в объявленном `cssFiles` или в инлайн-стиле.
+        for (const token of assigns)
+          requires.delete(token)
+        /*
+         * Запись safelist, которую извлечение и так нашло, в манифест не едет.
+         *
+         * Она не даёт ни байта CSS (класс уже в `classes`), но раздувает
+         * манифест: на дизайн-системе это 3479 записей из 3479. Убирать их в
+         * исходнике нельзя и незачем: safelist там выводится из тех же
+         * константных классов, что использует компонент, а видит ли их
+         * извлечение — решает раскладка чанков бандлером, а не автор. Автор
+         * объявил «эти классы собираются в рантайме» и не соврал; совпадение
+         * обнаруживается на сборке, значит сборке и решать.
+         *
+         * Предупреждения здесь поэтому нет: оно винило автора за чужое решение.
+         * Число вычищенных печатается строкой лога и уезжает в манифест.
+         */
+        const redundant = declaredSafelist.filter(c => info.classes.includes(c))
+        const safelist = declaredSafelist.filter(c => !info.classes.includes(c))
+        safelistRedundantTotal += redundant.length
         if (info.cssImportedByChunk.length > 0)
           warnings.push({ code: 'css-double-delivery', component: descriptor.name, files: info.cssImportedByChunk })
 
@@ -368,6 +401,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           tokens: {
             declares: descriptor.tokenDefinitions ?? {},
             consumes: sortedUnique(consumes),
+            requires: sortedUnique(requires),
             dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
           },
           hash: `sha256-${digest.digest('hex')}`,
@@ -416,9 +450,11 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       })
 
       const totalClasses = Object.values(components).reduce((n, c) => n + c.classes.length, 0)
+      const totalSafelist = Object.values(components).reduce((n, c) => n + c.safelist.length, 0)
       log(
         `${provider.id}: ${Object.keys(components).length} components, ${totalClasses} classes, `
-        + `${Object.values(components).reduce((n, c) => n + c.safelist.length, 0)} safelist, `
+        + `${totalSafelist} safelist`
+        + `${safelistRedundantTotal > 0 ? ` (+${safelistRedundantTotal} covered statically, dropped)` : ''}, `
         + `${warnings.length} warnings → ${relative(root, join(outDir, manifestFile))}`,
       )
     },

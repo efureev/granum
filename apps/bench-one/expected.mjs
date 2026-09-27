@@ -10,7 +10,7 @@ export default {
   doctor: {
     // Намеренные дефекты фикстуры heavy: `shadow-legacy` без правила движка и
     // строки тонов `XhButton`, видимые и статически.
-    warnings: { 'safelist-dead': 1, 'safelist-redundant': 1 },
+    warnings: { 'safelist-dead': 1 },
   },
   css: {
     present: [

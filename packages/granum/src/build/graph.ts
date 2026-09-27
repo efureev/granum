@@ -41,6 +41,10 @@ export interface ComponentBundleInfo {
   readonly classes: string[]
   /** Потребляемые токены (с `--`). */
   readonly consumes: string[]
+  /** Потребления без fallback: значение обязан дать кто-то извне (T-5). */
+  readonly requires: string[]
+  /** Токены, которым компонент присваивает значение сам: они требование закрывают. */
+  readonly assigns: string[]
   /** Компоненты, чьи entry достигаются из entry этого: `Name` того же провайдера или `pkg:Name` чужого. */
   readonly edges: string[]
   /** Чанки, импортирующие CSS-ассет из списка (двойная доставка, INV-CSS-5). */
@@ -139,6 +143,10 @@ export async function analyzeBundle(
 
     const candidates = new Set<string>()
     const consumes = new Set<string>()
+    // Токены без fallback и токены, которым компонент сам присваивает значение:
+    // разница между ними и есть «нужен извне».
+    const required = new Set<string>()
+    const assigns = new Set<string>()
     const cssAssets = new Set<string>()
     const cssImportedByChunk = new Set<string>()
 
@@ -151,6 +159,10 @@ export async function analyzeBundle(
         consumes.add(`--${name}`)
       for (const name of scan.literals)
         consumes.add(`--${name}`)
+      for (const name of scan.required)
+        required.add(`--${name}`)
+      for (const name of scan.assigns)
+        assigns.add(`--${name}`)
       for (const css of chunk.viteMetadata?.importedCss ?? []) {
         cssAssets.add(css)
         if (chunk.imports.includes(css) || chunk.code.includes(`"${basename(css)}"`) || chunk.code.includes(`'${basename(css)}'`))
@@ -160,8 +172,13 @@ export async function analyzeBundle(
     for (const css of cssAssets) {
       const asset = bundle[css]
       if (asset && asset.type === 'asset' && typeof asset.source === 'string') {
-        for (const name of scanTokenConsumption(asset.source, css).uses.keys())
+        const scan = scanTokenConsumption(asset.source, css)
+        for (const name of scan.uses.keys())
           consumes.add(`--${name}`)
+        for (const name of scan.required)
+          required.add(`--${name}`)
+        for (const name of scan.assigns)
+          assigns.add(`--${name}`)
       }
     }
     const generated = await engine.generate({
@@ -177,6 +194,8 @@ export async function analyzeBundle(
       cssAssets: sortedUnique(cssAssets),
       classes: sortedUnique(classes),
       consumes: sortedUnique(consumes),
+      requires: sortedUnique(required),
+      assigns: sortedUnique(assigns),
       edges: sortedUnique(edges),
       cssImportedByChunk: sortedUnique(cssImportedByChunk),
     })

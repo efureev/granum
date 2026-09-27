@@ -1,4 +1,5 @@
 import type { GranumConfig } from '../config'
+import type { DoctorDiagnostic, DoctorReport } from '../node/diagnostics/doctor'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,6 +72,46 @@ describe('granum doctor (D-2)', () => {
     const undefinedTokens = report.undefinedTokens.map(entry => entry.token)
     expect(undefinedTokens).toContain('--nowhere')
     expect(undefinedTokens).not.toContain('--x-runtime-lane')
+  })
+
+  /**
+   * Вердикт выносится по `tokens.requires`, а не по `consumes`: потребление с
+   * фолбэком и токен, который компонент присваивает сам, требованием не
+   * являются (T-5). Считается это на сборке пакета — доктор читает готовое.
+   */
+  it('находка только по requires; потребление сверх него молчит (INV-DIAG-4)', async () => {
+    const f = fixture()
+    const withRequires = {
+      ...f.manifest,
+      manifest: {
+        ...f.manifest.manifest,
+        components: {
+          ...f.manifest.manifest.components,
+          Panel: {
+            ...f.manifest.manifest.components.Panel!,
+            tokens: {
+              ...f.manifest.manifest.components.Panel!.tokens,
+              // `--with-fallback` и `--self-assigned` компонент потребляет, но
+              // значение у них есть и так: первое в самом `var()`, второе он
+              // присваивает сам.
+              consumes: ['--really-missing', '--with-fallback', '--self-assigned'],
+              requires: ['--really-missing'],
+              dynamic: [],
+            },
+          },
+        },
+      },
+    }
+    const report = await granumDoctor(await prepareTestApp({ providers: [withRequires], components: ['@x/kit:Panel'] }, f.root))
+    const tokens = report.undefinedTokens.filter(e => e.component === '@x/kit:Panel').map(e => e.token)
+    expect(tokens).toEqual(['--really-missing'])
+  })
+
+  it('манифест без requires проверяется по consumes — старое поведение', async () => {
+    const f = fixture()
+    const report = await granumDoctor(await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Panel'] }, f.root))
+    // Фикстура объявляет `consumes` и не объявляет `requires`.
+    expect(report.undefinedTokens).toEqual([{ token: '--nowhere', component: '@x/kit:Card' }])
   })
 
   it('чистая конфигурация: ok, предупреждения только по делу', async () => {
@@ -257,5 +298,86 @@ describe('granum prune', () => {
     expect(text).toContain('Removed (2): --dark-unused --unused')
     expect(text).toContain('not pruned (base)')
     expect(text).toContain('--space — used by a rule in an inlined file')
+  })
+})
+
+describe('formatDoctorReport: сводка и детали по требованию (D-8, INV-DIAG-5)', () => {
+  /** Отчёт с заданным числом предупреждений одного кода: проверяем свёртку. */
+  function reportWith(warnCount: number, extra: DoctorDiagnostic[] = []): DoctorReport {
+    const noisy: DoctorDiagnostic[] = Array.from({ length: warnCount }, (_, i) => ({
+      level: 'warn' as const,
+      code: 'safelist-redundant' as const,
+      subject: `@x/kit:C${i}`,
+      message: 'safelist duplicates statically extracted classes',
+      items: ['p-1', 'p-2', 'p-3', 'p-4', 'p-5'],
+    }))
+    return {
+      engine: { name: 'e', dialect: 'x/y@1', vocabulary: 'fnv64-0' },
+      providers: [],
+      components: Array.from({ length: 30 }, (_, i) => ({
+        key: `@x/kit:C${i}`,
+        providerId: '@x/kit',
+        name: `C${i}`,
+        dependencies: [],
+        classes: 2,
+        safelist: 1,
+        css: 0,
+      })),
+      themes: { names: ['light'], namesSource: 'defaults', blocks: [], warnings: [] },
+      tokenConflicts: [],
+      undefinedTokens: [],
+      files: { checked: 1, missing: [] },
+      diagnostics: [...noisy, ...extra],
+      ok: extra.every(d => d.level !== 'error'),
+    } as unknown as DoctorReport
+  }
+
+  it('много предупреждений — таблица по кодам с числами и подсказкой флага', () => {
+    const text = formatDoctorReport(reportWith(70))
+    expect(text).toContain('Diagnostics (errors: 0, warnings: 70):')
+    expect(text).toContain('safelist-redundant')
+    expect(text).toContain('--code=safelist-redundant')
+    // Ни одной построчной находки: 70 строк — это и есть нечитаемый вывод.
+    expect(text).not.toContain('@x/kit:C0 —')
+    // Список компонентов свёрнут, суммы на месте.
+    expect(text).toContain('--components to expand')
+    expect(text).toContain('classes 60, safelist 30')
+  })
+
+  it('мало предупреждений — печатаются построчно, перечисление свёрнуто в счётчик', () => {
+    const text = formatDoctorReport(reportWith(2))
+    expect(text).toContain('[safelist-redundant] @x/kit:C0 — safelist duplicates statically extracted classes (5): p-1 p-2 p-3 … +2')
+  })
+
+  it('ошибки печатаются целиком и первыми, сколько бы ни было предупреждений', () => {
+    const text = formatDoctorReport(reportWith(70, [{
+      level: 'error',
+      code: 'missing-file',
+      subject: '@x/kit (theme)',
+      message: 'file is missing: /nope.css',
+    }]))
+    const errorAt = text.indexOf('[missing-file]')
+    const tableAt = text.indexOf('--code=safelist-redundant')
+    expect(errorAt).toBeGreaterThan(-1)
+    expect(errorAt).toBeLessThan(tableAt)
+  })
+
+  it('--code разворачивает один код целиком, с перечислением', () => {
+    const text = formatDoctorReport(reportWith(70), { code: 'safelist-redundant' })
+    expect(text).toContain('Diagnostics for code safelist-redundant (70 of 70):')
+    expect(text).toContain('p-1 p-2 p-3 p-4 p-5')
+  })
+
+  it('--component сужает и находки, и список компонентов', () => {
+    const text = formatDoctorReport(reportWith(70), { component: '@x/kit:C3' })
+    expect(text).toContain('Selected components (1,')
+    expect(text).toContain('Diagnostics for component @x/kit:C3 (1 of 70):')
+    expect(text).not.toContain('@x/kit:C4 —')
+  })
+
+  it('--components разворачивает список без фильтра находок', () => {
+    const text = formatDoctorReport(reportWith(70), { components: true })
+    expect(text).toContain('• @x/kit:C29 —')
+    expect(text).toContain('--code=safelist-redundant')
   })
 })

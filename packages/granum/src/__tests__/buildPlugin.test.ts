@@ -184,7 +184,9 @@ describe('granumProvider с настоящим Vite', () => {
     const card = manifest.components.Card!
     expect(card.entry).toBe('components/Card/index.js')
     expect(card.classes).toEqual(['bg-[var(--t-bg)]', 'p-4'])
-    expect(card.safelist).toEqual(['p-4', 'shadow-legacy'])
+    // `p-4` объявлен в safelist и найден извлечением — в манифест он не едет
+    // (C-8, INV-MAN-4): CSS от записи не зависит, а манифест от неё пухнет.
+    expect(card.safelist).toEqual(['shadow-legacy'])
     expect(card.css).toEqual(['components/Card/styles.css'])
     const cardCss = readFileSync(join(dist, 'components/Card/styles.css'), 'utf8')
     expect(cardCss).toContain('font-weight:700')
@@ -203,7 +205,9 @@ describe('granumProvider с настоящим Vite', () => {
     expect(manifest.theme.declares).toEqual(['--t-bg', '--t-fallback', '--t-space'])
     expect(readFileSync(join(dist, 'theme/tokens.css'), 'utf8')).toContain('--t-space')
     expect(readFileSync(join(dist, 'theme/dark.css'), 'utf8')).toContain('.dark')
-    expect(manifest.warnings).toEqual([{ code: 'safelist-redundant', component: 'Card', classes: ['p-4'] }])
+    // Предупреждения о совпавшем safelist больше нет: раскладку чанков, от
+    // которой зависит видимость класса, выбирает бандлер, а не автор пакета.
+    expect(manifest.warnings).toEqual([])
     expect(logs.at(-1)).toMatch(/@t\/kit: 2 components/)
   })
 

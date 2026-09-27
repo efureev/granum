@@ -60,6 +60,7 @@
       "tokens": {
         "declares": {},
         "consumes": ["--xh-panel-bg", "--xh-space-2"],
+        "requires": ["--xh-space-2"],
         "dynamic": ["--xh-z-*"]
       },
       "hash": "sha256-9c0e…"
@@ -116,6 +117,7 @@
 | `safelist` | `string[]` | из дескриптора, отсортированы |
 | `tokens.declares` | `Record<theme, TokenSet>` | токены компонента (`tokenDefinitions` + материализованные ref) |
 | `tokens.consumes` | `string[]` | токены, найденные в CSS компонента и в JS `files` (`var(--x)` и литералы `'--x'`), с `--` |
+| `tokens.requires` | `string[]?` | подмножество `consumes`, значение которого обязан дать кто-то извне: потребление хотя бы раз без fallback, и сам компонент его не присваивает. Именно это множество проверяет `token-undefined` (T-5). Поля может не быть — манифест формата 2 читается как прежде, и диагностика смотрит весь `consumes` |
 | `tokens.dynamic` | `string[]` | из `dynamicTokens` дескриптора; допускается суффикс `*` |
 | `hash` | `string` | `sha256` от содержимого `files` и `css`; ключ кэша приложения (A-17) |
 

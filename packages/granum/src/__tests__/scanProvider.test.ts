@@ -48,7 +48,11 @@ describe('scanObjectProvider (R-6)', () => {
     expect(card.dependencies).toEqual(['@x/kit:Table'])
     expect(loaded.manifest.components.Table?.classes).toEqual(['m-2'])
     expect(loaded.manifest.theme.declares).toEqual(['--accent', '--card-fg', '--space'])
-    expect(loaded.manifest.warnings.map(w => w.code)).toEqual(['scanned-provider', 'safelist-redundant'])
+    // `p-4` извлечение нашло статически, поэтому из safelist он вычищен: записи
+    // без собственного CSS в манифест не едут (C-8). `sr-only` остался — его
+    // движок тестов не знает, и в `classes` его нет.
+    expect(card.safelist).toEqual(['sr-only'])
+    expect(loaded.manifest.warnings.map(w => w.code)).toEqual(['scanned-provider'])
     expect(loaded.manifest.generatedBy).toContain('(scanned)')
     expect(loaded.baseUrl).toBe(provider.baseUrl)
   })

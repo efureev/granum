@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { formatCodegenReport, parseCodegenTargets, runCodegenCommand } from './cli/codegen'
 import { loadGranumConfigFile } from './cli/loadConfig'
-import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
+import { formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
 import { prepareApp } from './node/prepare'
 import { GRANUM_VERSION } from './version'
 
@@ -25,7 +25,8 @@ export interface CliIo {
 export const USAGE = `granum — diagnostics for @feugene/granum
 
 usage:
-  granum doctor  <config> [--json] [--strict]
+  granum doctor  <config> [--json] [--strict] [--allow=code,code]
+                 [--code=<code>] [--component=<providerId:Name>] [--components]
   granum explain <config> <providerId:Component> [--json]
   granum why-css <config> <class> [--json]
   granum tokens  <config> <providerId:Component> [--deep] [--json]
@@ -46,6 +47,11 @@ flags:
   --json      structured report instead of text
   --strict    doctor: warnings fail; prune: anything removable fails;
               report: unmatched classes or undefined tokens fail
+  --allow     doctor: comma-separated codes that --strict tolerates (recorded
+              debt); they are still counted and printed
+  --code      doctor: print every finding of one code in full, with its lists
+  --component doctor: narrow everything down to one component
+  --components doctor: expand the list of selected components
   --deep      tokens: include the component's dependencies
   --check     codegen: only compare, exit 1 when registries are out of date
   --help, --version`
@@ -143,10 +149,27 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
 
     if (command === 'doctor') {
       const report = await granumDoctor(app)
-      emit(io, json, report, () => formatDoctorReport(report))
+      emit(io, json, report, () => formatDoctorReport(report, {
+        ...(values.has('--code') ? { code: values.get('--code')! } : {}),
+        ...(values.has('--component') ? { component: values.get('--component')! } : {}),
+        ...(flags.has('--components') ? { components: true } : {}),
+      }))
       if (!report.ok)
         return 1
-      return flags.has('--strict') && countDoctorDiagnostics(report).warnings > 0 ? 1 : 0
+      if (!flags.has('--strict'))
+        return 0
+      // `--allow` — записанный долг: находки этих кодов считаются и печатаются,
+      // но гейт не роняют. Без такого шва потребитель заводит свой скрипт-обёртку
+      // вокруг доктора, а он неизбежно расходится с самим доктором.
+      const allowed = new Set((values.get('--allow') ?? '').split(',').map(c => c.trim()).filter(Boolean))
+      const blocking = report.diagnostics.filter(d => d.level === 'warn' && !allowed.has(d.code))
+      if (blocking.length === 0)
+        return 0
+      const byCode = new Map<string, number>()
+      for (const d of blocking)
+        byCode.set(d.code, (byCode.get(d.code) ?? 0) + 1)
+      io.stderr(`granum doctor --strict: ${blocking.length} blocking warning(s): ${[...byCode].map(([c, n]) => `${n} × ${c}`).join(', ')}`)
+      return 1
     }
     if (command === 'explain') {
       const report = granumExplain(app, subject!)

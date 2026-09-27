@@ -14,7 +14,6 @@ import { scanCssDeclarations } from '../cssDeclarations'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { patternMatcher } from '../tokenPrune'
-import { extractTokenUses } from '../tokenScan'
 
 export interface DoctorProviderInfo {
   readonly id: string
@@ -79,6 +78,12 @@ export interface DoctorDiagnostic {
   readonly code: DoctorDiagnosticCode
   readonly subject: string
   readonly message: string
+  /**
+   * Перечисление, которое относится к находке: классы safelist, потерянные
+   * имена, файлы. Отдельным полем, а не внутри `message`, потому что текстовый
+   * вывод сворачивает его в счётчик и разворачивает по `--code=` (D-8).
+   */
+  readonly items?: readonly string[]
 }
 
 export interface DoctorReport {
@@ -135,11 +140,11 @@ export function formatThemeWarning(w: ResolvedThemeWarning): string {
 export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   const { resolution, engine } = app
   const diagnostics: DoctorDiagnostic[] = []
-  const warn = (code: DoctorDiagnosticCode, subject: string, message: string): void => {
-    diagnostics.push({ level: 'warn', code, subject, message })
+  const warn = (code: DoctorDiagnosticCode, subject: string, message: string, items?: readonly string[]): void => {
+    diagnostics.push({ level: 'warn', code, subject, message, ...(items?.length ? { items } : {}) })
   }
-  const error = (code: DoctorDiagnosticCode, subject: string, message: string): void => {
-    diagnostics.push({ level: 'error', code, subject, message })
+  const error = (code: DoctorDiagnosticCode, subject: string, message: string, items?: readonly string[]): void => {
+    diagnostics.push({ level: 'error', code, subject, message, ...(items?.length ? { items } : {}) })
   }
 
   const decisions = new Map(app.engineDecisions.map(d => [d.providerId, d]))
@@ -188,16 +193,18 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       warn(
         'provider-classes-recovered',
         decision.providerId,
-        `${decision.gained.length} classes the application engine knows were missing from the manifest: ${decision.gained.slice(0, 8).join(', ')}`
-        + `${decision.gained.length > 8 ? ', …' : ''} — the package build dropped them, the application got them back`,
+        `${decision.gained.length} classes the application engine knows were missing from the manifest `
+        + '— the package build dropped them, the application got them back',
+        decision.gained,
       )
     }
     if (decision.lost.length > 0) {
       warn(
         'provider-classes-dropped',
         decision.providerId,
-        `${decision.lost.length} classes from the manifest have no rule in the application engine: ${decision.lost.slice(0, 8).join(', ')}`
-        + `${decision.lost.length > 8 ? ', …' : ''} — they stay in the engine input and show up as unmatched`,
+        `${decision.lost.length} classes from the manifest have no rule in the application engine `
+        + '— they stay in the engine input and show up as unmatched',
+        decision.lost,
       )
     }
   }
@@ -304,32 +311,38 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
         continue
       const subject = w.component ? `${provider.id}:${w.component}` : provider.id
       if (w.code === 'safelist-redundant')
-        warn('safelist-redundant', subject, `safelist duplicates statically extracted classes: ${(w.classes as string[] | undefined)?.join(', ') ?? ''}`)
+        warn('safelist-redundant', subject, 'safelist duplicates statically extracted classes', (w.classes as string[] | undefined) ?? [])
       else if (w.code === 'css-double-delivery')
-        warn('css-double-delivery', subject, `component CSS is both inlined by granum and imported by its chunk (${(w.files as string[] | undefined)?.join(', ') ?? ''}) — it arrives twice (INV-CSS-5)`)
+        warn('css-double-delivery', subject, 'component CSS is both inlined by granum and imported by its chunk — it arrives twice (INV-CSS-5)', (w.files as string[] | undefined) ?? [])
       else if (w.code === 'peer-missing')
         warn('peer-missing', provider.id, `depends on provider '${String(w.provider)}' but does not list it in peerDependencies (C-5)`)
     }
   }
 
   /*
-   * Токены: потребляется выбранным компонентом, объявлено никем (T-5).
+   * Токены: нужен компоненту извне, не даёт никто (T-5).
    *
-   * Из находок исключаются `dynamicTokens` компонента. Такой токен компонент
-   * объявил как читаемый в рантайме — его имя собирается из переменной
-   * (`var(--gr-z-${'{'}name${'}'})`), и статический анализ видит только префикс.
-   * Обрезка это объявление уважает (C-14), а доктор до этого считал его «не
-   * объявлен никем»: одно и то же объявление значило в двух местах разное, и
-   * правильно оформленный компонент получал вечную находку. На дизайн-системе
-   * из 84 компонентов такой шум делал `--strict` непригодным.
+   * «Нужен извне» — не то же, что «потребляется». Из потребления вычитаются три
+   * вещи, и каждая — объявление компонента о себе, а не недосмотр:
+   *
+   *   - `var(--x, fallback)`: значение по умолчанию записано в самом `var()`,
+   *     молча не покрасить нельзя. Такое потребление в `requiresTokens` не
+   *     входит вовсе (`tokens.requires` манифеста);
+   *   - `--x:` где-то в собственном CSS или инлайн-стиле компонента: значение
+   *     даёт он сам, и слою granum его задавать незачем. Тоже вычтено на сборке;
+   *   - `dynamicTokens`: имя собирается из переменной (`var(--gr-z-${'{'}name${'}'})`),
+   *     и статический анализ видит только префикс. Обрезка это объявление
+   *     уважает (C-14), доктор обязан уважать так же.
+   *
+   * До этого проверялся весь `consumes`, и на дизайн-системе из 84 компонентов
+   * находок было 279 при одной настоящей: `--strict` от такого шума непригоден.
    */
   const undefinedTokens: { token: string, component: string }[] = []
   for (const { provider, component } of resolution.selection.entries) {
-    const consumed = new Set(component.consumesTokens)
-    for (const klass of component.safelist) {
-      for (const t of extractTokenUses(klass).keys())
-        consumed.add(`--${t}`)
-    }
+    // Полный ответ «что нужно извне» считается на сборке пакета и лежит в
+    // манифесте: код компонента, его CSS и классы safelist минус то, что он
+    // присваивает сам. Доктору считать тут нечего.
+    const consumed = new Set(component.requiresTokens)
     const dynamic = component.dynamicTokens.map(patternMatcher)
     for (const token of [...consumed].sort()) {
       if (definedTokens.has(token) || token.startsWith('--un-') || dynamic.some(match => match(token)))
@@ -409,9 +422,96 @@ const NAMES_SOURCE_TEXT: Record<ThemeNamesSource, string> = {
   'fallback': 'core fallback',
 }
 
-export function formatDoctorReport(report: DoctorReport): string {
+/** Опции текстового вывода доктора (D-8). JSON они не касаются. */
+export interface DoctorFormatOptions {
+  /** Показать все находки этого кода целиком, с перечислениями. */
+  readonly code?: string
+  /** Сузить вывод до одного компонента: `providerId:Name`. */
+  readonly component?: string
+  /** Развернуть список выбранных компонентов. */
+  readonly components?: boolean
+}
+
+/** Сколько элементов перечисления печатать, пока код не выбран явно. */
+const ITEMS_PREVIEW = 3
+
+/**
+ * Порядок кодов в сводке: сначала то, что ломает сборку, потом то, что делает
+ * её неверной молча, потом гигиена. Внутри уровня — по числу находок.
+ */
+const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
+  'missing-file',
+  'boundary',
+  'apply-not-expanded',
+  'provider-dialect-mismatch',
+  'engine-rules-skipped',
+  'provider-classes-dropped',
+  'provider-classes-recovered',
+  'token-undefined',
+  'token-conflict',
+  'override-skipped',
+  'css-double-delivery',
+  'important-in-provider-css',
+  'safelist-dead',
+  'safelist-redundant',
+  'peer-missing',
+  'provider-without-manifest',
+  'provider-scanned',
+  'unused-provider',
+  'theme-warning',
+]
+
+function severityOf(code: string): number {
+  const index = CODE_SEVERITY.indexOf(code as DoctorDiagnosticCode)
+  return index === -1 ? CODE_SEVERITY.length : index
+}
+
+/**
+ * Относится ли находка к компоненту.
+ *
+ * Сравнение точное, а не подстрокой: `@x/kit:C3` подстрокой попадает и в
+ * `@x/kit:C30`. Формы subject у находок три — сам ключ, `ключ:--токен` и список
+ * владельцев через запятую, — и все три разбираются здесь.
+ */
+function subjectMatchesComponent(subject: string, key: string): boolean {
+  return subject.split(', ').some(part => part === key || part.startsWith(`${key}:`))
+}
+
+/** Строка находки: сообщение плюс перечисление — свёрнутое или целиком. */
+function diagnosticLine(d: DoctorDiagnostic, expand: boolean): string {
+  const mark = d.level === 'error' ? '✗' : '⚠'
+  const head = `  ${mark} [${d.code}] ${d.subject} — ${d.message}`
+  if (!d.items?.length)
+    return head
+  if (expand)
+    return `${head}\n      ${d.items.join(' ')}`
+  const preview = d.items.slice(0, ITEMS_PREVIEW).join(' ')
+  const rest = d.items.length - ITEMS_PREVIEW
+  return `${head} (${d.items.length}): ${preview}${rest > 0 ? ` … +${rest}` : ''}`
+}
+
+/**
+ * Текстовый отчёт доктора.
+ *
+ * Разворачивать всё подряд нельзя: на дизайн-системе из восьми пакетов это 74
+ * находки, 116 компонентов и перечисления по несколько десятков классов в
+ * строке — формально верно, практически нечитаемо. Поэтому по умолчанию:
+ *
+ *   - **ошибки печатаются целиком и первыми**: они ломают сборку, и прятать их
+ *     за флагом нельзя ни при каком объёме;
+ *   - предупреждения сводятся в таблицу по кодам с числами, в порядке серьёзности;
+ *   - перечисление внутри находки сворачивается до трёх элементов и счётчика;
+ *   - список компонентов сворачивается в одну строку с суммами.
+ *
+ * Детали — по требованию: `--code=<code>` печатает все находки одного кода с
+ * полными перечислениями, `--component=<providerId:Name>` сужает всё до одного
+ * компонента, `--components` разворачивает список.
+ */
+export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOptions = {}): string {
   const lines: string[] = []
   const push = (s = ''): void => void lines.push(s)
+  const { code: onlyCode, component: onlyComponent } = options
+
   push('granum doctor')
   push('=============')
   push()
@@ -419,6 +519,7 @@ export function formatDoctorReport(report: DoctorReport): string {
   // и то, какие правила вообще будут исполнены (D-E1, D-E2).
   push(`Engine: ${report.engine.name}${report.engine.version ? ` ${report.engine.version}` : ''} — dialect ${report.engine.dialect}, vocabulary ${report.engine.vocabulary}`)
   push()
+
   push(`Providers (${report.providers.length}):`)
   for (const p of report.providers) {
     const extra: string[] = [`components: ${p.components}`]
@@ -433,34 +534,77 @@ export function formatDoctorReport(report: DoctorReport): string {
     push(`  • ${p.id} [${p.form}${p.version ? ` ${p.version}` : ''}] — ${extra.join(', ')}`)
   }
   push()
-  push(`Selected components (${report.components.length}, order = deps → dependents):`)
-  for (const c of report.components) {
-    const extra: string[] = []
-    if (c.dependencies.length)
-      extra.push(`deps: [${c.dependencies.join(', ')}]`)
-    extra.push(`classes: ${c.classes}`)
-    if (c.safelist)
-      extra.push(`safelist: ${c.safelist}`)
-    if (c.css)
-      extra.push(`css: ${c.css}`)
-    if (c.group)
-      extra.push(`group: ${c.group}`)
-    push(`  • ${c.key} — ${extra.join(', ')}`)
+
+  const components = onlyComponent ? report.components.filter(c => c.key === onlyComponent) : report.components
+  const expandComponents = options.components === true || onlyComponent !== undefined || components.length <= 12
+  const totals = components.reduce(
+    (acc, c) => ({ classes: acc.classes + c.classes, safelist: acc.safelist + c.safelist, css: acc.css + c.css }),
+    { classes: 0, safelist: 0, css: 0 },
+  )
+  push(`Selected components (${components.length}, order = deps → dependents) — classes ${totals.classes}, safelist ${totals.safelist}, css ${totals.css}:`)
+  if (expandComponents) {
+    for (const c of components) {
+      const extra: string[] = []
+      if (c.dependencies.length)
+        extra.push(`deps: [${c.dependencies.join(', ')}]`)
+      extra.push(`classes: ${c.classes}`)
+      if (c.safelist)
+        extra.push(`safelist: ${c.safelist}`)
+      if (c.css)
+        extra.push(`css: ${c.css}`)
+      if (c.group)
+        extra.push(`group: ${c.group}`)
+      push(`  • ${c.key} — ${extra.join(', ')}`)
+    }
+  }
+  else {
+    push(`  (list collapsed: --components to expand, --component=<providerId:Name> for one)`)
   }
   push()
+
   push(`Themes: [${report.themes.names.join(', ') || '—'}] (source: ${NAMES_SOURCE_TEXT[report.themes.namesSource]})`)
   for (const b of report.themes.blocks)
     push(`  • ${b.theme} → ${b.selector} (${b.tokens} token(s))`)
   push()
   push(`Files checked: ${report.files.checked}${report.files.missing.length ? `, missing: ${report.files.missing.length}` : ''}`)
   push()
+
+  const selected = report.diagnostics.filter(d =>
+    (onlyCode === undefined || d.code === onlyCode)
+    && (onlyComponent === undefined || subjectMatchesComponent(d.subject, onlyComponent)),
+  )
   const { errors, warnings } = countDoctorDiagnostics(report)
-  if (report.diagnostics.length) {
-    push(`Diagnostics (errors: ${errors}, warnings: ${warnings}):`)
-    for (const d of report.diagnostics)
-      push(`  ${d.level === 'error' ? '✗' : '⚠'} [${d.code}] ${d.subject} — ${d.message}`)
+
+  if (onlyCode !== undefined || onlyComponent !== undefined) {
+    const filter = [onlyCode && `code ${onlyCode}`, onlyComponent && `component ${onlyComponent}`].filter(Boolean).join(', ')
+    push(`Diagnostics for ${filter} (${selected.length} of ${report.diagnostics.length}):`)
+    for (const d of selected)
+      push(diagnosticLine(d, true))
     push()
   }
+  else if (report.diagnostics.length) {
+    // Ошибки — целиком и первыми: они ломают сборку.
+    const errorList = report.diagnostics.filter(d => d.level === 'error')
+    const warnList = report.diagnostics.filter(d => d.level === 'warn')
+    push(`Diagnostics (errors: ${errors}, warnings: ${warnings}):`)
+    for (const d of errorList)
+      push(diagnosticLine(d, true))
+    if (warnList.length <= 12) {
+      for (const d of warnList)
+        push(diagnosticLine(d, false))
+    }
+    else {
+      const byCode = new Map<string, number>()
+      for (const d of warnList)
+        byCode.set(d.code, (byCode.get(d.code) ?? 0) + 1)
+      const rows = [...byCode].sort((a, b) => severityOf(a[0]) - severityOf(b[0]) || b[1] - a[1])
+      const width = Math.max(...rows.map(([c]) => c.length))
+      for (const [codeName, count] of rows)
+        push(`  ⚠ ${codeName.padEnd(width)}  ${String(count).padStart(4)}   --code=${codeName}`)
+    }
+    push()
+  }
+
   if (!report.ok)
     push(`✗ Errors found: ${errors}.`)
   else if (warnings)

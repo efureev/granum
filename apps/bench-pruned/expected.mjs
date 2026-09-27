@@ -12,7 +12,7 @@ export default {
   doctor: {
     // Те же две находки фикстуры, что и у `bench-one`: стенды отличаются
     // одной строкой конфига, а не набором дефектов.
-    warnings: { 'safelist-dead': 1, 'safelist-redundant': 1 },
+    warnings: { 'safelist-dead': 1 },
   },
   css: {
     present: [

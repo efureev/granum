@@ -19,6 +19,15 @@ export interface GranumManifestTheme {
 export interface GranumManifestComponentTokens {
   readonly declares: Readonly<Record<string, GranumTokenSet>>
   readonly consumes: readonly string[]
+  /**
+   * Подмножество `consumes`, значение которого обязан дать кто-то извне:
+   * потребляется хотя бы раз без fallback, и сам компонент его не присваивает
+   * (T-5). Именно это множество проверяет `token-undefined`.
+   *
+   * Необязательное: манифест формата 2 без этого поля читается как прежде, и
+   * диагностика на нём смотрит весь `consumes`.
+   */
+  readonly requires?: readonly string[]
   readonly dynamic: readonly string[]
 }
 

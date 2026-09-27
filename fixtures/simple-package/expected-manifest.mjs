@@ -16,9 +16,11 @@ export default function ({ manifest, distDir, check }) {
   check(c.XNestedReverse.classes.includes('border-red') && c.XNestedReverse.classes.includes('tracking-widest'), `XNestedReverse.classes: ${c.XNestedReverse.classes}`)
 
   // Строка `base` уезжает в чанк литералом целиком, поэтому её классы видны и
-  // статике: safelist тут избыточен, и сборка честно это говорит (INV-MAN-4).
-  check(c.XTestStyled.safelist.includes('rounded-[var(--ds-radius-lg)]') && c.XTestStyled.classes.includes('shadow-sm'), `XTestStyled: ${c.XTestStyled.classes} / ${c.XTestStyled.safelist}`)
-  check(manifest.warnings.some(w => w.code === 'safelist-redundant' && w.component === 'XTestStyled'), `warnings: ${JSON.stringify(manifest.warnings)}`)
+  // статике. Весь safelist компонента оказался покрыт извлечением — и вычищен:
+  // CSS от него не зависит, а манифест от него пухнет (C-8).
+  check(c.XTestStyled.safelist.length === 0, `XTestStyled.safelist: ${c.XTestStyled.safelist}`)
+  check(c.XTestStyled.classes.includes('rounded-[var(--ds-radius-lg)]') && c.XTestStyled.classes.includes('shadow-sm'), `XTestStyled.classes: ${c.XTestStyled.classes}`)
+  check(!manifest.warnings.some(w => w.code === 'safelist-redundant'), `warnings: ${JSON.stringify(manifest.warnings)}`)
   check(c.XTokenized.classes.includes('space-y-2xl') && c.XTokenized.classes.includes('border-green'), `XTokenized.classes: ${c.XTokenized.classes}`)
 
   // Ссылки на токены материализованы (C-13); обе формы.
@@ -35,5 +37,7 @@ export default function ({ manifest, distDir, check }) {
   // Раскладка (INV-LAY-1).
   for (const name of Object.keys(c))
     check(existsSync(join(distDir, 'components', name, 'index.js')), `entry ${name}`)
-  check(manifest.warnings.length === 1, `warnings: ${JSON.stringify(manifest.warnings)}`)
+  // Предупреждений у фикстуры не остаётся ни одного: единственное, что было, —
+  // `safelist-redundant`, а такие записи сборка теперь вычищает молча.
+  check(manifest.warnings.length === 0, `warnings: ${JSON.stringify(manifest.warnings)}`)
 }
