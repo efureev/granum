@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Тот же стенд, что `bench-one`, с одним отличием: обрезка токенов включена.
@@ -11,7 +11,7 @@ import { miniEngine } from '@feugene/granum-engine-mini'
  * само, без этой строки уедет из CSS при зелёной сборке.
  */
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
   themes: { names: ['light', 'dark'] },

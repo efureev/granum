@@ -65,11 +65,11 @@
 
 Реализации движка в ядре нет вовсе: `./engine` отдаёт контракт и хелперы
 авторам движков, а инстанс приходит из `granum.config.*`. Штатная реализация —
-`@feugene/granum-engine-mini`: вендоренное ядро UnoCSS 66.7.5 (`@unocss/core`,
-`preset-mini`, `rule-utils` без `magic-string`,
-`extractor-arbitrary-variants`) плюс перенесённые правила
-`unocss-mini-extra-rules`; golden-тест против живого `unocss@66.7.5` живёт там
-же, рядом с вендоренным кодом.
+`@feugene/granum-engine-wind`: вендоренное ядро UnoCSS 66.7.5 (`@unocss/core`,
+`preset-wind3` вместе с `preset-mini`, на котором он построен, `rule-utils` без
+`magic-string`, `extractor-arbitrary-variants`) плюс одно доп-правило — альфа на
+произвольном цвете; golden-тест против живого `unocss@66.7.5` живёт там же, рядом
+с вендоренным кодом.
 
 ```ts
 interface GranumEngine {

@@ -10,10 +10,10 @@
 
 ```ts
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@acme/ui', '@acme/base'],
   components: [{ provider: '@acme/ui', names: ['XhPanel'] }, '@acme/base:XBox'],
   themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
@@ -27,7 +27,7 @@ export default defineGranumConfig({
 
 | Поле | Значение по умолчанию | Смысл |
 |---|---|---|
-| `engine` | — (обязательно) | инстанс движка утилит: `miniEngine()` из `@feugene/granum-engine-mini` или свой; строка `'builtin'` и объект опций не принимаются |
+| `engine` | — (обязательно) | инстанс движка утилит: `windEngine()` из `@feugene/granum-engine-wind` или свой; строка `'builtin'` и объект опций не принимаются |
 | `providers` | — | имена пакетов (манифест ищется через `exports["./granum.manifest.json"]`) или объекты контракта; объект с `baseUrl` на существующий `dist` сканируется приложением само (медленный путь, `provider-scanned`) |
 | `components` | `'all'` | список ключей `id:Name` / `{ provider, names }` либо `'imports'` — по импортам в `appSources` |
 | `themes.names` | по `define` → `defaultThemes` провайдеров → `['light']` | активный набор тем |
@@ -69,7 +69,7 @@ src/App.vue but is not part of the selection [@acme/ui:XhPanel, …]
 
 `engine` в конфиге — инстанс движка утилит: своего у granum нет, выбор делает
 приложение. Правила приложения передаются фабрике движка
-(`miniEngine({ rules: […] })`), у конфига поля для правил нет.
+(`windEngine({ rules: […] })`), у конфига поля для правил нет.
 
 Списку классов в манифесте granum верит только при равенстве отпечатков
 словаря: в блоке `engine` манифеста записан отпечаток той реализации, которая

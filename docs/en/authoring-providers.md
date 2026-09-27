@@ -75,7 +75,7 @@ export default defineGranumProvider({
     defaultThemes: ['light'],
     tokenDefinitions: { light: { tokens: { 'xh-accent': '#0a7' } } },
   },
-  engine: { dialect: 'unocss/preset-mini+granum@66', rules: [['btn-reset', { appearance: 'none' }]] },
+  engine: { dialect: 'unocss/preset-wind3+granum@66', rules: [['btn-reset', { appearance: 'none' }]] },
   dependencies: ['@acme/base'],
 })
 ```
@@ -103,11 +103,11 @@ application is in [engines and dialects](./engines-and-dialects.md).
 
 ```ts
 import { granumProvider } from '@feugene/granum/build'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 granumProvider({
   provider,
-  engine: miniEngine(),
+  engine: windEngine(),
   engineModule: 'granum-provider/engine.js',
   sourceDir: 'src',
   indexEntry: 'src/index.ts',

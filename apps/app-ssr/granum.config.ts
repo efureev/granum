@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Конфиг стенда серверного рендера.
@@ -19,7 +19,7 @@ import { miniEngine } from '@feugene/granum-engine-mini'
  * `src`, как у обычного приложения.
  */
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: [
     '@granum-fixtures/extra-simple',
     '@granum-fixtures/simple',

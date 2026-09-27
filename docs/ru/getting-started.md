@@ -11,7 +11,7 @@
 ## Установка
 
 ```bash
-yarn add -D @feugene/granum @feugene/granum-engine-mini vite
+yarn add -D @feugene/granum @feugene/granum-engine-wind vite
 ```
 
 Ядро не имеет зависимостей; `vite` — единственный peer, и нужен он только
@@ -52,13 +52,13 @@ export default defineGranumProvider({
 ```ts
 // vite.config.ts
 import { granumProvider } from '@feugene/granum/build'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import provider from './src/granum-provider/index.ts'
 
 export default defineConfig({
-  plugins: [vue(), granumProvider({ provider, engine: miniEngine() })],
+  plugins: [vue(), granumProvider({ provider, engine: windEngine() })],
   build: { rolldownOptions: { external: ['vue'] } },
 })
 ```
@@ -79,10 +79,10 @@ export default defineConfig({
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@acme/ui'],
   components: ['@acme/ui:XhCard'],
   appSources: { dirs: ['src'] },
@@ -91,7 +91,7 @@ export default defineGranumConfig({
 
 `engine` обязателен и принимает инстанс: выбор реализации и её настройка
 принадлежат приложению. Свои правила приложение отдаёт фабрике движка
-(`miniEngine({ rules: […] })`), а не конфигу.
+(`windEngine({ rules: […] })`), а не конфигу.
 
 2. Плагин и один импорт CSS:
 

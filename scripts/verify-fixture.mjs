@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 import { readManifestSync, scanTokenConsumption } from '@feugene/granum/node'
 import { readFileSync } from 'node:fs'
 
@@ -38,7 +38,7 @@ const check = (condition, message) => {
  * экспортирует `engine` из `expected-manifest.mjs`. Проверять чужим движком
  * бессмысленно — он не знает ни одного имени этого словаря.
  */
-const engine = typeof expected.engine === 'function' ? expected.engine() : miniEngine()
+const engine = typeof expected.engine === 'function' ? expected.engine() : windEngine()
 for (const [name, component] of Object.entries(loaded.manifest.components)) {
   const candidates = new Set()
   const consumes = new Set()

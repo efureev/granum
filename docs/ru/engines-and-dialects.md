@@ -24,26 +24,26 @@
 
 ## Установка и настройка
 
-Реализация по умолчанию — `@feugene/granum-engine-mini`: вендоренный форк ядра
-UnoCSS 66.7.5 с `preset-mini` и доп-правилами, ноль зависимостей.
+Реализация по умолчанию — `@feugene/granum-engine-wind`: вендоренный форк ядра
+UnoCSS 66.7.5 с `preset-wind3`, ноль зависимостей.
 
 ```bash
-yarn add -D @feugene/granum @feugene/granum-engine-mini
+yarn add -D @feugene/granum @feugene/granum-engine-wind
 ```
 
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@acme/ui'],
   appSources: { dirs: ['src'] },
 })
 ```
 
-| Опция `miniEngine` | По умолчанию | Меняет диалект | Меняет отпечаток |
+| Опция `windEngine` | По умолчанию | Меняет диалект | Меняет отпечаток |
 |---|---|---|---|
 | `extraRules` | `true` | да | да |
 | `rules`, `variants` | — | нет | да |
@@ -51,10 +51,13 @@ export default defineGranumConfig({
 | `preflight` | `true` | нет | нет |
 | `variablePrefix` | `--un-` | нет | нет |
 
-Опция, меняющая набор генерируемых имён качественно, обязана менять диалект:
-`extraRules: false` выключает `divide-y`, `space-x-4` и `tabular-nums`, и это
-уже другой словарь — `unocss/preset-mini@66` вместо
-`unocss/preset-mini+granum@66`. Опция, меняющая только вывод, диалект не
+Опция, меняющая набор генерируемых имён **или их смысл**, обязана менять
+диалект: `extraRules: false` выключает единственное доп-правило — альфу на
+произвольном цвете. Множество имён от этого не меняется (`bg-[var(--x)]/55`
+совпадает и так), но смысл меняется: без правила wind3 отдаёт
+`background-color: var(--x)` и молча теряет `/55`, с правилом — `color-mix`.
+Поэтому это другой словарь, `unocss/preset-wind3@66` вместо
+`unocss/preset-wind3+granum@66`. Опция, меняющая только вывод, диалект не
 меняет.
 
 ## Своё правило приложению
@@ -63,10 +66,10 @@ export default defineGranumConfig({
 поля для правил нет и не появится.
 
 ```ts
-engine: miniEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
+engine: windEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
 ```
 
-Диалект при этом тот же — словарь preset-mini никуда не делся, — а отпечаток
+Диалект при этом тот же — словарь wind3 никуда не делся, — а отпечаток
 другой: движок знает имя, которого не знала сборка пакетов. Что из этого
 следует, ниже.
 
@@ -76,7 +79,7 @@ engine: miniEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
 
 ### Диалект — имя словаря
 
-`<vendor>/<vocabulary>@<major>`: `unocss/preset-mini+granum@66`,
+`<vendor>/<vocabulary>@<major>`: `unocss/preset-wind3+granum@66`,
 `granum-fixtures/atoms@1`. Сравнивается строгим равенством строк; мажор в конце
 — часть имени, а не диапазон, потому что `@66` и `@67` — разные словари, а не
 версии одного.
@@ -137,7 +140,7 @@ engine: miniEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
    `unmatched`.
 
 Что делать: либо взять движок диалекта пакета, либо добавить нужные правила
-фабрике своего (`miniEngine({ rules: […] })`). Смешать два словаря в одной
+фабрике своего (`windEngine({ rules: […] })`). Смешать два словаря в одной
 сборке нельзя, и это не ограничение реализации: имена словарей пересекаются, а
 смысл у них разный, и класс `.p-4` получил бы два вердикта в одном слое.
 

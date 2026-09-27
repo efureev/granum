@@ -58,8 +58,9 @@
   эмиссия манифеста, интеграция с codegen.
 - Плагин приложения: конфиг, резолюция, CSS-канал с каскадными слоями, JS-канал,
   канал токенов и тем, dev-режим с HMR, отчёт сборки.
-- Встроенный движок утилит на вендоренных `@unocss/core` + `@unocss/preset-mini` +
-  правилах `@feugene/unocss-mini-extra-rules`, переведённых на внутренние типы.
+- Движок утилит отдельным пакетом: вендоренные `@unocss/core` + `@unocss/preset-wind3`
+  (тот построен на `@unocss/preset-mini`, поэтому вендорятся оба) плюс одно
+  доп-правило — альфа на произвольном цвете.
 - Диагностика и CLI.
 - Фикстуры: три провайдера (аналоги `simple`, `extra-simple`, `heavy`), приложения-
   интеграционные тесты, стенды замера веса.
@@ -312,7 +313,7 @@ interface GranumComponentDescriptor {
 
 Движка в ядре нет. `./engine` отдаёт контракт и хелперы; реализацию приложение
 выбирает само и передаёт инстансом. Референсная реализация —
-`@feugene/granum-engine-mini` (вендоренный форк UnoCSS 66.7.5 с доп-правилами);
+`@feugene/granum-engine-wind` (вендоренный форк UnoCSS 66.7.5 с доп-правилами);
 рабочий пример движка, написанного с нуля, — `fixtures/atoms-engine`.
 Обоснование — [ADR-8](./decisions.md) и [ADR-9](./decisions.md).
 
@@ -335,7 +336,8 @@ interface EngineInput {
   preflights?: readonly GranumPreflight[]
 }
 interface EngineOutput {
-  css: string                               // только утилиты и их preflights, без @layer
+  css: string                               // только утилиты, без @layer
+  preflight?: string                        // CSS базового уровня: `--un-*`, @property, reset (E-15)
   matched: ReadonlyMap<string, EngineMatch> // класс → { rule: string, selector: string, source: 'builtin' | providerId | 'app' }
   unmatched: readonly string[]              // классы, для которых правила нет
 }
@@ -358,7 +360,7 @@ interface EngineOutput {
 
 | ID | Требование |
 |---|---|
-| E-1 | `dialect` MUST соответствовать `/^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/`; сравнение — равенством. Примеры: `unocss/preset-mini@66`, `unocss/preset-mini+granum@66`, `granum-fixtures/atoms@1`. |
+| E-1 | `dialect` MUST соответствовать `/^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/`; сравнение — равенством. Примеры: `unocss/preset-mini@66`, `unocss/preset-wind3+granum@66`, `granum-fixtures/atoms@1`. |
 | E-2 | Опция движка, меняющая набор генерируемых имён качественно, MUST менять диалект; опция, меняющая только вывод (префикс кастомных свойств, preflight), диалект MUST NOT менять. |
 | E-3 | Диалект `null` в манифесте означает, что артефакт не зависит ни от одного словаря и ни одного не расширяет. Допустим тогда и только тогда, когда у всех компонентов пусты `classes` и `safelist`, а `engine.module` равен `null`. |
 | E-4 | `vocabulary` MUST быть непустой непрозрачной строкой, сравниваемой равенством, и MUST меняться всякий раз, когда меняется множество генерируемых имён — включая правила, переданные фабрике движка. `vocabulary` равен `null` тогда и только тогда, когда `dialect` равен `null`. |
@@ -377,6 +379,7 @@ interface EngineOutput {
 | E-12 | Экстрактор движка MUST понимать словарь, который движок объявляет, и MUST NOT извлекать классы из комментариев SFC. Границы среза комментариев (хелпер `stripComments` ядра): HTML-комментарии в `.vue`/`.html`/`.svelte`/`.astro`, блочные комментарии везде, строчные — только строки, начинающиеся с двух слешей, и вызовы `createCommentVNode("…")` в скомпилированных шаблонах Vue (INV-ENG-5). |
 | E-13 | Движок MUST NOT знать о слоях, манифестах и Vite; всё это — забота сборщика CSS (§10.3). |
 | E-14 | Реализация, вендорящая чужой код, MUST держать golden-тест: для фиксированного набора классов CSS сравнивается с выводом апстрима, зафиксированным в снапшоте (INV-ENG-4), и уведомление об авторстве — в `THIRD_PARTY_NOTICES.md` (ADR-2). |
+| E-15 | CSS базового уровня — инициализацию кастомных свойств, регистрации `@property`, reset — движок MUST отдавать полем `preflight`, а не смешивать с утилитами в `css`. Это утверждение о роде CSS, не о слое: имён слоёв движок по-прежнему не знает (E-13), место в каскаде выбирает сборщик (§10.3, INV-CSS-8). Движок без preflight поле не заполняет. |
 
 ### 9.4 Сверка на стороне приложения
 
@@ -407,7 +410,7 @@ export default defineGranumConfig({
   providers: ['@feugene/heavy-package', localProviderObject],   // имя пакета → манифест через exports; объект → медленный путь
   components: 'all' | ComponentSelectionItem[] | 'imports',
   themes: { names?, define?, tokenOverrides?, strictTokens? },
-  engine: GranumEngine,                                         // обязателен и только инстансом: miniEngine() или свой
+  engine: GranumEngine,                                         // обязателен и только инстансом: windEngine() или свой
   css: { layers: true, layerPrefix: 'granum', expandDirectives: false },
   appSources: { dirs: ['./src'], extensions?: string[] },
   pruneTokens: { mode: 'off' | 'report' | 'on', keep?: string[] },
@@ -438,7 +441,7 @@ export default defineGranumConfig({
 | ID | Требование |
 |---|---|
 | A-9 | Виртуальный модуль `virtual:granum.css` MUST содержать весь CSS granum в порядке слоёв: `@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;` затем блоки слоёв в том же порядке (INV-CSS-1, ADR-4). |
-| A-10 | Содержимое слоёв: `tokens` — `theme.tokensCss` всех провайдеров графа по порядку графа, затем структурные токены `:root`; `base` — `theme.baseCss`; `themes` — блоки токенов по активным темам (структурные), затем файлы тем без структурного определения, дедуп по пути; `components` — `cssFiles` и `styles.css` компонентов селекции в порядке селекции; `utilities` — вывод движка (INV-CSS-2). |
+| A-10 | Содержимое слоёв: `tokens` — `theme.tokensCss` всех провайдеров графа по порядку графа, затем структурные токены `:root`; `base` — `preflight` движка (первым), затем `theme.baseCss` провайдеров; `themes` — блоки токенов по активным темам (структурные), затем файлы тем без структурного определения, дедуп по пути; `components` — `cssFiles` и `styles.css` компонентов селекции в порядке селекции; `utilities` — утилиты движка (INV-CSS-2, INV-CSS-8). |
 | A-11 | Вход движка MUST быть объединением: статических классов компонентов селекции из манифестов, их safelist, классов, извлечённых из исходников приложения (`appSources`). Классы приложения извлекаются тем же экстрактором (INV-CSS-3). |
 | A-12 | Модули `virtual:granum/layers/<layer>.css` MUST отдавать один слой (для раздельной загрузки и замера веса); их конкатенация в порядке слоёв MUST быть равна `virtual:granum.css` (INV-CSS-4). |
 | A-13 | CSS компонентов MUST проходить в вывод побайтно, кроме: раскрытия `@apply` (если оно не выполнено провайдером и включено `css.expandDirectives`) и обрезки токенов при `pruneTokens.mode: 'on'` (INV-CSS-5). |
@@ -628,7 +631,7 @@ export default defineGranumConfig({
 | AC-4 | Импорт компонента вне селекции при `guard: 'error'` валит сборку с `ComponentOutsideSelectionError` | интеграционный тест |
 | AC-5 | В `node_modules` приложения нет `unocss` и `@unocss/*`; сборка проходит | `apps/*` без этих зависимостей |
 | AC-6 | Повторная сборка провайдера и приложения даёт побайтно те же манифест, CSS и отчёт | тест детерминизма |
-| AC-7 | Golden-тесты движка против `unocss@66.7.5` проходят | `packages/granum-engine-mini/src/__tests__` |
+| AC-7 | Golden-тесты движка против `unocss@66.7.5` проходят | `packages/granum-engine-wind/src/__tests__` |
 | AC-8 | `dependencies` ядра пусты; `dist` браузерных entry не содержит `node:` | тест на package.json и на `dist` |
 | AC-9 | HMR: правка `App.vue` с новым классом обновляет `virtual:granum/layers/utilities.css` без перезагрузки | e2e на dev-сервере |
 | AC-10 | `docs/ru` ↔ `docs/en` parity, `MIGRATION.md` присутствует | `check:docs` |

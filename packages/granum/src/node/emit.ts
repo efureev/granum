@@ -129,9 +129,15 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     }
   }
 
+  // Preflight движка — базового уровня, поэтому уезжает в `base` и **первым**:
+  // инициализация `--un-*` и reset обязаны действовать до стилей компонентов, а
+  // не после них. Слой выбирает сборщик, движок про слои не знает (E-13, E-15).
+  const enginePreflight = generated.preflight?.trim()
+  const baseSections = sections.filter(s => s.source.kind === 'base').map(s => s.css)
+
   const layers: Record<LayerName, string> = {
     tokens: tokensSections.join('\n'),
-    base: sections.filter(s => s.source.kind === 'base').map(s => s.css).join('\n'),
+    base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
     themes: [...themeBlocks, ...themeFileSections].join('\n'),
     components: componentCss.join('\n'),
     utilities: generated.css,

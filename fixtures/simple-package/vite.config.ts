@@ -1,11 +1,11 @@
 import { granumProvider } from '@feugene/granum/build'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import { simpleProvider } from './src/granum-provider/index.ts'
 
 export default defineConfig({
-  plugins: [vue(), granumProvider({ provider: simpleProvider, engine: miniEngine() })],
+  plugins: [vue(), granumProvider({ provider: simpleProvider, engine: windEngine() })],
   build: {
     target: 'esnext',
     minify: false,

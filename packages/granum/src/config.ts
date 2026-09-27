@@ -52,8 +52,8 @@ export interface GranumConfig {
   readonly themes?: GranumThemesInput
   /**
    * Движок утилит — инстанс, а не имя и не опции (A-E1). Выбор реализации и её
-   * настройка принадлежат приложению: `miniEngine()` из
-   * `@feugene/granum-engine-mini` или свой. Правила приложения передаются
+   * настройка принадлежат приложению: `windEngine()` из
+   * `@feugene/granum-engine-wind` или свой. Правила приложения передаются
    * фабрике движка, у конфига поля для правил нет (E-10).
    */
   readonly engine: GranumEngine

@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Скан вложенных SFC и дополнительные правила движка под чужим префиксом
@@ -14,6 +14,6 @@ import { miniEngine } from '@feugene/granum-engine-mini'
 export default defineGranumConfig({
   providers: ['@granum-fixtures/simple'],
   components: ['@granum-fixtures/simple:XNestedReverse'],
-  engine: miniEngine({ variablePrefix: 'ds-' }),
+  engine: windEngine({ variablePrefix: 'ds-' }),
   appSources: { dirs: ['src'] },
 })

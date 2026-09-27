@@ -1,6 +1,6 @@
 /**
  * Движок для тестов ядра. Ядро реализации движка не содержит (INV-ENG-9), а
- * тянуть в свои юниты `@feugene/granum-engine-mini` значило бы проверять ядро
+ * тянуть в свои юниты `@feugene/granum-engine-wind` значило бы проверять ядро
  * через чужой пакет и зависеть от порядка сборки. Поэтому здесь минимальная
  * реализация `GranumEngine`: она держит ровно те имена, которые встречаются в
  * фикстурах тестов, и повторяет форму вывода настоящего движка
@@ -79,6 +79,8 @@ export interface TestEngineOptions {
   readonly version?: string
   /** Имена, которые движок знает сверх встроенного набора: значение — декларации. */
   readonly extra?: Readonly<Record<string, string>>
+  /** CSS базового уровня, который движок отдаёт полем `preflight` (E-15). */
+  readonly preflight?: string
 }
 
 /** Экранирование селектора как в движке: `.gap-[var(--x)]` → `.gap-\[var\(--x\)\]`. */
@@ -164,7 +166,12 @@ export function testEngine(options: TestEngineOptions = {}): GranumEngine {
         })
         blocks.push(`${selector}{${declarations}}`)
       }
-      return { css: blocks.join('\n'), matched, unmatched }
+      return {
+        css: blocks.join('\n'),
+        ...(options.preflight !== undefined ? { preflight: options.preflight } : {}),
+        matched,
+        unmatched,
+      }
     },
   }
 }

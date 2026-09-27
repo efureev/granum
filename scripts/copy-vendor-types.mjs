@@ -3,7 +3,7 @@
  * После `tsc` копирует `.d.ts` вендоренного ядра в `dist/types`: tsc не эмитит
  * декларации для входных `.d.ts`, а внутренние модули движка на них ссылаются.
  * Запускается из каталога пакета, который вендорит код
- * (`packages/granum-engine-mini`, скрипт `build`).
+ * (`packages/granum-engine-wind`, скрипт `build`).
  */
 import { cpSync, existsSync } from 'node:fs'
 import { join } from 'node:path'

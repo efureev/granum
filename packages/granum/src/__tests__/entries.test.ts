@@ -31,7 +31,7 @@ describe('entry points', () => {
     expect(typeof engine.vocabularyFingerprint).toBe('function')
     expect(typeof engine.parseDialect).toBe('function')
     expect(Object.keys(engine)).not.toContain('createEngine')
-    expect(Object.keys(engine)).not.toContain('miniEngine')
+    expect(Object.keys(engine)).not.toContain('windEngine')
     expect(typeof build.granumProvider).toBe('function')
     expect(typeof vite.granum).toBe('function')
     expect(typeof vite.defineGranumConfig).toBe('function')

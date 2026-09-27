@@ -9,7 +9,12 @@ export default {
   },
   css: {
     present: [
-      { what: 'слои каскада на месте: пустые объявлены, компоненты и утилиты — блоками (INV-CSS-1)', css: '@layer granum.tokens,granum.base,granum.themes;@layer granum.components{' },
+      { what: 'слои каскада на месте: пустые объявлены, непустые — блоками (INV-CSS-1)', css: '@layer granum.tokens;@layer granum.base{' },
+      { what: 'слой тем пуст и объявлен между base и components', css: '@layer granum.themes;@layer granum.components{' },
+      // У провайдера app-1 нет ни tokens.css, ни base.css: всё содержимое слоя
+      // `base` — preflight движка. Он обязан быть до CSS компонентов, иначе
+      // утилиты, читающие `--un-*`, получают невалидные значения (INV-CSS-8).
+      { what: 'preflight движка в слое base, а не в утилитах (E-15, INV-CSS-8)', css: '@layer granum.base{*,:before,:after,::backdrop{--un-rotate:0' },
       { what: 'утилиты — отдельным слоем после компонентов', css: '@layer granum.utilities{' },
       { what: 'CSS компонента XTest1 из его SFC <style>', css: '.x-sp-test' },
       { what: '@apply раскрыт на сборке провайдера (B-11)', css: 'font-weight:700' },

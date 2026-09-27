@@ -1,41 +1,59 @@
 /**
- * Ветка «другой диалект, наборы разошлись» (таблица §8 ТЗ движка, AC-E1).
+ * Ветка «другой диалект» (таблица §8 ТЗ движка, AC-E1).
  *
- * Пакет собран движком с доп-правилами, приложение — без них. Это разные
- * словари, и granum обязан не поверить списку классов манифеста, а пересчитать
- * его. `divide-y` пересчёт не находит: правила для него у движка приложения нет.
- * Главное здесь — что класс не исчезает молча: он назван в `lost`, подан
- * движку и виден в `unmatched` (A-E7, INV-DIAG-2, INV-ENG-11).
+ * Пакет собран движком словаря `granum-fixtures/atoms@1` и привозит правила для
+ * него модулем. Приложение говорит на `unocss/preset-wind3+granum@66`. Из этого
+ * следуют три обязательства granum, и все три проверяются здесь:
+ *
+ *   1. правила пакета не загружаются (`engine-rules-skipped`);
+ *   2. списку классов манифеста не верят — он пересчитывается;
+ *   3. имена, которых словарь приложения не знает, названы поимённо в `lost`,
+ *      поданы движку и видны в `unmatched` (A-E7, INV-DIAG-2, INV-ENG-11).
+ *
+ * Обратная сторона — `app-atoms`: там движок и пакет говорят на одном словаре.
  */
 export default {
-  purpose: 'другой диалект: классы пакета пересчитаны, потерянный класс назван, а не потерян молча',
+  purpose: 'другой диалект: правила пакета не грузятся, классы пересчитаны, потерянные названы, а не потеряны молча',
   doctor: {
-    warnings: { 'provider-dialect-mismatch': 1, 'provider-classes-dropped': 1 },
+    warnings: {
+      'provider-dialect-mismatch': 1,
+      'engine-rules-skipped': 1,
+      'provider-classes-dropped': 1,
+    },
   },
   css: {
     present: [
       { what: 'слои каскада на месте', css: '@layer granum.utilities{' },
-      { what: 'фундамент пакета доехал', css: '--xh-space-3:12px' },
-      // `px-[var(--xh-space-3)]` пережил пересчёт: это общая часть словарей.
-      { what: 'классы общей части словаря пересчитаны и сгенерированы', css: 'var(--xh-space-3)' },
-      { what: 'утилита приложения из App.vue', css: 'padding:1.5rem' },
+      // Фундамент от словаря не зависит: это CSS-файлы пакета, а не утилиты.
+      { what: 'токены пакета доехали, несмотря на расхождение словарей', css: '--at-bg:#fff' },
+      { what: 'тема пакета доехала', css: '--at-radius:6px' },
+      { what: 'preflight движка приложения — в слое base (E-15, INV-CSS-8)', css: '@layer granum.base{*,:before,:after,::backdrop{--un-rotate:0' },
+      { what: 'утилита приложения из App.vue — на своём словаре она работает', css: 'padding:1.5rem' },
     ],
     absent: [
-      // `divide-y` — из доп-правил, которых у движка приложения нет. Правило
-      // не выдумывается: его в CSS быть не должно.
-      { what: 'правила чужого словаря не выдуманы', css: 'divide-y-reverse' },
+      // Правила пакета не загружены, а выдумывать granum не умеет: ни одного
+      // `atom-*` в CSS быть не должно.
+      { what: 'правила чужого словаря не выдуманы', css: 'atom-stack' },
+      { what: 'и произвольное значение чужого словаря тоже', css: 'atom-bg-' },
     ],
   },
   report: (report, check) => {
-    check(report.engine.dialect === 'unocss/preset-mini@66', `движок приложения: ${report.engine.dialect}`)
-    const provider = report.providers.find(p => p.id === '@granum-fixtures/heavy')
-    check(provider?.dialect === 'unocss/preset-mini+granum@66', `диалект пакета: ${provider?.dialect}`)
+    check(report.engine.dialect === 'unocss/preset-wind3+granum@66', `движок приложения: ${report.engine.dialect}`)
+    const provider = report.providers.find(p => p.id === '@granum-fixtures/atoms')
+    check(provider?.dialect === 'granum-fixtures/atoms@1', `диалект пакета: ${provider?.dialect}`)
     check(provider?.reason === 'dialect', `причина пересчёта: ${provider?.reason}`)
     check(provider?.classes === 're-extracted', `источник классов: ${provider?.classes}`)
-    check(provider?.lost.join(',') === 'divide-y', `lost: ${provider?.lost}`)
     check(provider?.gained.length === 0, `gained: ${provider?.gained}`)
-    // Потерянный класс остался громким: он в `unmatched` и с названным источником.
-    const unmatched = report.classes.unmatched.find(e => e.className === 'divide-y')
-    check(unmatched?.sources.join(',') === '@granum-fixtures/heavy', `unmatched divide-y: ${JSON.stringify(unmatched)}`)
+    // Пересчёт идёт по пакету целиком, поэтому в `lost` и классы компонента, в
+    // селекцию не попавшего (`AtChip`). Важно не число, а что ни одно имя не
+    // пропало без упоминания.
+    check(
+      provider?.lost.join(',') === 'atom-bg-[var(--at-bg)],atom-frame,atom-gap-2,atom-inline,atom-pad-1,atom-round,atom-stack',
+      `lost: ${provider?.lost}`,
+    )
+    for (const className of provider?.lost ?? []) {
+      const entry = report.classes.unmatched.find(e => e.className === className)
+      check(entry?.sources.join(',') === '@granum-fixtures/atoms', `unmatched ${className}: ${JSON.stringify(entry)}`)
+    }
   },
 }

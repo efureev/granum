@@ -271,14 +271,6 @@
     "@eslint/core" "^1.2.1"
     levn "^0.4.1"
 
-"@feugene/unocss-mini-extra-rules@0.8.1":
-  version "0.8.1"
-  resolved "https://registry.yarnpkg.com/@feugene/unocss-mini-extra-rules/-/unocss-mini-extra-rules-0.8.1.tgz#04cdf74687a05cc897549e405437c09c9eb85462"
-  integrity sha512-0VKwvmEUQYjn+tNYErlXyC5AfwqD1RH5bsV8Phatpu3OrWviyi52Rm7TPsmy4Zsn8dJjffG5HcF5LLkU/vWoFA==
-  dependencies:
-    "@unocss/preset-mini" "^66.7.5"
-    "@unocss/rule-utils" "^66.7.5"
-
 "@humanfs/core@^0.19.2":
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"
@@ -345,7 +337,7 @@
   resolved "https://registry.yarnpkg.com/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz#7a0ee601f60f99a20c7c7c5ff0c80388c1189bd6"
   integrity sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==
 
-"@jridgewell/sourcemap-codec@^1.4.14", "@jridgewell/sourcemap-codec@^1.5.0", "@jridgewell/sourcemap-codec@^1.5.5", "@jridgewell/sourcemap-codec@^1.6.0":
+"@jridgewell/sourcemap-codec@^1.4.14", "@jridgewell/sourcemap-codec@^1.5.0", "@jridgewell/sourcemap-codec@^1.5.5":
   version "1.6.0"
   resolved "https://registry.yarnpkg.com/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.6.0.tgz#f4c663e862f06dc98ca4d453862c46902789a18d"
   integrity sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==
@@ -821,22 +813,10 @@
     consola "^3.4.2"
     unconfig "^7.5.0"
 
-"@unocss/core@66.10.5":
-  version "66.10.5"
-  resolved "https://registry.yarnpkg.com/@unocss/core/-/core-66.10.5.tgz#765690ad5a04c6d53a394c15a0971bf83aba5408"
-  integrity sha512-fukv4bL32z/kWIiKgDy5ih452Jzf7S76p8RnP4N+3utqMFeqWayEApiqRidGv5b6NwPguTsKXaLsy+mbK9aMfA==
-
 "@unocss/core@66.7.5":
   version "66.7.5"
   resolved "https://registry.yarnpkg.com/@unocss/core/-/core-66.7.5.tgz#3d04cba1a124d7677457839ff7ba61314826f8e4"
   integrity sha512-UdJb8MiMywcau8QrWEVgUAz0kvoFHyR+sACwYCgmBh/BpKJGyR/zw/Ys3wvysbm0f+i/20VGBex/QQxYVlzdyQ==
-
-"@unocss/extractor-arbitrary-variants@66.10.5":
-  version "66.10.5"
-  resolved "https://registry.yarnpkg.com/@unocss/extractor-arbitrary-variants/-/extractor-arbitrary-variants-66.10.5.tgz#e5da038c97e6583722bdd2b1c13efc7684cf133d"
-  integrity sha512-8qCJjByALdNiGQB1xHWK3tAl3n+hacBLlklqHhgNj0qWYtr3Hp+pfyA2nuyzJcPXkolqtGn1APJ1TNPbL5w+qg==
-  dependencies:
-    "@unocss/core" "66.10.5"
 
 "@unocss/extractor-arbitrary-variants@66.7.5":
   version "66.7.5"
@@ -880,15 +860,6 @@
     "@unocss/core" "66.7.5"
     "@unocss/extractor-arbitrary-variants" "66.7.5"
     "@unocss/rule-utils" "66.7.5"
-
-"@unocss/preset-mini@^66.7.5":
-  version "66.10.5"
-  resolved "https://registry.yarnpkg.com/@unocss/preset-mini/-/preset-mini-66.10.5.tgz#274ea140c684e6017917ac845a92b6c3cb150c8e"
-  integrity sha512-oFKjmK32jyKp8rMI8Zu5+1AaFOvbwlQ7wztNGjtiAhhglKREZoncThLBE6Yd3B2+p/xf8YXfSOr5TFzhzXnDIQ==
-  dependencies:
-    "@unocss/core" "66.10.5"
-    "@unocss/extractor-arbitrary-variants" "66.10.5"
-    "@unocss/rule-utils" "66.10.5"
 
 "@unocss/preset-tagify@66.7.5":
   version "66.7.5"
@@ -946,14 +917,6 @@
   dependencies:
     "@unocss/core" "66.7.5"
     "@unocss/preset-wind3" "66.7.5"
-
-"@unocss/rule-utils@66.10.5", "@unocss/rule-utils@^66.7.5":
-  version "66.10.5"
-  resolved "https://registry.yarnpkg.com/@unocss/rule-utils/-/rule-utils-66.10.5.tgz#8a973fc4c66266646dcf1aec329895d3e8081a04"
-  integrity sha512-ePcz9fJfEVN4VXJgx2bPdGSZ/ujdyUhiJOnMTwIWRxlUdZ2Wgc5aT6zTb9W9AjOB0eWxO2Iyb0HGhA9GGuIY8g==
-  dependencies:
-    "@unocss/core" "66.10.5"
-    magic-string "^1.4.1"
 
 "@unocss/rule-utils@66.7.5":
   version "66.7.5"
@@ -2297,13 +2260,6 @@ magic-string@^0.30.12, magic-string@^0.30.21:
   integrity sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==
   dependencies:
     "@jridgewell/sourcemap-codec" "^1.5.5"
-
-magic-string@^1.4.1:
-  version "1.4.2"
-  resolved "https://registry.yarnpkg.com/magic-string/-/magic-string-1.4.2.tgz#508aef4aac7319496dc074ec60ea511c49daf138"
-  integrity sha512-vG+rjFRj1PqdIBozIxAGMjPlOhaVe+GXpbttY/iSK7rGcJRMlwNJO7dcUwmUqkymsFLJiNGI06t4D7Fr7yRC9g==
-  dependencies:
-    "@jridgewell/sourcemap-codec" "^1.6.0"
 
 magicast@^0.5.2:
   version "0.5.5"

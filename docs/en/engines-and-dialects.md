@@ -24,26 +24,26 @@ implementation, not about the package.
 
 ## Install and configure
 
-The default implementation is `@feugene/granum-engine-mini`: a vendored fork of
-the UnoCSS 66.7.5 core with `preset-mini` and extra rules, zero dependencies.
+The default implementation is `@feugene/granum-engine-wind`: a vendored fork of
+the UnoCSS 66.7.5 core with `preset-wind3`, zero dependencies.
 
 ```bash
-yarn add -D @feugene/granum @feugene/granum-engine-mini
+yarn add -D @feugene/granum @feugene/granum-engine-wind
 ```
 
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@acme/ui'],
   appSources: { dirs: ['src'] },
 })
 ```
 
-| `miniEngine` option | Default | Changes the dialect | Changes the fingerprint |
+| `windEngine` option | Default | Changes the dialect | Changes the fingerprint |
 |---|---|---|---|
 | `extraRules` | `true` | yes | yes |
 | `rules`, `variants` | — | no | yes |
@@ -51,11 +51,14 @@ export default defineGranumConfig({
 | `preflight` | `true` | no | no |
 | `variablePrefix` | `--un-` | no | no |
 
-An option that qualitatively changes the set of generated names must change the
-dialect: `extraRules: false` turns off `divide-y`, `space-x-4` and
-`tabular-nums`, and that is already another vocabulary —
-`unocss/preset-mini@66` instead of `unocss/preset-mini+granum@66`. An option
-that only changes the output leaves the dialect alone.
+An option that changes the set of generated names **or what they mean** must
+change the dialect: `extraRules: false` turns off the one extra rule — alpha on
+an arbitrary colour. The set of names does not change (`bg-[var(--x)]/55` matches
+either way), but the meaning does: without the rule wind3 emits
+`background-color: var(--x)` and silently drops the `/55`; with it, a
+`color-mix`. So that is another vocabulary, `unocss/preset-wind3@66` instead of
+`unocss/preset-wind3+granum@66`. An option that only changes the output leaves
+the dialect alone.
 
 ## A rule of your own
 
@@ -63,10 +66,10 @@ Application rules go to the engine factory, not to the granum config: the
 config has no field for rules and will not grow one.
 
 ```ts
-engine: miniEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
+engine: windEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
 ```
 
-The dialect stays the same — the preset-mini vocabulary did not go anywhere —
+The dialect stays the same — the wind3 vocabulary did not go anywhere —
 but the fingerprint differs: the engine knows a name the package builds did
 not. What follows from that is right below.
 
@@ -76,7 +79,7 @@ Two entities rather than one, because their consumers and decisions differ.
 
 ### The dialect is the name of a vocabulary
 
-`<vendor>/<vocabulary>@<major>`: `unocss/preset-mini+granum@66`,
+`<vendor>/<vocabulary>@<major>`: `unocss/preset-wind3+granum@66`,
 `granum-fixtures/atoms@1`. Compared by strict string equality; the trailing
 major is part of the name, not a range, because `@66` and `@67` are different
 vocabularies rather than versions of one.
@@ -138,7 +141,7 @@ The package was built by an engine of another vocabulary. The consequences:
    up in `unmatched`.
 
 What to do: either run an engine of the package dialect, or add the rules you
-need to your own factory (`miniEngine({ rules: […] })`). Two vocabularies
+need to your own factory (`windEngine({ rules: […] })`). Two vocabularies
 cannot be mixed in one build, and that is not an implementation limit: their
 names overlap while their meanings differ, and `.p-4` would get two verdicts in
 one layer.

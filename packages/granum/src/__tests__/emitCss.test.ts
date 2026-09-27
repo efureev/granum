@@ -9,6 +9,7 @@ import { CssReadError, TokenRefError } from '../core/errors'
 import { emitCss, LAYER_NAMES, wrapLayers } from '../node/emit'
 import { buildReport } from '../node/report'
 import { makeManifest, makeProvider, prepareTestApp } from './helpers'
+import { testEngine } from './testEngine'
 
 /** Провайдер-манифест с файлами на диске: tokens, base, тема, CSS компонента. */
 function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } {
@@ -83,6 +84,48 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     const app = await prepareTestApp({ providers: [broken] }, root)
     await expect(emitCss(app)).rejects.toBeInstanceOf(CssReadError)
     await expect(emitCss(app)).rejects.toMatchObject({ providerId: '@x/kit', section: 'base' })
+  })
+})
+
+describe('emitCss: preflight движка (E-15, INV-CSS-8)', () => {
+  const PREFLIGHT = '*,::before,::after{--un-rotate:0;}'
+
+  it('preflight уезжает в base и стоит перед base.css провайдера', async () => {
+    const { root, manifest } = fixture()
+    const app = await prepareTestApp(
+      { providers: [manifest], components: ['@x/kit:Panel'], engine: testEngine({ preflight: PREFLIGHT }) },
+      root,
+    )
+    const css = await emitCss(app)
+
+    expect(css.layers.base).toContain(PREFLIGHT)
+    // Порядок внутри слоя нормативен: reset движка обязан действовать ДО
+    // `base.css` провайдера, иначе тот не сможет его переопределить.
+    expect(css.layers.base.indexOf(PREFLIGHT)).toBeLessThan(css.layers.base.indexOf('body { margin'))
+  })
+
+  it('в слое утилит preflight отсутствует', async () => {
+    const { root, manifest } = fixture()
+    const app = await prepareTestApp(
+      { providers: [manifest], components: ['@x/kit:Panel'], engine: testEngine({ preflight: PREFLIGHT }) },
+      root,
+    )
+    const css = await emitCss(app)
+
+    expect(css.layers.utilities).not.toContain('--un-rotate')
+    expect(css.layers.utilities).toContain('.gap-2{gap:0.5rem;}')
+  })
+
+  it('движок без preflight не меняет слой base ни на байт', async () => {
+    const { root, manifest } = fixture()
+    const withOut = await emitCss(await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'] }, root))
+    const fresh = fixture()
+    const withEmpty = await emitCss(await prepareTestApp(
+      { providers: [fresh.manifest], components: ['@x/kit:Panel'], engine: testEngine() },
+      fresh.root,
+    ))
+
+    expect(withEmpty.layers.base).toBe(withOut.layers.base)
   })
 })
 

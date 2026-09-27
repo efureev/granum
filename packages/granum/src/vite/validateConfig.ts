@@ -28,7 +28,7 @@ function validateEngine(engine: unknown): void {
   if (engine === undefined || engine === null) {
     throw new InvalidConfigError(
       'engine',
-      `expected a GranumEngine instance — e.g. miniEngine() from '@feugene/granum-engine-mini'. `
+      `expected a GranumEngine instance — e.g. windEngine() from '@feugene/granum-engine-wind'. `
       + `The application picks the engine: granum ships no implementation.`,
     )
   }

@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Стенд аудита дистрибутива.
@@ -15,7 +15,7 @@ import { miniEngine } from '@feugene/granum-engine-mini'
  * это ещё одна строка аудита, которую видно рядом с обрезкой токенов.
  */
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@granum-fixtures/mini-ds'],
   components: ['@granum-fixtures/mini-ds:XxCard'],
   themes: { names: ['light'] },

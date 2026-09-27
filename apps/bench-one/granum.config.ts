@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Ровно один компонент. Его граф разворачивает ещё четыре
@@ -7,7 +7,7 @@ import { miniEngine } from '@feugene/granum-engine-mini'
  * приложение, которое умеет переключаться, платит за оба файла.
  */
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
   themes: { names: ['light', 'dark'] },

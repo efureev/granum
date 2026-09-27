@@ -9,7 +9,7 @@
  * меняется, и диалект этого по определению не видит.
  */
 
-/** `<vendor>/<vocabulary>@<major>`: `unocss/preset-mini+granum@66`, `granum-fixtures/atoms@1`. */
+/** `<vendor>/<vocabulary>@<major>`: `unocss/preset-wind3+granum@66`, `granum-fixtures/atoms@1`. */
 export const GRANUM_DIALECT_PATTERN = /^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/
 
 export interface ParsedDialect {

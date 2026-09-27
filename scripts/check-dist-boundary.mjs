@@ -10,7 +10,7 @@
  *   3. ни один файл `dist` не импортирует `unocss`, `@unocss/*`, `magic-string`,
  *      `css-tree` — рантайма UnoCSS в пакете быть не должно;
  *   4. в `dist` нет реализации движка: ни вендоренного кода апстрима, ни правил
- *      (INV-ENG-9). Движок живёт в `@feugene/granum-engine-mini`, и ядро не
+ *      (INV-ENG-9). Движок живёт в `@feugene/granum-engine-wind`, и ядро не
  *      имеет права протащить его обратно ни копией, ни импортом.
  *
  * Использование: node scripts/check-dist-boundary.mjs   # 0 — чисто, 1 — нарушения
@@ -126,7 +126,7 @@ for (const file of listJs(dist)) {
       fail(`${relative(root, file)}: след реализации движка (${marker.source}) — ядро не содержит движка (INV-ENG-9)`)
   }
 }
-for (const spec of ['granum-engine-mini']) {
+for (const spec of ['granum-engine-wind']) {
   for (const file of listJs(dist)) {
     if (collectImportSpecifiers(readFileSync(file, 'utf8')).some(s => s.includes(spec)))
       fail(`${relative(root, file)}: импорт '${spec}' — ядро не зависит от реализации движка (INV-ENG-9)`)

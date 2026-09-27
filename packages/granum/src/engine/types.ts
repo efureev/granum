@@ -90,8 +90,18 @@ export interface EngineMatch {
 }
 
 export interface EngineOutput {
-  /** Только утилиты и их preflights, без `@layer` (E-7). */
+  /** Только утилиты, без `@layer` (E-7). */
   readonly css: string
+  /**
+   * CSS базового уровня: инициализация кастомных свойств движка, регистрации
+   * `@property`, reset — всё, что обязано действовать ДО стилей компонентов, а
+   * не после них (E-15).
+   *
+   * Движок не знает, в какой слой это уедет (E-13): он сообщает род CSS, а место
+   * в каскаде выбирает сборщик. Поле необязательное — движок без preflight его
+   * не заполняет, и вывод ведёт себя как прежде.
+   */
+  readonly preflight?: string
   readonly matched: ReadonlyMap<string, EngineMatch>
   /** Классы без правила — никогда не отбрасываются молча (INV-DIAG-2). */
   readonly unmatched: readonly string[]

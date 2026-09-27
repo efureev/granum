@@ -43,7 +43,7 @@ v1 preset keeps working and is not changed; migrate one package at a time.
    `dist` (`theme/base.css`) and keep the sources in `src/theme/`.
 3. In `vite.config.ts` replace `granularChunkFileNames`,
    `granularAssetFileNames`, `granularCssAssetsPlugin` and manual entries
-   with a single `granumProvider({ provider, engine: miniEngine() })`.
+   with a single `granumProvider({ provider, engine: windEngine() })`.
 4. Add `codegenTargets.manifestExport()` to codegen so that
    `package.json#exports` lists `./granum.manifest.json`.
 5. `vite build`, then `granum doctor --strict` in a consuming application.
@@ -65,11 +65,11 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 
 1. Delete `uno.config.ts`, the `unocss` and `@unocss/*` dependencies, the
    `virtual:uno.css` and `virtual:uno:granular.css` imports; install an engine:
-   `yarn add -D @feugene/granum-engine-mini`.
-2. Create `granum.config.ts` with the mandatory `engine: miniEngine()`, plus
+   `yarn add -D @feugene/granum-engine-wind`.
+2. Create `granum.config.ts` with the mandatory `engine: windEngine()`, plus
    `providers`, `components`, `themes`, `appSources`; add `granum(config)` to
    `vite.config.ts`. Rules the application wrote for itself in `uno.config.ts`
-   move into the engine factory: `miniEngine({ rules: […] })`.
+   move into the engine factory: `windEngine({ rules: […] })`.
 3. Replace the two CSS imports with one `import 'virtual:granum.css'`.
 4. Build and check `dist/granum-report.json`: `classes.unmatched` must be
    empty or explained; `tokens.undefined` — empty.

@@ -65,11 +65,12 @@ by config identity.
 
 The core carries no engine implementation at all: `./engine` ships the contract
 and the helpers for engine authors, while the instance arrives from
-`granum.config.*`. The stock implementation is `@feugene/granum-engine-mini`: a
-vendored UnoCSS 66.7.5 core (`@unocss/core`, `preset-mini`, `rule-utils`
-without `magic-string`, `extractor-arbitrary-variants`) plus the ported rules of
-`unocss-mini-extra-rules`; the golden test against a live `unocss@66.7.5` lives
-there too, next to the vendored code.
+`granum.config.*`. The stock implementation is `@feugene/granum-engine-wind`: a
+vendored UnoCSS 66.7.5 core (`@unocss/core`, `preset-wind3` together with the
+`preset-mini` it builds on, `rule-utils` without `magic-string`,
+`extractor-arbitrary-variants`) plus one extra rule — alpha on an arbitrary
+colour; the golden test against a live `unocss@66.7.5` lives there too, next to
+the vendored code.
 
 ```ts
 interface GranumEngine {

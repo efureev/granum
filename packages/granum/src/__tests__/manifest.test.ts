@@ -34,7 +34,7 @@ function draft(patch: Partial<Draft> = {}): Draft {
       tokenDefinitions: { dark: { selector: '.dark', tokens: { bg: '#000' } } },
       declares: ['--xh-bg', '--xh-accent'],
     },
-    engine: { dialect: 'unocss/preset-mini+granum@66', vocabulary: 'fnv64-0123456789abcdef', name: 'granum-engine-mini', version: '66.7.5', module: null },
+    engine: { dialect: 'unocss/preset-wind3+granum@66', vocabulary: 'fnv64-0123456789abcdef', name: 'granum-engine-wind', version: '66.7.5', module: null },
     components: {
       XhPanel: {
         entry: 'components/XhPanel/index.js',
@@ -143,7 +143,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
       [ok.replace('"entry": "components/XhCard/index.js"', '"entry": 7'), 'components.XhCard.entry'],
       [ok.replace('"consumes": []', '"consumes": [1]'), 'components.XhCard.tokens.consumes'],
       [ok.replace('"module": null', '"module": 3'), 'engine.module'],
-      [ok.replace('"name": "granum-engine-mini"', '"name": 3'), 'engine.name'],
+      [ok.replace('"name": "granum-engine-wind"', '"name": 3'), 'engine.name'],
       [ok.replace('"warnings": [', '"warnings": [{},'), 'warnings.0.code'],
     ]
     for (const [text, path] of cases) {
@@ -166,7 +166,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     expect(noBlock).not.toContain('"engine"')
     expect(() => parseManifest(noBlock, BASE)).toThrow(InvalidManifestError)
 
-    const halfNull = ok.replace('"dialect": "unocss/preset-mini+granum@66"', '"dialect": null')
+    const halfNull = ok.replace('"dialect": "unocss/preset-wind3+granum@66"', '"dialect": null')
     try {
       parseManifest(halfNull, BASE)
       throw new Error('should have thrown')

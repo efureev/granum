@@ -43,7 +43,7 @@ granum — преемник пресета v1 с тем же контракто�
    `dist` (`theme/base.css`), исходники держать в `src/theme/`.
 3. В `vite.config.ts` заменить `granularChunkFileNames`,
    `granularAssetFileNames`, `granularCssAssetsPlugin` и ручные entry одним
-   `granumProvider({ provider, engine: miniEngine() })`.
+   `granumProvider({ provider, engine: windEngine() })`.
 4. Добавить `codegenTargets.manifestExport()` в codegen, чтобы
    `package.json#exports` содержал `./granum.manifest.json`.
 5. `vite build`, затем `granum doctor --strict` в приложении-потребителе.
@@ -65,11 +65,11 @@ granum — преемник пресета v1 с тем же контракто�
 
 1. Удалить `uno.config.ts`, зависимости `unocss` и `@unocss/*`, импорты
    `virtual:uno.css` и `virtual:uno:granular.css`; поставить движок:
-   `yarn add -D @feugene/granum-engine-mini`.
-2. Создать `granum.config.ts` с обязательным `engine: miniEngine()`,
+   `yarn add -D @feugene/granum-engine-wind`.
+2. Создать `granum.config.ts` с обязательным `engine: windEngine()`,
    `providers`, `components`, `themes`, `appSources`; добавить `granum(config)`
    в `vite.config.ts`. Правила, которые приложение писало себе в `uno.config.ts`,
-   переезжают в фабрику движка: `miniEngine({ rules: […] })`.
+   переезжают в фабрику движка: `windEngine({ rules: […] })`.
 3. Заменить два импорта CSS одним `import 'virtual:granum.css'`.
 4. Собрать и проверить `dist/granum-report.json`: `classes.unmatched` должен
    быть пуст или объяснён; `tokens.undefined` — пуст.

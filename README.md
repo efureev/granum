@@ -16,7 +16,7 @@ stages of the plan are done; the CSS of the benchmark stand matches the v1 prese
 | Path | Purpose |
 |---|---|
 | `packages/granum` | the package: `.`, `./contract`, `./engine`, `./build`, `./vite`, `./node`, `./runtime`, `./codegen`, CLI `granum` |
-| `packages/granum-engine-mini` | reference utility engine: vendored UnoCSS 66.7.5 fork behind a `GranumEngine` instance |
+| `packages/granum-engine-wind` | reference utility engine: vendored UnoCSS 66.7.5 fork behind a `GranumEngine` instance |
 | `fixtures/*` | reference provider packages, plus a toy engine of a second vocabulary |
 | `apps/*` | integration apps `app-*` and size benchmarks `bench-*` |
 | `docs/` | technical specification, invariants, manifest format, decisions, plan |

@@ -80,7 +80,7 @@ jobs:
         working-directory: packages/granum
         run: npx --yes publint@latest --pack npm
       - name: Validate engine package metadata (publint)
-        working-directory: packages/granum-engine-mini
+        working-directory: packages/granum-engine-wind
         run: npx --yes publint@latest --pack npm
       # Границы проверяются на ядре: у движка вендоренный код внутри законен, а
       # у ядра его быть не должно вовсе (INV-ENG-9).
@@ -94,8 +94,8 @@ jobs:
       - name: Upload engine dist
         uses: actions/upload-artifact@v7
         with:
-          name: granum-engine-mini-dist
-          path: packages/granum-engine-mini/dist/
+          name: granum-engine-wind-dist
+          path: packages/granum-engine-wind/dist/
 
   # Сквозная проверка контракта: пакет → фикстурные провайдеры → приложения,
   # затем `doctor` провайдеров, сверка CSS приложений и бюджет стендов.
@@ -172,7 +172,7 @@ jobs:
       - name: Verify tag matches both package versions
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          for dir in packages/granum packages/granum-engine-mini; do
+          for dir in packages/granum packages/granum-engine-wind; do
             PKG_VERSION=$(node -p "require('./$dir/package.json').version")
             echo "$dir: $PKG_VERSION (tag $TAG_VERSION)"
             if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
@@ -188,8 +188,8 @@ jobs:
       - name: Download engine dist
         uses: actions/download-artifact@v8
         with:
-          name: granum-engine-mini-dist
-          path: packages/granum-engine-mini/dist
+          name: granum-engine-wind-dist
+          path: packages/granum-engine-wind/dist
       # Ядро первым: движок ссылается на него как на peer, и порядок публикации
       # определяет, что увидит потребитель, поставивший пару сразу после релиза.
       - name: Publish core to npm
@@ -199,6 +199,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish engine to npm
         run: npm publish --access public --provenance
-        working-directory: packages/granum-engine-mini
+        working-directory: packages/granum-engine-wind
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,5 +1,5 @@
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Компонент, все классы которого собираются в JS в рантайме: в манифесте они
@@ -14,7 +14,7 @@ import { miniEngine } from '@feugene/granum-engine-mini'
  * тем же preset-mini, — и расхождение здесь означало бы дефект пересчёта.
  */
 export default defineGranumConfig({
-  engine: miniEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
+  engine: windEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
   providers: ['@granum-fixtures/simple'],
   components: [{ provider: '@granum-fixtures/simple', names: ['XTestStyled'] }],
   themes: {

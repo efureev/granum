@@ -170,7 +170,7 @@ interface GranumComponentDescriptor {
 
 Движка в ядре нет. `./engine` отдаёт контракт и хелперы; реализацию приложение
 выбирает само и передаёт инстансом. Референсная реализация —
-`@feugene/granum-engine-mini` (вендоренный форк UnoCSS 66.7.5 с доп-правилами);
+`@feugene/granum-engine-wind` (вендоренный форк UnoCSS 66.7.5 с доп-правилами);
 рабочий пример движка, написанного с нуля, — `fixtures/atoms-engine`.
 Обоснование — [ADR-8](../../docs/decisions.md) и [ADR-9](../../docs/decisions.md).
 
@@ -193,7 +193,8 @@ interface EngineInput {
   preflights?: readonly GranumPreflight[]
 }
 interface EngineOutput {
-  css: string                               // только утилиты и их preflights, без @layer
+  css: string                               // только утилиты, без @layer
+  preflight?: string                        // CSS базового уровня: `--un-*`, @property, reset (E-15)
   matched: ReadonlyMap<string, EngineMatch> // класс → { rule: string, selector: string, source: 'builtin' | providerId | 'app' }
   unmatched: readonly string[]              // классы, для которых правила нет
 }
@@ -216,7 +217,7 @@ interface EngineOutput {
 
 | ID | Требование |
 |---|---|
-| E-1 | `dialect` MUST соответствовать `/^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/`; сравнение — равенством. Примеры: `unocss/preset-mini@66`, `unocss/preset-mini+granum@66`, `granum-fixtures/atoms@1`. |
+| E-1 | `dialect` MUST соответствовать `/^[a-z0-9][\w.-]*\/[\w.+-]+@\d+$/`; сравнение — равенством. Примеры: `unocss/preset-mini@66`, `unocss/preset-wind3+granum@66`, `granum-fixtures/atoms@1`. |
 | E-2 | Опция движка, меняющая набор генерируемых имён качественно, MUST менять диалект; опция, меняющая только вывод (префикс кастомных свойств, preflight), диалект MUST NOT менять. |
 | E-3 | Диалект `null` в манифесте означает, что артефакт не зависит ни от одного словаря и ни одного не расширяет. Допустим тогда и только тогда, когда у всех компонентов пусты `classes` и `safelist`, а `engine.module` равен `null`. |
 | E-4 | `vocabulary` MUST быть непустой непрозрачной строкой, сравниваемой равенством, и MUST меняться всякий раз, когда меняется множество генерируемых имён — включая правила, переданные фабрике движка. `vocabulary` равен `null` тогда и только тогда, когда `dialect` равен `null`. |
@@ -235,6 +236,7 @@ interface EngineOutput {
 | E-12 | Экстрактор движка MUST понимать словарь, который движок объявляет, и MUST NOT извлекать классы из комментариев SFC. Границы среза комментариев (хелпер `stripComments` ядра): HTML-комментарии в `.vue`/`.html`/`.svelte`/`.astro`, блочные комментарии везде, строчные — только строки, начинающиеся с двух слешей, и вызовы `createCommentVNode("…")` в скомпилированных шаблонах Vue (INV-ENG-5). |
 | E-13 | Движок MUST NOT знать о слоях, манифестах и Vite; всё это — забота сборщика CSS (§10.3). |
 | E-14 | Реализация, вендорящая чужой код, MUST держать golden-тест: для фиксированного набора классов CSS сравнивается с выводом апстрима, зафиксированным в снапшоте (INV-ENG-4), и уведомление об авторстве — в `THIRD_PARTY_NOTICES.md` (ADR-2). |
+| E-15 | CSS базового уровня — инициализацию кастомных свойств, регистрации `@property`, reset — движок MUST отдавать полем `preflight`, а не смешивать с утилитами в `css`. Это утверждение о роде CSS, не о слое: имён слоёв движок по-прежнему не знает (E-13), место в каскаде выбирает сборщик (§10.3, INV-CSS-8). Движок без preflight поле не заполняет. |
 
 ### 9.4 Сверка на стороне приложения
 

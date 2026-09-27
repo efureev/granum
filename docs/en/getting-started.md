@@ -11,7 +11,7 @@ manifests. Below is the shortest path for each side. Details live in the
 ## Install
 
 ```bash
-yarn add -D @feugene/granum @feugene/granum-engine-mini vite
+yarn add -D @feugene/granum @feugene/granum-engine-wind vite
 ```
 
 The core has no dependencies; `vite` is the only peer and is needed only by
@@ -52,13 +52,13 @@ export default defineGranumProvider({
 ```ts
 // vite.config.ts
 import { granumProvider } from '@feugene/granum/build'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import provider from './src/granum-provider/index.ts'
 
 export default defineConfig({
-  plugins: [vue(), granumProvider({ provider, engine: miniEngine() })],
+  plugins: [vue(), granumProvider({ provider, engine: windEngine() })],
   build: { rolldownOptions: { external: ['vue'] } },
 })
 ```
@@ -79,10 +79,10 @@ implementation, not about the package, and applications read it as such.
 ```ts
 // granum.config.ts
 import { defineGranumConfig } from '@feugene/granum/vite'
-import { miniEngine } from '@feugene/granum-engine-mini'
+import { windEngine } from '@feugene/granum-engine-wind'
 
 export default defineGranumConfig({
-  engine: miniEngine(),
+  engine: windEngine(),
   providers: ['@acme/ui'],
   components: ['@acme/ui:XhCard'],
   appSources: { dirs: ['src'] },
@@ -91,7 +91,7 @@ export default defineGranumConfig({
 
 `engine` is required and takes an instance: choosing an implementation and
 configuring it belong to the application. Its own rules go to the engine
-factory (`miniEngine({ rules: […] })`), not to the config.
+factory (`windEngine({ rules: […] })`), not to the config.
 
 2. The plugin and a single CSS import:
 

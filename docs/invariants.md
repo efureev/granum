@@ -90,6 +90,7 @@
 | INV-CSS-5 | CSS компонентов проходит побайтно, кроме раскрытия `@apply` и обрезки токенов; один и тот же CSS не доставляется дважды (импорт из чанка + инлайн) | v1 §8, gotchas | `./build`, `./vite` | снапшот; `buildGraph.test.ts` — `cssImportedByChunk` у чанка, который сам импортирует свой CSS; `diagnostics.test.ts` — доведение `css-double-delivery` до `doctor` |
 | INV-CSS-6 | Утилита приложения перебивает базовый стиль компонента: слой `utilities` позже `components`; нелейерный CSS приложения перебивает всё | new (ADR-4) | сборщик CSS | `emitCss.test.ts` (порядок слоёв); `scripts/e2e-dev.mjs` — computed `gap` элемента до и после появления утилиты приложения, джоба CI `e2e` |
 | INV-CSS-7 | Одно правило эмитируется один раз независимо от числа источников класса | new | движок, сборщик | `invariantsCoverage.test.ts` |
+| INV-CSS-8 | Preflight движка лежит в слое `base` и первым в нём: до CSS компонентов и до `base.css` провайдеров. В `utilities` его нет | new | сборщик CSS | `emitCss.test.ts`: reset движка стоит перед `base.css` провайдера и отсутствует в слое утилит |
 
 ## Движок (`INV-ENG-*`)
 

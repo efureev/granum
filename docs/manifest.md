@@ -39,9 +39,9 @@
     "declares": ["--xh-accent", "--xh-bg", "--xh-space-2"]
   },
   "engine": {
-    "dialect": "unocss/preset-mini+granum@66",
+    "dialect": "unocss/preset-wind3+granum@66",
     "vocabulary": "fnv64-2f8975047b2c4cc5",
-    "name": "granum-engine-mini",
+    "name": "granum-engine-wind",
     "version": "66.7.5",
     "module": "granum-provider/engine.js"
   },

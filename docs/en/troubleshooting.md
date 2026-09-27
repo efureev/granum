@@ -26,7 +26,7 @@ granum neither runs the rules of a foreign vocabulary nor invents them.
 `granum why-css granum.config.ts <class>` prints a `Vocabularies` section: which
 engine built the package and for which vocabulary, and which dialect the
 application runs. There are two ways out — run an engine of the package dialect,
-or add the rule to your own factory (`miniEngine({ rules: […] })`). Two
+or add the rule to your own factory (`windEngine({ rules: […] })`). Two
 vocabularies cannot be mixed in one build. The classes themselves never vanish
 silently: they are named in `provider-classes-dropped` and in `unmatched`.
 

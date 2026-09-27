@@ -93,7 +93,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     throw new InvalidProviderError(
       provider.id,
       'invalid-dialect',
-      `granumProvider({ engine }) requires a GranumEngine instance (e.g. miniEngine() from '@feugene/granum-engine-mini').`,
+      `granumProvider({ engine }) requires a GranumEngine instance (e.g. windEngine() from '@feugene/granum-engine-wind').`,
     )
   }
   // Утверждение провайдера о словаре сверяется до первой генерации: записать в

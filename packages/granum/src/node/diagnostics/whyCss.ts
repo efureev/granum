@@ -154,7 +154,7 @@ export function formatWhyCssReport(report: WhyCssReport): string {
     }
     push()
     push('Fix it one of two ways: run an engine of the package dialect, or add a rule for this class to your engine factory')
-    push('(for example miniEngine({ rules: [[…]] })) — granum will then find it on the next build.')
+    push('(for example windEngine({ rules: [[…]] })) — granum will then find it on the next build.')
   }
   return lines.join('\n')
 }
