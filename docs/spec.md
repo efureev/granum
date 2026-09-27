@@ -408,7 +408,7 @@ export default defineGranumConfig({
   components: 'all' | ComponentSelectionItem[] | 'imports',
   themes: { names?, define?, tokenOverrides?, strictTokens? },
   engine: GranumEngine,                                         // обязателен и только инстансом: miniEngine() или свой
-  css: { layers: true, layerPrefix: 'granum', split: false, expandDirectives: false },
+  css: { layers: true, layerPrefix: 'granum', expandDirectives: false },
   appSources: { dirs: ['./src'], extensions?: string[] },
   pruneTokens: { mode: 'off' | 'report' | 'on', keep?: string[] },
   js: { virtualComponents: true, guard: 'error' | 'warn' | 'off' },
