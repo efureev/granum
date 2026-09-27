@@ -13,6 +13,7 @@ import { sortedUnique } from '../../core/dedupe'
 import { scanCssDeclarations } from '../cssDeclarations'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
+import { patternMatcher } from '../tokenPrune'
 import { extractTokenUses } from '../tokenScan'
 
 export interface DoctorProviderInfo {
@@ -311,7 +312,17 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     }
   }
 
-  // Токены: потребляется выбранным компонентом, объявлено никем (T-5).
+  /*
+   * Токены: потребляется выбранным компонентом, объявлено никем (T-5).
+   *
+   * Из находок исключаются `dynamicTokens` компонента. Такой токен компонент
+   * объявил как читаемый в рантайме — его имя собирается из переменной
+   * (`var(--gr-z-${'{'}name${'}'})`), и статический анализ видит только префикс.
+   * Обрезка это объявление уважает (C-14), а доктор до этого считал его «не
+   * объявлен никем»: одно и то же объявление значило в двух местах разное, и
+   * правильно оформленный компонент получал вечную находку. На дизайн-системе
+   * из 84 компонентов такой шум делал `--strict` непригодным.
+   */
   const undefinedTokens: { token: string, component: string }[] = []
   for (const { provider, component } of resolution.selection.entries) {
     const consumed = new Set(component.consumesTokens)
@@ -319,8 +330,9 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       for (const t of extractTokenUses(klass).keys())
         consumed.add(`--${t}`)
     }
+    const dynamic = component.dynamicTokens.map(patternMatcher)
     for (const token of [...consumed].sort()) {
-      if (definedTokens.has(token) || token.startsWith('--un-'))
+      if (definedTokens.has(token) || token.startsWith('--un-') || dynamic.some(match => match(token)))
         continue
       const key = `${provider.id}:${component.name}`
       undefinedTokens.push({ token, component: key })

@@ -43,15 +43,28 @@ function strip(token: string): string {
   return token.startsWith('--') ? token.slice(2) : token
 }
 
-function patternMatcher(pattern: string | RegExp): (token: string) => boolean {
+/**
+ * Матчер шаблона токена: точное имя, префикс с `*` или готовый RegExp.
+ *
+ * Префикс `--` снимается и у шаблона, и у проверяемого имени: в манифесте
+ * токены лежат с ним (`--gr-z-modal`), а в `dynamicTokens` и `keep` их пишут и
+ * так и так. Требовать одну форму значит ловить опечатку, которая ничего не
+ * значит.
+ *
+ * Экспортируется, потому что тем же правилом обязана пользоваться диагностика:
+ * токен, объявленный компонентом как читаемый в рантайме, для обрезки жив, а
+ * для доктора до этого был «не объявлен никем» — одно и то же объявление
+ * значило в двух местах разное.
+ */
+export function patternMatcher(pattern: string | RegExp): (token: string) => boolean {
   if (pattern instanceof RegExp)
     return token => pattern.test(token)
   const p = strip(pattern)
   if (p.endsWith('*')) {
     const prefix = p.slice(0, -1)
-    return token => token.startsWith(prefix)
+    return token => strip(token).startsWith(prefix)
   }
-  return token => token === p
+  return token => strip(token) === p
 }
 
 function overrideTokens(overrides: ThemeTokenOverrides | undefined): string[] {

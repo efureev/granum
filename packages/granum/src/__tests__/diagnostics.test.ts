@@ -44,6 +44,35 @@ async function app(f: Fixture, config: Partial<GranumConfig> = {}) {
 }
 
 describe('granum doctor (D-2)', () => {
+  it('динамический токен компонента находкой не считается (C-14, T-5)', async () => {
+    // Имя такого токена собирается в рантайме, и статический анализ видит
+    // только префикс. Объявление `dynamicTokens` уважает обрезка; доктор обязан
+    // уважать его так же, иначе правильно оформленный компонент получает вечную
+    // находку, а `--strict` становится непригодным.
+    const f = fixture()
+    const withDynamic = {
+      ...f.manifest,
+      manifest: {
+        ...f.manifest.manifest,
+        components: {
+          ...f.manifest.manifest.components,
+          Panel: {
+            ...f.manifest.manifest.components.Panel!,
+            tokens: {
+              ...f.manifest.manifest.components.Panel!.tokens,
+              consumes: ['--nowhere', '--x-runtime-lane'],
+              dynamic: ['--x-runtime-*'],
+            },
+          },
+        },
+      },
+    }
+    const report = await granumDoctor(await prepareTestApp({ providers: [withDynamic], components: ['@x/kit:Panel'] }, f.root))
+    const undefinedTokens = report.undefinedTokens.map(entry => entry.token)
+    expect(undefinedTokens).toContain('--nowhere')
+    expect(undefinedTokens).not.toContain('--x-runtime-lane')
+  })
+
   it('чистая конфигурация: ok, предупреждения только по делу', async () => {
     const report = await granumDoctor(await app(fixture()))
     expect(report.ok).toBe(true)
