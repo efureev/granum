@@ -29,6 +29,7 @@ stages of the plan are done; the CSS of the benchmark stand matches the v1 prese
 - [Manifest format](./docs/manifest.md)
 - [Architecture decisions](./docs/decisions.md)
 - [Implementation plan](./docs/plan.md)
+- [Roadmap](./docs/roadmap.md)
 - [User guides](./docs/en/README.md)
 
 ## Commands

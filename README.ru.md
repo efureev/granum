@@ -29,6 +29,7 @@ JavaScript, CSS с каскадными слоями, токены и темы. 
 - [Формат манифеста](./docs/manifest.md)
 - [Архитектурные решения](./docs/decisions.md)
 - [План реализации](./docs/plan.md)
+- [Roadmap](./docs/roadmap.md)
 - [Руководства](./docs/ru/README.md)
 
 ## Команды
