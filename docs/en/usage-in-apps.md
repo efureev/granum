@@ -153,8 +153,12 @@ The limits of the option: it applies to an application build only, and only wher
 there is an HTML entry — that is where the links go, and without HTML the plugin
 says so with a warning. A server build produces no HTML, and in dev there are no
 hashed assets at all, so CSS still arrives as a single module. The price is the
-total weight: five files compress worse than one, but what gets re-fetched is one
-layer rather than the whole CSS.
+total weight, and it is not symbolic: every file is compressed with its own
+dictionary. On a design system with 222 kB of CSS that is 41.6 kB gzip in five
+layers against 32.9 kB in one file — **+27% on the first visit**. In exchange a
+markup change re-fetches 20.8 kB instead of 32.9, a theme change 5.9 kB. So the
+option pays off where repeat visits are many and the foundation changes rarely;
+if the page is read once, the price is paid for nothing.
 
 ## JS channel
 
