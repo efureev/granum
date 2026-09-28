@@ -107,6 +107,28 @@ own `@layer` wrapper; the concatenation of layers equals the whole. Unlayered
 application CSS beats everything inside the layers — by design: a utility in an
 application template wins over a component's base style.
 
+That rule has a flip side that is easy to walk into: **a browser reset is
+unlayered CSS too**. Imported as is, it wins over utilities and component CSS
+regardless of specificity: `button { color: inherit }` from a typical reset is
+stronger than the class `.text-[var(--…)]` in `@layer granum.utilities`. On the
+design system's showcase that produced a red button with dark text and a
+contrast of 2.89:1 instead of 4.5:1.
+
+One line fixes it — import the reset into a layer of its own:
+
+```css
+/* src/styles/reset.css — imported BEFORE virtual:granum.css */
+@import '@unocss/reset/tailwind-compat.css' layer(reset);
+```
+
+A layer's place in the cascade is set by its first appearance, so a reset
+imported earlier loses to every granum layer — which is exactly what a reset
+should do.
+
+With the v1 preset the question did not arise: there UnoCSS “layers” are output
+order rather than cascade layers, and the conflict was settled by specificity,
+where a class beats a tag.
+
 ### One asset per layer: `css.split`
 
 A single file compresses better but is invalidated as a whole: a change in the

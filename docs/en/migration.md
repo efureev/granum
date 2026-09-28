@@ -96,6 +96,23 @@ picks it and passes an instance, while packages record in the manifest the
 dialect and vocabulary fingerprint of the implementation that built them. What
 that changes in practice — [engines and dialects](./engines-and-dialects.md).
 
+## Move the reset into a layer
+
+The quietest trap of the migration. With the v1 preset UnoCSS “layers” are
+output order, and a conflict between the reset and a utility was settled by
+specificity: `.text-[…]` beats `button`. granum uses real cascade layers, and
+the rule flips: any unlayered CSS beats any `@layer`.
+
+So an import like `import '@unocss/reset/tailwind-compat.css'` starts winning
+over utilities and component CSS after the migration. Move it into a layer:
+
+```css
+/* src/styles/reset.css — imported BEFORE virtual:granum.css */
+@import '@unocss/reset/tailwind-compat.css' layer(reset);
+```
+
+More on this in [“Using granum in an application”](./usage-in-apps.md).
+
 ## Checking equivalence
 
 `yarn compare:css` in this repository compares the CSS of the `bench-one`
