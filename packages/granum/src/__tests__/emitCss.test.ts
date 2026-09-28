@@ -188,6 +188,27 @@ describe('buildReport (A-19, A-20)', () => {
     expect(report.sizes.total.raw).toBe(Buffer.byteLength(css.css))
     expect(report.sizes.utilities.gzip).toBeGreaterThan(0)
   })
+
+  /**
+   * brotli качества 11 стоит 151 мс на 222 kB против 2 мс у gzip и считается на
+   * каждый слой дважды — эмиссия и бандл. Платить это на каждой сборке за
+   * число, которое смотрят редко, незачем, поэтому по умолчанию его нет (N-4).
+   */
+  it('brotli считается только по просьбе конфига', async () => {
+    const { root, manifest } = fixture()
+    const base = { providers: [manifest], components: ['@x/kit:Panel'] } as const
+
+    const plain = await prepareTestApp({ ...base }, root)
+    const plainReport = buildReport(plain, await emitCss(plain))
+    expect(plainReport.sizes.total.brotli).toBeUndefined()
+    expect(plainReport.emissionSizes.total.brotli).toBeUndefined()
+    expect(plainReport.sizes.total.gzip).toBeGreaterThan(0)
+
+    const asked = await prepareTestApp({ ...base, report: { brotli: true } }, root)
+    const askedReport = buildReport(asked, await emitCss(asked))
+    expect(askedReport.sizes.total.brotli).toBeGreaterThan(0)
+    expect(askedReport.emissionSizes.total.brotli).toBeGreaterThan(0)
+  })
 })
 
 describe('prepareApp: tokensRef тем приложения', () => {

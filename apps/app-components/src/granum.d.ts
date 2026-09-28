@@ -1,13 +1,6 @@
-/**
- * Локальные объявления виртуальных модулей granum: пакет их не поставляет, а
- * без них редактор считает импорт ошибкой. Форма повторяет то, что отдаёт
- * плагин: именованный экспорт на каждый компонент селекции (A-5).
- */
+// Сгенерировано granum по селекции `granum.config`. Правки будут перезаписаны.
+
 declare module 'virtual:granum/components' {
-  import type { DefineComponent } from 'vue'
-
-  export const XxCard: DefineComponent
-  export const XxBadge: DefineComponent
+  export { XxBadge } from '@granum-fixtures/mini-ds/components/XxBadge'
+  export { XxCard } from '@granum-fixtures/mini-ds/components/XxCard'
 }
-
-declare module 'virtual:granum.css' {}

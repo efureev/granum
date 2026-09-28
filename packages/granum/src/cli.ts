@@ -234,9 +234,14 @@ export function formatBuildReport(report: GranumBuildReport): string {
   if (report.prune)
     push(`Prune (${report.prune.mode}): removable ${report.prune.removable.length}, kept ${report.prune.kept}, dead patterns ${report.prune.deadPatterns.length}`)
   push()
-  push(`Sizes (raw / gzip / brotli, ${report.sizesSource === 'bundle' ? 'from the built bundle after minification' : 'from the emission before minification'}):`)
+  // brotli в отчёте не всегда: сжатие качества 11 стоит десятки миллисекунд
+  // на слой и включается отдельно (N-4).
+  const hasBrotli = Object.values(report.sizes).some(size => size.brotli !== undefined)
+  push(`Sizes (raw / gzip${hasBrotli ? ' / brotli' : ''}, ${report.sizesSource === 'bundle' ? 'from the built bundle after minification' : 'from the emission before minification'}):`)
   for (const [name, size] of Object.entries(report.sizes))
-    push(`  ${name.padEnd(11)} ${String(size.raw).padStart(8)} ${String(size.gzip).padStart(8)} ${String(size.brotli).padStart(8)}`)
+    push(`  ${name.padEnd(11)} ${String(size.raw).padStart(8)} ${String(size.gzip).padStart(8)}${size.brotli === undefined ? '' : String(size.brotli).padStart(9)}`)
+  if (!hasBrotli)
+    push('  brotli is off: enable `report: { brotli: true }` in granum.config to measure it')
   if (report.warnings.length) {
     push()
     push(`Warnings (${report.warnings.length}):`)

@@ -30,14 +30,20 @@ describe('package.json', () => {
     expect(pkg.peerDependenciesMeta?.vite?.optional).toBe(true)
   })
 
-  it('publishes exactly the eight entry points of the spec plus package.json (§4.2)', () => {
-    expect(Object.keys(pkg.exports)).toEqual([...ENTRIES, './package.json'])
+  it('publishes exactly the eight entry points of the spec plus ./client and package.json (§4.2)', () => {
+    expect(Object.keys(pkg.exports)).toEqual([...ENTRIES, './client', './package.json'])
     for (const key of ENTRIES) {
       const target = pkg.exports[key] as Record<string, string>
       expect(target.types, key).toMatch(/^\.\/dist\/types\/src\/.+\.d\.ts$/)
       expect(target.import, key).toMatch(/^\.\/dist\/[a-z]+\.js$/)
       expect(target.default, key).toBe(target.import)
     }
+
+    // `./client` — объявления виртуальных модулей, и кода за ними нет: импортировать
+    // его нечем и незачем, поэтому у точки только `types`.
+    const client = pkg.exports['./client'] as Record<string, string>
+    expect(client).toEqual({ types: './client.d.ts' })
+    expect(pkg.files).toContain('client.d.ts')
   })
 
   it('is ESM-only, side-effect free, Node >= 22, with the granum bin (N-2)', () => {

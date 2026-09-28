@@ -254,6 +254,24 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     expect(await runGranumCli(['report', '--strict'], io(clean).io)).toBe(0)
     expect(formatBuildReport(JSON.parse(json.out[0]!))).toContain('utilities         22       40       30')
   })
+
+  /**
+   * Отчёт без brotli — норма с 0.7.0: сжатие качества 11 считается только по
+   * просьбе конфига. Печать обязана это пережить и сказать, как его включить, а
+   * не показать пустую колонку или `undefined`.
+   */
+  it('report: колонка brotli появляется только когда она есть в отчёте', () => {
+    const report = JSON.parse(readFileSync(join(appDir(), 'dist/granum-report.json'), 'utf8'))
+    const withBrotli = formatBuildReport(report)
+    expect(withBrotli).toContain('Sizes (raw / gzip / brotli')
+    expect(withBrotli).not.toContain('brotli is off')
+
+    const sizes = Object.fromEntries(Object.entries(report.sizes as Record<string, { raw: number, gzip: number }>).map(([layer, size]) => [layer, { raw: size.raw, gzip: size.gzip }]))
+    const plain = formatBuildReport({ ...report, sizes, emissionSizes: sizes })
+    expect(plain).toContain('Sizes (raw / gzip,')
+    expect(plain).toContain('brotli is off: enable `report: { brotli: true }`')
+    expect(plain).not.toContain('undefined')
+  })
 })
 
 /** Пакет-провайдер с размеченными реестрами — как в codegen.test.ts. */

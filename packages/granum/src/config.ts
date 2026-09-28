@@ -48,6 +48,16 @@ export interface GranumCssOptions {
 export interface GranumJsOptions {
   /** Отдавать `virtual:granum/components`. По умолчанию `true`. */
   readonly virtualComponents?: boolean
+  /**
+   * Куда писать объявления для `virtual:granum/components` (путь от корня
+   * проекта, например `src/granum.d.ts`). По умолчанию не пишутся.
+   *
+   * Имена реэкспортов зависят от селекции, а значит от конфига приложения, и
+   * амбиентным `d.ts` из пакета выражены быть не могут — как и у авто-импорта
+   * с его `components.d.ts`. Файл перезаписывается, когда меняется селекция;
+   * его место — в гите, рядом с исходниками.
+   */
+  readonly dts?: string
   /** Импорт компонента вне селекции: ошибка (по умолчанию), предупреждение или молчание (A-6). */
   readonly guard?: 'error' | 'warn' | 'off'
 }
@@ -55,6 +65,16 @@ export interface GranumJsOptions {
 export interface GranumReportOptions {
   /** Имя файла отчёта в `outDir`; `false` — не писать. По умолчанию `granum-report.json`. */
   readonly file?: string | false
+  /**
+   * Считать ли размеры слоёв в brotli. По умолчанию `false`.
+   *
+   * Цена меры: brotli качества 11 на 222 kB CSS дизайн-системы — 151 мс против
+   * 2 мс у gzip, и считается оно на каждый слой дважды (эмиссия и бандл). Платить
+   * это на каждой сборке за число, которое смотрят раз в месяц, незачем — поэтому
+   * по умолчанию в отчёте только raw и gzip, а `brotli: true` включается тогда, когда
+   * вес действительно считают.
+   */
+  readonly brotli?: boolean
 }
 
 export interface GranumConfig {

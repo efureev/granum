@@ -37,8 +37,10 @@ export default defineGranumConfig({
 | `appSources` | — | директории, из которых извлекаются классы и потребление токенов приложения |
 | `css.layers` | `true` | обёртки `@layer`; `false` — плоская конкатенация в том же порядке |
 | `js.guard` | `'error'` | импорт компонента вне селекции: ошибка, предупреждение или ничего |
+| `js.dts` | — | куда писать объявления для `virtual:granum/components`, например `src/granum.d.ts` |
 | `pruneTokens.mode` | `'off'` | `'report'` — план в отчёте, `'on'` — обрезка слоёв `tokens` и `themes` |
 | `report.file` | `'granum-report.json'` | отчёт сборки в `outDir`; `false` — не писать |
+| `report.brotli` | `false` | считать ли размеры слоёв в brotli: качество 11 — 151 мс на 222 kB против 2 мс у gzip |
 
 Форма конфига проверяется при загрузке: `InvalidConfigError` называет путь до
 поля. Один и тот же объект конфига читают CLI и плагин, поэтому `doctor`
@@ -146,15 +148,27 @@ import { XhPanel } from 'virtual:granum/components'
 Компонент, который есть в селекции, но не импортирован, в бандл не попадёт, а
 его CSS попадёт. Чтобы ушло и то и другое, сужайте селекцию, а не импорты.
 
-Типы виртуальных модулей пакет пока не поставляет, поэтому объявления пишутся
-в приложении:
+Типы. Амбиентные объявления виртуальных модулей поставляет сам пакет — ссылка
+один раз в любом `.d.ts` проекта:
 
 ```ts
-// src/granum.d.ts
-declare module 'virtual:granum/components' {
-  import type { DefineComponent } from 'vue'
+/// <reference types="@feugene/granum/client" />
+```
 
-  export const XhPanel: DefineComponent
+Имён компонентов там нет и быть не может: они зависят от селекции
+приложения, а не от пакета, и импорт оттуда типизирован как `any`. Точные
+объявления порождает плагин — как `components.d.ts` у авто-импорта:
+
+```ts
+// granum.config.ts
+js: { dts: 'src/granum.d.ts' }
+```
+
+Файл переписывается только при смене селекции и его место — в гите:
+
+```ts
+declare module 'virtual:granum/components' {
+  export { XhPanel } from '@acme/ui/components/XhPanel'
 }
 ```
 

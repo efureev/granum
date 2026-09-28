@@ -1,5 +1,5 @@
 import type { GranumConfig } from '../config'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -55,10 +55,13 @@ async function buildProvider(): Promise<string> {
   return root
 }
 
-async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`) {
-  const root = mkdtempSync(join(tmpdir(), 'granum-app-'))
+async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string) {
+  // `reuseRoot` — для второй сборки ТОГО ЖЕ приложения: без него не проверить,
+  // что плагин не переписывает файлы, которые не менялись.
+  const root = reuseRoot ?? mkdtempSync(join(tmpdir(), 'granum-app-'))
   mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
-  symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
+  if (!existsSync(join(root, 'node_modules/@t/kit')))
+    symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
   // vue резолвится из корня репозитория через symlink: приложение — отдельный каталог.
   const vuePkg = join(root, 'node_modules/vue')
   if (!existsSync(vuePkg))
@@ -132,6 +135,50 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.js).toContain('defaultTheme')
     expect(app.js).toContain('activation')
     expect(app.report).toBeUndefined()
+  })
+
+  /**
+   * Имена реэкспортов зависят от селекции, а не от пакета, поэтому амбиентным
+   * `d.ts` их не выразить: точные объявления пишет плагин (A-5). Запись только
+   * при изменении — иначе dev-сервер дёргал бы watcher на каждый перезапуск.
+   */
+  it('js.dts: объявления пишутся по селекции и только при изменении', async () => {
+    const app = await buildApp(
+      providerRoot,
+      { components: ['@t/kit:Card'], js: { dts: 'src/granum.d.ts' } },
+      `<script setup lang="ts">import { Card } from 'virtual:granum/components'</script><template><Card/></template>`,
+    )
+    const file = join(app.root, 'src/granum.d.ts')
+    const written = readFileSync(file, 'utf8')
+
+    expect(written).toContain('declare module \'virtual:granum/components\'')
+    expect(written).toContain('export { Card } from \'@t/kit/components/Card\'')
+    // Невыбранный компонент в объявлениях не появляется: их предмет — селекция.
+    expect(written).not.toContain('Panel')
+    expect(app.logs.some(l => l.startsWith('types: '))).toBe(true)
+
+    // Повторная сборка ТОГО ЖЕ приложения файл не трогает: селекция та же.
+    const before = statSync(file).mtimeMs
+    const again = await buildApp(
+      providerRoot,
+      { components: ['@t/kit:Card'], js: { dts: 'src/granum.d.ts' } },
+      `<script setup lang="ts">import { Card } from 'virtual:granum/components'</script><template><Card/></template>`,
+      undefined,
+      app.root,
+    )
+    expect(statSync(file).mtimeMs).toBe(before)
+    expect(again.logs.some(l => l.startsWith('types: '))).toBe(false)
+
+    // А смена селекции — трогает: иначе объявления разошлись бы с модулем.
+    const widened = await buildApp(
+      providerRoot,
+      { components: ['@t/kit:Card', '@t/kit:Panel'], js: { dts: 'src/granum.d.ts' } },
+      `<script setup lang="ts">import { Card } from 'virtual:granum/components'</script><template><Card/></template>`,
+      undefined,
+      app.root,
+    )
+    expect(readFileSync(file, 'utf8')).toContain('Panel')
+    expect(widened.logs.some(l => l.startsWith('types: '))).toBe(true)
   })
 
   it('срезы по слоям загружаются отдельными модулями (A-12)', async () => {

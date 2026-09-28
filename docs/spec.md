@@ -129,6 +129,7 @@
 | `./vite` | node (vite.config приложения) | MAY | `vite` (peer) | плагин `granum()`, `defineGranumConfig` |
 | `./node` | node | MAY | нет | чтение манифестов, эмиссия CSS, prune, диагностика как функции |
 | `./codegen` | node (скрипты провайдера) | MAY | нет | генерация реестров, entry, `exports` |
+| `./client` | — (только типы) | — | нет | амбиентные объявления виртуальных модулей (`virtual:granum.css`, срезы слоёв, `virtual:granum/themes`); кода за точкой нет |
 | `bin/granum` | node | MAY | нет | CLI |
 
 Точки входа `./build`, `./vite`, `./node`, `./codegen` **MUST NOT** быть достижимы из
@@ -431,7 +432,7 @@ export default defineGranumConfig({
 
 | ID | Требование |
 |---|---|
-| A-5 | Виртуальный модуль `virtual:granum/components` MUST реэкспортировать именованно каждый компонент селекции из его subpath (`export { XhPanel } from '@feugene/heavy-package/components/XhPanel'`); модуль MUST NOT иметь побочных эффектов, чтобы tree-shaking работал (INV-JS-1). |
+| A-5 | Виртуальный модуль `virtual:granum/components` MUST реэкспортировать именованно каждый компонент селекции из его subpath (`export { XhPanel } from '@feugene/heavy-package/components/XhPanel'`); модуль MUST NOT иметь побочных эффектов, чтобы tree-shaking работал (INV-JS-1). При `js.dts` плагин MUST писать рядом объявления той же формы и только при их изменении: имена зависят от селекции и амбиентно невыразимы. |
 | A-6 | Guard: при `js.guard !== 'off'` плагин MUST в `resolveId` распознавать импорты, попадающие в `components/<Name>/` любого провайдера графа, и для `Name` вне селекции выдавать ошибку (`error`) или предупреждение (`warn`) `component-outside-selection` с указанием импортёра (INV-JS-2). |
 | A-7 | Плагин MUST NOT переписывать код провайдера и MUST NOT влиять на раскладку чанков приложения; это остаётся за бандлером. |
 | A-8 | Плагин SHOULD экспортировать резолвер для auto-import инструментов (`unplugin-vue-components`-совместимый), возвращающий subpath компонента по имени (`granumResolver`). В режиме `'imports'` селекция пополняется сканом PascalCase-тегов в `appSources` (имя, которое объявляет ровно один провайдер графа), а не записями резолвера: порядок трансформаций бандлера не определён. |

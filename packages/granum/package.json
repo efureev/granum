@@ -40,6 +40,7 @@
     "granum": "./dist/bin.js"
   },
   "files": [
+    "client.d.ts",
     "dist",
     "docs/SPEC.md",
     "LICENSE",
@@ -88,6 +89,9 @@
       "types": "./dist/types/src/codegen.d.ts",
       "import": "./dist/codegen.js",
       "default": "./dist/codegen.js"
+    },
+    "./client": {
+      "types": "./client.d.ts"
     },
     "./package.json": "./package.json"
   },

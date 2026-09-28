@@ -10,7 +10,7 @@ import type { GranumConfig } from '../config'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
 import type { GranumThemeManifestOptions } from '../node/themeManifest'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
@@ -38,6 +38,41 @@ export interface GranumPluginOptions {
 }
 
 /** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
+/**
+ * Реэкспорты `virtual:granum/components`: имя компонента и subpath пакета, из
+ * которого он приезжает. Одно место на модуль и на его объявления типов — иначе
+ * они разъедутся, и типы будут описывать не то, что импортируется.
+ */
+function componentExports(app: PreparedApp): { name: string, from: string }[] {
+  const out: { name: string, from: string }[] = []
+  for (const { provider, component } of app.resolution.selection.entries) {
+    if (provider.form !== 'manifest')
+      continue
+    out.push({ name: component.name, from: `${provider.id}/components/${component.name}` })
+  }
+  return out
+}
+
+/**
+ * Объявления для `virtual:granum/components` — точные, по селекции: тип берётся
+ * из того же subpath, откуда приезжает сам компонент.
+ *
+ * Пакет поставляет и общий `@feugene/granum/client`, но там имён быть не может:
+ * они зависят от конфига приложения, а не от пакета. Поэтому точный вариант —
+ * порождаемый, как `components.d.ts` у авто-импорта.
+ */
+function componentTypes(app: PreparedApp): string {
+  const exports = componentExports(app)
+  return [
+    '// Сгенерировано granum по селекции `granum.config`. Правки будут перезаписаны.',
+    '',
+    'declare module \'virtual:granum/components\' {',
+    ...exports.map(e => `  export { ${e.name} } from '${e.from}'`),
+    '}',
+    '',
+  ].join('\n')
+}
+
 function assetNameOf(layer: LayerName): string {
   return `granum.${layer}.css`
 }
@@ -95,6 +130,30 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     })
     return emitted
   }
+  /*
+   * Объявления пишутся только по просьбе (`js.dts`) и только если изменились:
+   * запись без нужды дёргала бы watcher dev-сервера на каждый перезапуск.
+   */
+  const writeComponentTypes = (app: PreparedApp): void => {
+    const target = config.js?.dts
+    if (target === undefined)
+      return
+    const file = resolve(root, target)
+    const next = componentTypes(app)
+    let current: string | undefined
+    try {
+      current = readFileSync(file, 'utf8')
+    }
+    catch {
+      current = undefined
+    }
+    if (current === next)
+      return
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, next)
+    log(`types: ${relative(root, file)}`)
+  }
+
   const invalidate = (): void => {
     prepared = undefined
     emitted = undefined
@@ -164,6 +223,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         else if (w.kind === 'imports-without-app-sources')
           log(`warning: components: 'imports' needs appSources.dirs — the selection is empty`)
       }
+      writeComponentTypes(app)
     },
 
     async resolveId(source, importer) {
@@ -208,13 +268,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       }
       if (id === RESOLVED_COMPONENTS) {
         const app = await prepare()
-        const lines: string[] = []
-        for (const { provider, component } of app.resolution.selection.entries) {
-          if (provider.form !== 'manifest')
-            continue
-          lines.push(`export { ${component.name} } from '${provider.id}/components/${component.name}'`)
-        }
-        return `${lines.join('\n')}\n`
+        return `${componentExports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
       }
       if (id === RESOLVED_THEMES) {
         const app = await prepare()

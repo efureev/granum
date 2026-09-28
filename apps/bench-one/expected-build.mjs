@@ -27,5 +27,5 @@ export default {
    * разница машин и версий vite столько не стоит.
    */
   time: { maxGranumShare: 0.35 },
-  hints: { wallMs: 650, granumMs: 80 },
+  hints: { wallMs: 640, granumMs: 41 },
 }

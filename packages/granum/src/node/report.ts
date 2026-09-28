@@ -17,7 +17,8 @@ import { resolveInlinedCssSources } from './inlinedCss'
 export interface LayerSize {
   readonly raw: number
   readonly gzip: number
-  readonly brotli: number
+  /** Только при `report.brotli: true`: сжатие качества 11 стоит десятки миллисекунд на слой. */
+  readonly brotli?: number
 }
 
 export interface GranumBuildReport {
@@ -81,19 +82,29 @@ export interface BuildReportOptions {
 }
 
 /** Размеры по блокам `@layer` бандла; `undefined`, если блоков granum там нет. */
-export function bundleLayerSizes(bundleCss: string, prefix: string): Record<LayerName | 'total', LayerSize> | undefined {
+export function bundleLayerSizes(bundleCss: string, prefix: string, brotli = false): Record<LayerName | 'total', LayerSize> | undefined {
   const { blocks, statements } = extractLayerBlocks(bundleCss, prefix)
   if (blocks.size === 0)
     return undefined
   const total = [...statements, ...LAYER_NAMES.map(name => blocks.get(name) ?? '')].join('')
   return Object.fromEntries([
-    ...LAYER_NAMES.map(name => [name, sizeOf(blocks.get(name) ?? '')]),
-    ['total', sizeOf(total)],
+    ...LAYER_NAMES.map(name => [name, sizeOf(blocks.get(name) ?? '', brotli)]),
+    ['total', sizeOf(total, brotli)],
   ]) as Record<LayerName | 'total', LayerSize>
 }
 
-function sizeOf(text: string): LayerSize {
-  return { raw: Buffer.byteLength(text), gzip: gzipSync(text).length, brotli: brotliCompressSync(text).length }
+/**
+ * Размер текста. `brotli` считается только по просьбе: качество 11 стоит 151 мс
+ * на 222 kB против 2 мс у gzip, а слоёв шесть и меряются они дважды — эмиссия и
+ * бандл. На сборке дизайн-системы это полсекунды за число, которое смотрят
+ * редко (N-4).
+ */
+function sizeOf(text: string, brotli: boolean): LayerSize {
+  return {
+    raw: Buffer.byteLength(text),
+    gzip: gzipSync(text).length,
+    ...(brotli ? { brotli: brotliCompressSync(text).length } : {}),
+  }
 }
 
 export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
@@ -151,12 +162,14 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
   const hasManifests = resolution.providers.some(p => p.form === 'manifest') && resolveInlinedCssSources(resolution).length >= 0
   const tokenUndefined = hasManifests ? [...consumed].filter(t => !declared.has(t) && !t.startsWith('--un-')).sort() : []
 
+  // Считать ли brotli — решает конфиг приложения: по умолчанию нет (N-4).
+  const brotli = app.config.report?.brotli === true
   const emissionSizes = Object.fromEntries([
-    ...LAYER_NAMES.map(name => [name, sizeOf(css.layers[name])]),
-    ['total', sizeOf(css.css)],
+    ...LAYER_NAMES.map(name => [name, sizeOf(css.layers[name], brotli)]),
+    ['total', sizeOf(css.css, brotli)],
   ]) as Record<LayerName | 'total', LayerSize>
   const fromBundle = options.bundleCss !== undefined && app.config.css?.layers !== false
-    ? bundleLayerSizes(options.bundleCss, app.config.css?.layerPrefix ?? 'granum')
+    ? bundleLayerSizes(options.bundleCss, app.config.css?.layerPrefix ?? 'granum', brotli)
     : undefined
 
   const warnings: string[] = []
