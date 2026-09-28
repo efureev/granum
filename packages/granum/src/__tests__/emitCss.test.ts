@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CssReadError, TokenRefError } from '../core/errors'
-import { emitCss, LAYER_NAMES, wrapLayers } from '../node/emit'
+import { emitCss, LAYER_NAMES, wrapLayer, wrapLayers } from '../node/emit'
 import { buildReport } from '../node/report'
 import { makeManifest, makeProvider, prepareTestApp } from './helpers'
 import { testEngine } from './testEngine'
@@ -58,6 +58,17 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
   it('конкатенация срезов по слоям равна целому (INV-CSS-4); плоский режим без @layer', async () => {
     const { css } = await run()
     expect(wrapLayers(css.layers, {})).toBe(css.css)
+    // Срез слоя — самостоятельный файл: своя обёртка `@layer`, а объявление
+    // порядка несёт первый непустой слой. Тогда конкатенация срезов в порядке
+    // слоёв побайтно равна целому.
+    const slices = LAYER_NAMES.map(name => wrapLayer(css.layers, name, {})).join('')
+    expect(slices).toBe(css.css)
+    // Пустой слой ассета не порождает.
+    const onlyTokens = { ...css.layers, base: '', themes: '', components: '', utilities: '' }
+    expect(wrapLayer(onlyTokens, 'base', {})).toBe('')
+    expect(wrapLayer(onlyTokens, 'tokens', {})).toContain('@layer granum.tokens, granum.base')
+    // `declareOrder: false` — объявление живёт отдельным ассетом (A-21).
+    expect(wrapLayer(onlyTokens, 'tokens', {}, { declareOrder: false })).not.toContain('granum.base,')
     const flat = wrapLayers(css.layers, { layers: false })
     expect(flat).not.toContain('@layer')
     expect(flat.indexOf('--space: 8px')).toBeLessThan(flat.indexOf('body { margin'))

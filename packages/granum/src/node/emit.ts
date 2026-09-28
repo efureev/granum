@@ -44,18 +44,70 @@ export function serializeThemeBlock(block: EffectiveThemeBlock): string | undefi
   return `${block.selector || ':root'} {\n${lines.join('\n')}\n}`
 }
 
-export function wrapLayers(layers: Readonly<Record<LayerName, string>>, options: { readonly layers?: boolean, readonly layerPrefix?: string }): string {
+export interface LayerWrapOptions {
+  readonly layers?: boolean
+  readonly layerPrefix?: string
+}
+
+/** Объявление порядка слоёв — первая строка вывода (INV-CSS-1). */
+export function layerOrderDeclaration(options: LayerWrapOptions): string {
+  if (options.layers === false)
+    return ''
+  const prefix = options.layerPrefix ?? 'granum'
+  return `@layer ${LAYER_NAMES.map(n => `${prefix}.${n}`).join(', ')};\n`
+}
+
+function orderDeclaration(prefix: string): string {
+  return `@layer ${LAYER_NAMES.map(n => `${prefix}.${n}`).join(', ')};`
+}
+
+/** Первый слой с непустым содержимым: он несёт объявление порядка. */
+function firstNonEmpty(layers: Readonly<Record<LayerName, string>>): LayerName | undefined {
+  return LAYER_NAMES.find(name => layers[name].trim().length > 0)
+}
+
+export function wrapLayers(layers: Readonly<Record<LayerName, string>>, options: LayerWrapOptions): string {
   const useLayers = options.layers !== false
   const prefix = options.layerPrefix ?? 'granum'
   const parts: string[] = []
   if (useLayers)
-    parts.push(`@layer ${LAYER_NAMES.map(n => `${prefix}.${n}`).join(', ')};`)
+    parts.push(orderDeclaration(prefix))
   for (const name of LAYER_NAMES) {
     const body = layers[name]
     if (!body.trim())
       continue
     parts.push(useLayers ? `@layer ${prefix}.${name} {\n${body}\n}` : body)
   }
+  return `${parts.join('\n')}\n`
+}
+
+/**
+ * Один слой как самостоятельный файл (A-12).
+ *
+ * Обёртка `@layer` здесь обязательна: без неё срез отдавал бы нелейерный CSS, то
+ * есть ровно наоборот тому, что обещает слой. Объявление порядка несёт файл
+ * первого непустого слоя — тогда конкатенация всех срезов в порядке слоёв
+ * побайтно равна `virtual:granum.css` (INV-CSS-4), а не повторяет объявление
+ * пять раз.
+ *
+ * Пустой слой даёт пустую строку: ассета и запроса за ним быть не должно.
+ */
+export function wrapLayer(
+  layers: Readonly<Record<LayerName, string>>,
+  name: LayerName,
+  options: LayerWrapOptions,
+  /** `declareOrder: false` — порядок объявлен где-то ещё (например отдельным ассетом). */
+  slice: { readonly declareOrder?: boolean } = {},
+): string {
+  const body = layers[name]
+  if (!body.trim())
+    return ''
+  const useLayers = options.layers !== false
+  const prefix = options.layerPrefix ?? 'granum'
+  const parts: string[] = []
+  if (useLayers && slice.declareOrder !== false && firstNonEmpty(layers) === name)
+    parts.push(orderDeclaration(prefix))
+  parts.push(useLayers ? `@layer ${prefix}.${name} {\n${body}\n}` : body)
   return `${parts.join('\n')}\n`
 }
 

@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { ComponentOutsideSelectionError } from '../core/errors'
-import { emitCss, LAYER_NAMES } from '../node/emit'
+import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
 import { prepareApp } from '../node/prepare'
 import { buildReport } from '../node/report'
 import { getThemeManifest } from '../node/themeManifest'
@@ -36,18 +36,31 @@ export interface GranumPluginOptions {
   readonly log?: (line: string) => void
 }
 
+/** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
+function assetNameOf(layer: LayerName): string {
+  return `granum.${layer}.css`
+}
+
 export function granum(config: GranumConfig, options: GranumPluginOptions = {}): Plugin {
   validateGranumConfig(config)
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
 
   let root = process.cwd()
   let outDir = 'dist'
+  let base = '/'
   let isBuild = false
+  let isSsrBuild = false
   let server: ViteDevServer | undefined
   let prepared: Promise<PreparedApp> | undefined
   let emitted: Promise<EmittedCss> | undefined
   /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте (A-19). */
   let bundleCss: string | undefined
+  /** Слои, уехавшие отдельными ассетами при `css.split`, в порядке слоёв (A-21). */
+  let splitLayers: LayerName[] = []
+  /** Проставлены ли `<link>` на них: без HTML-точки входа этого не произойдёт. */
+  let splitLinked = false
+  /** Делим ли слои в этой сборке. */
+  const splitting = (): boolean => config.css?.split === true && isBuild && !isSsrBuild
 
   const prepare = (): Promise<PreparedApp> => {
     prepared ??= prepareApp(config, root)
@@ -61,6 +74,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     prepared = undefined
     emitted = undefined
     bundleCss = undefined
+    splitLayers = []
+    splitLinked = false
     if (!server)
       return
     for (const id of [RESOLVED_CSS, RESOLVED_COMPONENTS, RESOLVED_THEMES, ...LAYER_NAMES.map(n => `${RESOLVED_LAYER_PREFIX}${n}.css`)]) {
@@ -90,7 +105,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     configResolved(resolved: ResolvedConfig): void {
       root = resolved.root
       outDir = resolved.build.outDir
+      base = resolved.base
       isBuild = resolved.command === 'build'
+      // Серверная сборка HTML не порождает, ссылки проставлять некуда: слои там
+      // не делятся, CSS приезжает одним модулем, как и раньше.
+      isSsrBuild = Boolean(resolved.build.ssr)
     },
 
     configureServer(devServer: ViteDevServer): void {
@@ -144,13 +163,20 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     },
 
     async load(id) {
-      if (id === RESOLVED_CSS)
-        return (await emit()).css
+      if (id === RESOLVED_CSS) {
+        /*
+         * При `split` содержимое уезжает отдельными ассетами, и здесь остаётся
+         * ровно объявление порядка слоёв. Оно обязано быть первым (INV-CSS-1), и
+         * ссылку на этот ассет Vite ставит раньше наших — значит место верное.
+         * Дублировать его в ассете первого слоя не надо: объявление одно.
+         */
+        return splitting() ? layerOrderDeclaration(config.css ?? {}) : (await emit()).css
+      }
       if (id.startsWith(RESOLVED_LAYER_PREFIX)) {
         const name = id.slice(RESOLVED_LAYER_PREFIX.length).replace(/\.css$/, '') as LayerName
         if (!LAYER_NAMES.includes(name))
           throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
-        return (await emit()).layers[name]
+        return wrapLayer((await emit()).layers, name, config.css ?? {})
       }
       if (id === RESOLVED_COMPONENTS) {
         const app = await prepare()
@@ -169,6 +195,68 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       return null
     },
 
+    /**
+     * Ассеты слоёв (A-21).
+     *
+     * Эмитятся здесь, а не в `generateBundle`: имя с хешем присваивается
+     * бандлером позже, и сослаться на него можно только через `getFileName` по
+     * ссылке, выданной сейчас. Пустые слои пропускаются — ассета и запроса за
+     * ним быть не должно.
+     */
+    async renderStart(): Promise<void> {
+      if (!splitting())
+        return
+      const css = await emit()
+      const options = config.css ?? {}
+      splitLayers = []
+      for (const layer of LAYER_NAMES) {
+        const source = wrapLayer(css.layers, layer, options, { declareOrder: false })
+        if (!source)
+          continue
+        this.emitFile({ type: 'asset', name: assetNameOf(layer), source })
+        splitLayers.push(layer)
+      }
+    },
+
+    /**
+     * Порядок ссылок и есть порядок слоёв: первое появление слоя задаёт его
+     * место в каскаде, поэтому `<link>` проставляются строго по `LAYER_NAMES`.
+     */
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler(html: string, ctx: { bundle?: Record<string, unknown> }) {
+        if (!splitting() || splitLayers.length === 0)
+          return html
+        // Имя с хешем присваивает бандлер, поэтому берём его из самого бандла по
+        // имени, под которым ассет эмитился: ссылка по `ref` в этом хуке не
+        // типизирована, а бандл — типизирован и уже собран.
+        const byName = new Map<string, string>()
+        for (const item of Object.values(ctx.bundle ?? {})) {
+          const asset = item as { type?: string, name?: string, names?: readonly string[], fileName?: string }
+          if (asset.type !== 'asset' || typeof asset.fileName !== 'string')
+            continue
+          for (const name of [asset.name, ...(asset.names ?? [])]) {
+            if (typeof name === 'string')
+              byName.set(name, asset.fileName)
+          }
+        }
+        const links = splitLayers
+          .map(layer => byName.get(assetNameOf(layer)))
+          .filter((fileName): fileName is string => fileName !== undefined)
+        if (links.length !== splitLayers.length)
+          return html
+        splitLinked = true
+        // База обязательна: приложение может жить не в корне домена, и Vite
+        // проставляет её своим ссылкам — наши не имеют права отличаться.
+        const prefix = base.endsWith('/') ? base : `${base}/`
+        return links.map(href => ({
+          tag: 'link',
+          attrs: { rel: 'stylesheet', href: `${prefix}${href}` },
+          injectTo: 'head' as const,
+        }))
+      },
+    },
+
     generateBundle(_options, bundle): void {
       const parts: string[] = []
       for (const name of Object.keys(bundle).sort()) {
@@ -184,6 +272,14 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         return
       const app = await prepare()
       const css = await emit()
+      // Без HTML-точки входа ссылки проставить некуда, и CSS не приедет вовсе:
+      // это тихая поломка, поэтому говорим о ней громко.
+      if (splitting() && splitLayers.length > 0 && !splitLinked) {
+        log(
+          `warning: css.split is on, ${splitLayers.length} layer asset(s) were emitted, but no HTML entry was found to link them `
+          + `— the CSS will not load. Drop css.split or add an HTML entry.`,
+        )
+      }
       const report = buildReport(app, css, bundleCss !== undefined ? { bundleCss } : {})
       const file = config.report?.file ?? 'granum-report.json'
       if (file !== false) {
@@ -195,7 +291,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         `${report.selection.length} components, ${report.classes.matched} classes matched, `
         + `${report.classes.unmatched.length} without a rule, themes [${report.themes.names.join(', ')}]${
           report.prune ? `, prune: ${report.prune.removable.length} removable` : ''
-        }${file !== false ? ` → ${join(outDir, file)}` : ''}`,
+        }${splitting() && splitLayers.length > 0 ? `, css: ${splitLayers.length} layer assets` : ''}${file !== false ? ` → ${join(outDir, file)}` : ''}`,
       )
     },
   }

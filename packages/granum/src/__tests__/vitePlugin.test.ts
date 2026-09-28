@@ -55,9 +55,7 @@ async function buildProvider(): Promise<string> {
   return root
 }
 
-interface AppBuild { root: string, css: string, js: string, report: Record<string, any> | undefined, logs: string[] }
-
-async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`): Promise<AppBuild> {
+async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`) {
   const root = mkdtempSync(join(tmpdir(), 'granum-app-'))
   mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
   symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
@@ -78,10 +76,20 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
   })
   const assets = join(root, 'dist/assets')
   const files = readdirSync(assets)
-  const css = files.filter(f => f.endsWith('.css')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
+  const cssFiles = files.filter(f => f.endsWith('.css')).sort()
+  const css = cssFiles.map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
   const js = files.filter(f => f.endsWith('.js')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
   const reportPath = join(root, 'dist/granum-report.json')
-  return { root, css, js, report: existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : undefined, logs }
+  return {
+    root,
+    css,
+    js,
+    cssFiles,
+    cssOf: (file: string) => readFileSync(join(assets, file), 'utf8'),
+    html: readFileSync(join(root, 'dist/index.html'), 'utf8'),
+    report: existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : undefined,
+    logs,
+  }
 }
 
 describe('granum() с настоящим Vite', async () => {
@@ -129,6 +137,60 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).toContain('--t-space')
     expect(app.css).toContain('.t-card')
     expect(app.css).not.toContain('.p-4{')
+  })
+
+  it('срез слоя обёрнут в свой @layer, а не отдаёт голое тело (A-12, INV-CSS-4)', async () => {
+    const app = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, `<template><div/></template>`, `import 'virtual:granum/layers/components.css'`)
+    // Без обёртки срез отдавал бы нелейерный CSS — ровно наоборот тому, что
+    // обещает слой: он перебивал бы утилиты приложения вместо обратного.
+    expect(app.css).toContain('@layer granum.components {')
+    expect(app.css).toContain('.t-card')
+  })
+
+  describe('css.split: отдельный ассет на слой (A-21, INV-CSS-9)', () => {
+    it('ассет на каждый непустой слой, ссылки в порядке слоёв, объявление порядка одно', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'], themes: { names: ['light', 'dark'] }, css: { split: true } },
+        `<template><div class="p-4"/></template>`,
+      )
+      const layerFiles = app.cssFiles.filter(f => /^granum\.[a-z]+-/.test(f))
+      const order = layerFiles.map(f => /^granum\.([a-z]+)-/.exec(f)![1]!)
+      /*
+       * Ассет только у непустого слоя: у фикстуры нет `base.css`, поэтому слоёв
+       * четыре из пяти — и запроса за пустым файлом быть не должно.
+       */
+      expect([...order].sort()).toEqual(['components', 'themes', 'tokens', 'utilities'])
+
+      // Порядок ссылок и есть порядок каскада.
+      const linked = [...app.html.matchAll(/granum\.([a-z]+)-[\w-]+\.css/g)].map(m => m[1])
+      expect(linked).toEqual(['tokens', 'themes', 'components', 'utilities'])
+
+      // Объявление порядка — ровно в одном файле, и это не ассет слоя.
+      const declaring = app.cssFiles.filter(f => /@layer granum\.tokens\s*,/.test(app.cssOf(f)))
+      expect(declaring.length).toBe(1)
+      expect(declaring[0]!.startsWith('granum.')).toBe(false)
+
+      // Каждый ассет несёт только свой слой.
+      for (const file of layerFiles) {
+        const layer = /^granum\.([a-z]+)-/.exec(file)![1]!
+        const css = app.cssOf(file)
+        expect(css).toContain(`@layer granum.${layer} {`)
+        for (const other of ['tokens', 'base', 'themes', 'components', 'utilities'].filter(l => l !== layer))
+          expect(css).not.toContain(`@layer granum.${other} {`)
+      }
+    })
+
+    it('без split — один ассет со всеми слоями', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'], themes: { names: ['light', 'dark'] } },
+        `<template><div class="p-4"/></template>`,
+      )
+      expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])
+      expect(app.css).toContain('@layer granum.tokens {')
+      expect(app.css).toContain('@layer granum.components {')
+    })
   })
 
   it('импорт компонента вне селекции — ошибка; guard: warn — предупреждение; imports — попадает в селекцию (A-3, A-6, INV-SEL-5, INV-JS-2)', async () => {

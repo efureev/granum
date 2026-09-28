@@ -92,18 +92,45 @@ The module holds the order statement and five layers:
 ```css
 @layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;
 @layer granum.tokens { … }      /* providers' theme.tokensCss, structural :root tokens */
-@layer granum.base { … }        /* theme.baseCss */
+@layer granum.base { … }        /* the engine preflight, then theme.baseCss */
 @layer granum.themes { … }      /* token blocks of active themes, theme files */
 @layer granum.components { … }  /* cssFiles and styles.css of selected components */
-@layer granum.utilities { … }   /* engine output: preflight and utilities */
+@layer granum.utilities { … }   /* the engine's utilities */
 ```
 
 The engine input is the union of the static classes of selected components
 (from the manifests), their safelist and the classes extracted from
-`appSources`. One layer alone: `virtual:granum/layers/utilities.css`; the
-concatenation of layers equals the whole. Unlayered application CSS beats
-everything inside the layers — by design: a utility in an application
-template wins over a component's base style.
+`appSources`. One layer alone: `virtual:granum/layers/utilities.css` — with its
+own `@layer` wrapper; the concatenation of layers equals the whole. Unlayered
+application CSS beats everything inside the layers — by design: a utility in an
+application template wins over a component's base style.
+
+### One asset per layer: `css.split`
+
+A single file compresses better but is invalidated as a whole: a change in the
+markup drops the cache of tokens and themes that did not change.
+
+```ts
+export default defineGranumConfig({
+  engine: windEngine(),
+  providers: ['@acme/ui'],
+  appSources: { dirs: ['src'] },
+  css: { split: true },
+})
+```
+
+Every non-empty layer goes out as its own asset with its own hash, and the
+`<link>` tags are injected into the HTML in layer order — the order of the links
+is the order of the cascade. After that, a change in the markup changes one asset
+out of five; the browser takes the other four from cache. The `apps/bench-split`
+stand checks exactly this: two builds and a comparison of names.
+
+The limits of the option: it applies to an application build only, and only where
+there is an HTML entry — that is where the links go, and without HTML the plugin
+says so with a warning. A server build produces no HTML, and in dev there are no
+hashed assets at all, so CSS still arrives as a single module. The price is the
+total weight: five files compress worse than one, but what gets re-fetched is one
+layer rather than the whole CSS.
 
 ## JS channel
 
