@@ -51,11 +51,13 @@ export interface GranumBuildReport {
     readonly unmatched: readonly { readonly className: string, readonly sources: readonly string[] }[]
     readonly safelistRedundant: readonly string[]
     /**
-     * Классы, извлечённые из исходников приложения (`appSources`).
+     * Классы разметки приложения, которые есть и у компонентов пакетов.
      *
      * Нужны аудиту дистрибутива: без них класс из разметки приложения,
      * совпавший с классом невыбранного компонента, выглядел бы утечкой
-     * компонента (D-9).
+     * компонента (D-9). Всё, чего у пакетов нет, аудиту не пригодилось бы, а
+     * отчёт раздувало: на витрине дизайн-системы полный список — 33 тысячи
+     * имён и 750 kB JSON на каждую сборку.
      */
     readonly app: readonly string[]
   }
@@ -109,19 +111,54 @@ function sizeOf(text: string, brotli: boolean): LayerSize {
 
 export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
   const { resolution, engine } = app
+  /*
+   * Индекс «класс → кто его объявил» строится один раз.
+   *
+   * Поиск перебором стоил 785 мс на витрине дизайн-системы: у неё 32 тысячи
+   * классов без правила (экстрактор берёт из исходников приложения всё подряд),
+   * и на каждый шёл линейный проход по 116 компонентам и по 33 тысячам классов
+   * разметки. Это была половина всего времени granum на сборке.
+   */
+  const sources = new Map<string, string[]>()
+  const addSource = (className: string, source: string): void => {
+    const existing = sources.get(className)
+    if (existing === undefined)
+      sources.set(className, [source])
+    else if (!existing.includes(source))
+      existing.push(source)
+  }
+  for (const { provider, component } of resolution.selection.entries) {
+    for (const className of component.classes)
+      addSource(className, `${provider.id}:${component.name}`)
+    for (const className of component.safelist)
+      addSource(className, `${provider.id}:${component.name}`)
+  }
+  // Класс, потерянный пересчётом, в списках компонентов уже не лежит — но
+  // источник у него есть, и без него он выпал бы из `unmatched` (A-E7).
+  for (const decision of app.engineDecisions) {
+    for (const className of decision.lost)
+      addSource(className, decision.providerId)
+  }
+  const appClasses = new Set(app.appScan.classes)
+  /*
+   * Классы ВСЕХ компонентов графа, а не только выбранных: `classes.app` нужен
+   * аудиту, чтобы не вменять невыбранному компоненту класс, который приехал из
+   * разметки приложения. Фильтр по одной лишь селекции отбрасывал ровно те
+   * имена, ради которых поле и заведено, — на стендах дизайн-системы это сразу
+   * дало полторы сотни ложных находок.
+   */
+  const packageClasses = new Set<string>()
+  for (const provider of resolution.providers) {
+    for (const component of provider.components) {
+      for (const className of component.classes)
+        packageClasses.add(className)
+      for (const className of component.safelist)
+        packageClasses.add(className)
+    }
+  }
   const sourcesOf = (className: string): string[] => {
-    const out: string[] = []
-    for (const { provider, component } of resolution.selection.entries) {
-      if (component.classes.includes(className) || component.safelist.includes(className))
-        out.push(`${provider.id}:${component.name}`)
-    }
-    // Класс, потерянный пересчётом, в списках компонентов уже не лежит — но
-    // источник у него есть, и без него он выпал бы из `unmatched` (A-E7).
-    for (const decision of app.engineDecisions) {
-      if (decision.lost.includes(className))
-        out.push(decision.providerId)
-    }
-    if (app.appScan.classes.includes(className))
+    const out = [...(sources.get(className) ?? [])]
+    if (appClasses.has(className))
       out.push('app')
     return out
   }
@@ -213,7 +250,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
         .map(className => ({ className, sources: sourcesOf(className).filter(s => s !== 'app') }))
         .filter(entry => entry.sources.length > 0),
       safelistRedundant: css.safelistRedundant,
-      app: [...app.appScan.classes].sort(),
+      app: [...appClasses].filter(className => packageClasses.has(className)).sort(),
     },
     tokens: { undefined: tokenUndefined },
     prune: css.prune

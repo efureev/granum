@@ -190,6 +190,26 @@ describe('buildReport (A-19, A-20)', () => {
   })
 
   /**
+   * `classes.app` — не весь словарь разметки, а его пересечение с классами
+   * компонентов. Ровно оно нужно аудиту (D-9), а полный список на витрине
+   * дизайн-системы — это 33 тысячи имён и 750 kB JSON на каждую сборку.
+   *
+   * Считаются классы ВСЕХ компонентов графа, а не только выбранных: без
+   * этого из списка выпадают ровно те имена, ради которых поле и заведено.
+   */
+  it('classes.app — только то, что есть у компонентов, включая невыбранные', async () => {
+    const { root, manifest } = fixture()
+    mkdirSync(join(root, 'src'), { recursive: true })
+    // `flex` есть у выбранного Card, `gap-2` — у невыбранного Panel,
+    // `mx-auto` — только у приложения.
+    writeFileSync(join(root, 'src/App.vue'), '<template><div class="flex gap-2 mx-auto"></div></template>')
+    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Card'], appSources: { dirs: ['src'] } }, root)
+    const report = buildReport(app, await emitCss(app))
+
+    expect(report.classes.app).toEqual(['flex', 'gap-2'])
+  })
+
+  /**
    * brotli качества 11 стоит 151 мс на 222 kB против 2 мс у gzip и считается на
    * каждый слой дважды — эмиссия и бандл. Платить это на каждой сборке за
    * число, которое смотрят редко, незачем, поэтому по умолчанию его нет (N-4).

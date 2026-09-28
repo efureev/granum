@@ -44,8 +44,14 @@ export default {
     )
     check(report.classes.unmatched.length === 0, `unmatched: ${JSON.stringify(report.classes.unmatched)}`)
     check(report.tokens.undefined.length === 0, `undefined tokens: ${report.tokens.undefined}`)
-    // Классы разметки приложения отчёт перечисляет отдельно от классов пакетов.
-    check(report.classes.app.includes('max-w-md'), `classes.app: ${report.classes.app}`)
+    /*
+     * `classes.app` — классы разметки приложения, которые есть и у компонентов
+     * пакетов. Ровно они и нужны аудиту: без них класс из `App.vue`, совпавший
+     * с классом невыбранного компонента, выглядел бы утечкой. Всё остальное в
+     * отчёте не лежит — на витрине это было бы 33 тысячи имён.
+     */
+    check(report.classes.app.includes('p-[var(--xxx-space-2)]'), `classes.app: ${report.classes.app}`)
+    check(!report.classes.app.includes('max-w-md'), `classes.app содержит класс, которого нет ни у одного компонента: ${report.classes.app}`)
     check(report.prune === null, `prune: ${JSON.stringify(report.prune)}`)
   },
 }

@@ -8,7 +8,9 @@ import { XxCard } from 'virtual:granum/components'
 </script>
 
 <template>
-  <div class="mx-auto max-w-md p-6">
+  <!-- `p-[var(--xxx-space-2)]` — класс, который есть и у XxCard: на нём видно
+       поле `classes.app` отчёта, ради которого оно и заведено. -->
+  <div class="mx-auto max-w-md p-[var(--xxx-space-2)]">
     <XxCard>
       Канал JS
     </XxCard>

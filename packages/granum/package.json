@@ -1,7 +1,7 @@
 {
   "name": "@feugene/granum",
   "description": "Build pipeline for granular UI packages: components, styles, design tokens and themes flow from provider manifests to the application bundle through one resolution. Framework-agnostic, zero dependencies.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "license": "MIT",
   "author": {
     "name": "Evgeniy Fureev",
@@ -105,7 +105,7 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.1.0",
-    "@feugene/granum-engine-wind": "0.7.0",
+    "@feugene/granum-engine-wind": "0.8.0",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
