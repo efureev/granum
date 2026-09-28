@@ -160,6 +160,22 @@ markup change re-fetches 20.8 kB instead of 32.9, a theme change 5.9 kB. So the
 option pays off where repeat visits are many and the foundation changes rarely;
 if the page is read once, the price is paid for nothing.
 
+### A host with several Vite environments
+
+A host may build several Vite environments in one build: Astro builds
+`prerender`, `ssr` and `client`, resolving the config of each one before the
+first build and calling the final hooks for every one of them. Resolution and
+emission do not suffer from that — they are memoized and happen once — and the
+report is written once, into the output directory of the resolved config. Of the
+config, not of the environment: an environment directory may be temporary (in
+Astro `prerender` is `dist/.prerender/`, which the host removes after the build),
+and the report would be deleted along with it.
+
+`css.split` is not applicable on such a host: the `<link>` tags are injected
+through `transformIndexHtml`, and such a host builds HTML itself, bypassing that
+hook. Leave the option at its default `false` — CSS then arrives as a single
+`virtual:granum.css` module, which the host picks up as an ordinary CSS import.
+
 ## JS channel
 
 ```ts

@@ -91,6 +91,16 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   let emitted: Promise<EmittedCss> | undefined
   /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте (A-19). */
   let bundleCss: string | undefined
+  /**
+   * Отчёт уже написан в этой сборке.
+   *
+   * Хост вправе собрать несколько окружений Vite одним билдом — Astro строит
+   * `prerender`, `ssr` и `client`, — и тогда финальные хуки срабатывают на
+   * каждое. Резолюция и эмиссия мемоизированы и от этого не страдают, а отчёт
+   * без флага писался бы столько раз, сколько окружений, и печатал бы столько
+   * же строк лога об одной и той же сборке.
+   */
+  let reported = false
   /** Слои, уехавшие отдельными ассетами при `css.split`, в порядке слоёв (A-21). */
   let splitLayers: LayerName[] = []
   /** Проставлены ли `<link>` на них: без HTML-точки входа этого не произойдёт. */
@@ -161,6 +171,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     timings.emit = 0
     timings.report = 0
     bundleCss = undefined
+    reported = false
     splitLayers = []
     splitLinked = false
     if (!server)
@@ -191,6 +202,10 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
 
     configResolved(resolved: ResolvedConfig): void {
       root = resolved.root
+      // Каталог берётся из разрешённого конфига, а НЕ из `this.environment` в
+      // финальных хуках: у многосредового хоста каталог окружения бывает
+      // временным (у Astro `prerender` это `dist/.prerender/`, который хост
+      // удаляет после сборки), и отчёт уехал бы вместе с ним.
       outDir = resolved.build.outDir
       base = resolved.base
       isBuild = resolved.command === 'build'
@@ -350,8 +365,9 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     },
 
     async closeBundle(): Promise<void> {
-      if (!isBuild)
+      if (!isBuild || reported)
         return
+      reported = true
       const app = await prepare()
       const css = await emit()
       // Без HTML-точки входа ссылки проставить некуда, и CSS не приедет вовсе:

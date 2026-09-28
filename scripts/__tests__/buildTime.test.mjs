@@ -19,6 +19,18 @@ describe('buildTime', () => {
     expect(parseGranumTime('vite v8.3.1 building...\n✓ built\n')).toBeNull()
   })
 
+  /*
+   * Формат, который плагин печатает сейчас. Без этого случая разбор проверялся
+   * бы на строке, которой в логе уже нет: разбивка `prepare` появилась позже
+   * парсера, регулярка перестала матчиться, доля granum стала нулевой — и гейт
+   * `time.maxGranumShare` проходил на чём угодно.
+   */
+  it('разбивка prepare в строке фаз разбору не мешает', () => {
+    const stdout = '[granum] time 76 ms (prepare 3 [manifests 0, scan 1, resolve 2], emit 35, report 38)\n'
+
+    expect(parseGranumTime(stdout)).toEqual({ total: 76, prepare: 3, emit: 35, report: 38 })
+  })
+
   it('факты о работе берутся из отчёта, а не из замера', () => {
     const report = {
       providers: [

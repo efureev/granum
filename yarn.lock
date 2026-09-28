@@ -271,6 +271,11 @@
     "@eslint/core" "^1.2.1"
     levn "^0.4.1"
 
+"@feugene/granum-engine-wind@1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@feugene/granum-engine-wind/-/granum-engine-wind-1.0.0.tgz#ce7747d73ba73b809ac1e38fce0d0023e00cecd0"
+  integrity sha512-pcMWSMhTujAYrDOg5F/pmeu/zyA3+8ImWNXU5hNQx3NoKYtQNVmpf+LdBf5uE1aO//86vKADo6jbic7EQJcpfQ==
+
 "@humanfs/core@^0.19.2":
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"

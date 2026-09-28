@@ -30,14 +30,19 @@ export function spread(values) {
 }
 
 /**
- * Строка фаз из лога сборки: `[granum] time 76 ms (prepare 3, emit 35, report 38)`.
+ * Строка фаз из лога сборки:
+ * `[granum] time 76 ms (prepare 3 [manifests 0, scan 1, resolve 2], emit 35, report 38)`.
  *
  * Её печатает сам плагин, и другого источника этих чисел нет: в
  * `granum-report.json` время не попадает — отчёт обязан быть побайтно
  * стабильным между сборками (INV-DET-2).
+ *
+ * Разбивка `prepare` в скобках разбору не нужна, но пропустить её обязательно:
+ * без этого регулярка не матчится, функция возвращает `null`, доля granum
+ * считается нулевой — и гейт `time.maxGranumShare` проходит на чём угодно.
  */
 export function parseGranumTime(stdout) {
-  const m = /\[granum\] time (\d+) ms \(prepare (\d+), emit (\d+), report (\d+)\)/.exec(stdout)
+  const m = /\[granum\] time (\d+) ms \(prepare (\d+)(?: \[[^\]]*\])?, emit (\d+), report (\d+)\)/.exec(stdout)
   if (!m)
     return null
   return { total: Number(m[1]), prepare: Number(m[2]), emit: Number(m[3]), report: Number(m[4]) }

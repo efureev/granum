@@ -263,4 +263,51 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).not.toContain('@layer')
     expect(app.css).toContain('.t-card')
   })
+
+  /**
+   * Хост вправе собрать несколько окружений Vite одним билдом: Astro строит
+   * `prerender`, `ssr` и `client`, разрешая конфиг каждого ДО первой сборки и
+   * вызывая финальные хуки на каждое. Настоящего такого хоста среди стендов
+   * нет, поэтому окружения имитируются прямым вызовом хуков.
+   */
+  describe('многосредовая сборка хоста', () => {
+    interface Hooks {
+      configResolved: (config: unknown) => void
+      generateBundle: (options: unknown, bundle: unknown) => void
+      closeBundle: () => Promise<void>
+    }
+
+    it('отчёт пишется один раз, в каталог разрешённого конфига, по бандлу с CSS', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-multienv-'))
+      mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+      symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
+      write(root, 'src/App.vue', `<template><div class="mx-auto"/></template>`)
+
+      const logs: string[] = []
+      const hooks = granum(
+        { providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'] },
+        { log: line => logs.push(line) },
+      ) as unknown as Hooks
+
+      // Конфиги всех окружений разрешаются до сборок; побеждает последний.
+      for (const outDir of ['dist', 'dist/.prerender', 'dist', 'dist'])
+        hooks.configResolved({ root, base: '/', command: 'build', build: { outDir, ssr: true } })
+
+      // Первое окружение несёт CSS, второе — только JS.
+      hooks.generateBundle({}, { 'a.css': { type: 'asset', fileName: 'a.css', source: '@layer granum.utilities{.mx-auto{margin:0 auto}}' } })
+      await hooks.closeBundle()
+      hooks.generateBundle({}, { 'b.js': { type: 'chunk', fileName: 'b.js', code: '' } })
+      await hooks.closeBundle()
+
+      // Во временный каталог окружения отчёт не уезжает: хост его удаляет.
+      expect(existsSync(join(root, 'dist/.prerender/granum-report.json'))).toBe(false)
+      const report = JSON.parse(readFileSync(join(root, 'dist/granum-report.json'), 'utf8'))
+      // Размеры сняты с того окружения, в котором CSS был.
+      expect(report.sizesSource).toBe('bundle')
+      expect(report.sizes.utilities.raw).toBeGreaterThan(0)
+      // Две строки — итог и время, а не по паре на окружение.
+      expect(logs).toHaveLength(2)
+      expect(logs[0]).toMatch(/1 components/)
+    })
+  })
 })
