@@ -167,6 +167,43 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     expect(expanded.out[0]).toContain('• @x/kit:Card —')
   })
 
+  /**
+   * `audit` работает по СОБРАННОМУ дистрибутиву и конфига не требует вовсе:
+   * селекцию и список провайдеров он берёт из отчёта сборки, состав компонентов —
+   * из манифестов. Поэтому его можно поставить в прогон чужого репозитория.
+   */
+  it('audit: по dist без конфига; недоставленный CSS роняет код возврата', async () => {
+    const root = appDir()
+    // В `dist` приложения нет ни CSS, ни JS: ни класса выбранного компонента,
+    // ни его собственного правила там нет — это дефект доставки.
+    const failing = io(root)
+    expect(await runGranumCli(['audit', 'dist'], failing.io)).toBe(1)
+    expect(failing.out[0]).toContain('granum audit')
+    expect(failing.out[0]).toContain('@x/kit:Card: classes missing from the CSS (p-4)')
+    expect(failing.out[0]).toContain('@x/kit:Card: own rules missing from the CSS (card)')
+    // Мёртвая запись safelist — находка отчёта: её называет `doctor`, а аудит
+    // доводит до кода возврата только со `--strict` (D-9).
+    expect(failing.out[0]).not.toContain('classes with no engine rule')
+
+    const strict = io(root)
+    expect(await runGranumCli(['audit', 'dist', '--strict'], strict.io)).toBe(1)
+    expect(strict.out[0]).toContain('classes with no engine rule: no-such-rule')
+
+    const json = io(root)
+    expect(await runGranumCli(['--json', 'audit', 'dist'], json.io)).toBe(1)
+    const report = JSON.parse(json.out[0]!)
+    expect(report.ok).toBe(false)
+    expect(report.selection).toEqual(['@x/kit:Card'])
+    expect(report.providers[0].id).toBe('@x/kit')
+  })
+
+  it('audit: нет отчёта сборки — код 1 и внятное сообщение, а не догадки', async () => {
+    const root = appDir()
+    const t = io(root)
+    expect(await runGranumCli(['audit', 'node_modules'], t.io)).toBe(1)
+    expect(t.err.join('\n')).toContain('no \'granum-report.json\'')
+  })
+
   it('doctor: ошибка манифеста (нет файла) — код 1 и без --strict', async () => {
     const root = appDir()
     writeFileSync(join(root, 'node_modules/@x/kit/dist/components/Card/styles.css'), '.card{@apply p-2}')

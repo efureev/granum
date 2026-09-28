@@ -49,6 +49,14 @@ export interface GranumBuildReport {
     /** Класс → откуда он пришёл: ключи компонентов (`classes`/`safelist`) или `app`. */
     readonly unmatched: readonly { readonly className: string, readonly sources: readonly string[] }[]
     readonly safelistRedundant: readonly string[]
+    /**
+     * Классы, извлечённые из исходников приложения (`appSources`).
+     *
+     * Нужны аудиту дистрибутива: без них класс из разметки приложения,
+     * совпавший с классом невыбранного компонента, выглядел бы утечкой
+     * компонента (D-9).
+     */
+    readonly app: readonly string[]
   }
   readonly tokens: {
     /** Потребляется селекцией или приложением, но не объявлен ни одним слоем (T-5). */
@@ -192,6 +200,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
         .map(className => ({ className, sources: sourcesOf(className).filter(s => s !== 'app') }))
         .filter(entry => entry.sources.length > 0),
       safelistRedundant: css.safelistRedundant,
+      app: [...app.appScan.classes].sort(),
     },
     tokens: { undefined: tokenUndefined },
     prune: css.prune

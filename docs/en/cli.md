@@ -15,6 +15,7 @@ granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
+granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
 granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
 ```
 
@@ -128,6 +129,59 @@ than just an exit code.
 class source (`manifest` or `re-extracted`) and whether its rules were loaded,
 and at the root the application engine with its dialect and fingerprint. Why
 there are two decisions — [engines and dialects](./engines-and-dialects.md).
+
+## `audit`
+
+A check of the **built** dist: what made it out of the packages and what should
+have disappeared. The only command that looks at the result rather than at the
+resolution.
+
+```bash
+granum audit dist
+granum audit dist/client --root=.      # SSR: assets live in a subdirectory
+granum audit dist --strict             # plus the build report's findings
+granum audit dist --json               # for a script in CI
+```
+
+No config needed: the selection and the provider list come from
+`dist/granum-report.json`, the components and the declared tokens from the
+providers' manifests. That is why the command can be dropped into **another**
+repository's pipeline: its `dist` is enough.
+
+What counts as a finding:
+
+| Finding | Why it is a defect |
+|---|---|
+| a class unique to an unselected component, in the CSS | the component was not cut: the selection leaked |
+| the own CSS of an unselected component | its `styles.css` was inlined although the component is not selected |
+| a class of a selected component missing from the CSS | the opposite mistake: promised and not delivered |
+| a package token in the dist that nothing can reach | dead weight: pruning is on and did not take it |
+| a class with no engine rule, a token with no declaration | only with `--strict`: that is `doctor`'s job |
+
+The verdict is made on the CSS, not on the JS. The chunk layout is the bundler's
+call, and a class of an unselected component sitting in a shared chunk is not
+evidence that tree-shaking failed; granum does not touch JS at all (A-7). The
+`js` column in the output is therefore information, not an accusation.
+
+What the audit does not hold against you:
+
+* **a class shared with a selected component** (`flex` belongs to both) — it is
+  in the CSS by right; the same goes for a selected component's `safelist`: a
+  button's tone utility ships from exactly there;
+* **a class from the application's own markup** — it has nothing to do with the
+  component, and the build report lists such classes separately;
+* **a class the engine found no rule for** — it could not have been in the CSS
+  in the first place; `unmatched` is what speaks about it;
+* **an unreachable token while pruning is off** — nobody promised to remove it;
+* **the engine's preflight variables (`--un-*`)** — a fixed cost of the engine,
+  not a package token; the audit names them on their own line.
+
+If the build report has no `classes.app` (the application was built with granum
+older than 0.6.0), there is no way to tell `gap-3` in `App.vue` from a leaked
+class. The audit then prints such lines under a separate “Not judged” list and
+does not fail: a rebuild puts the check back in service.
+
+Exit code `1` on any finding — the command can stand as a gate in CI.
 
 ## `explain`
 

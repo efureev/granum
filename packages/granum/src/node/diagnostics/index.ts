@@ -1,3 +1,5 @@
+export type { AuditComponentInfo, AuditDistOptions, AuditDistReport, AuditProviderInfo } from './auditDist'
+export { declaredCssTokens, formatAuditDistReport, granumAuditDist, reachableCssTokens } from './auditDist'
 export type { DoctorComponentInfo, DoctorDiagnostic, DoctorDiagnosticCode, DoctorProviderInfo, DoctorReport, DoctorTokenConflict } from './doctor'
 export { countDoctorDiagnostics, formatDoctorReport, formatThemeWarning, granumDoctor } from './doctor'
 export type { ExplainReason, ExplainReport, ExplainTokenContribution } from './explain'

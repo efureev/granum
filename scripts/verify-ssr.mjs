@@ -34,6 +34,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { auditFailure } from './audit-dist.mjs'
 
 const dir = process.cwd()
 const client = join(dir, 'dist', 'client')
@@ -194,6 +195,12 @@ else {
   for (const code of [...new Set([...Object.keys(counted), ...Object.keys(declared)])].sort())
     check((counted[code] ?? 0) === (declared[code] ?? 0), `doctor: находок \`${code}\` — ${counted[code] ?? 0}, объявлено ${declared[code] ?? 0}`)
 }
+
+// Аудит по клиентскому дистрибутиву: в браузер едет именно он, а корень для
+// резолва манифестов — каталог стенда, а не `dist/client`.
+const audit = auditFailure(dir, ['dist/client', '--root=.'])
+if (audit)
+  failures.push(audit)
 
 const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
 if (failures.length > 0) {

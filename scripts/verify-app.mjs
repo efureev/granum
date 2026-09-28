@@ -10,6 +10,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { auditFailure } from './audit-dist.mjs'
 
 const dir = process.cwd()
 const assetsDir = join(dir, 'dist', 'assets')
@@ -47,6 +48,8 @@ if (expected.report) {
   }
 }
 
+const bin = createRequire(join(dir, 'package.json')).resolve('@feugene/granum/package.json').replace(/package\.json$/, 'dist/bin.js')
+
 // CLI на настоящем `granum.config.ts`: `doctor` обязан пройти без ошибок и
 // отдать JSON с той же селекцией, что в отчёте сборки (D-4, INV-DIAG-1).
 // Стенд без granum (`noGranum`) конфига не имеет — пропуск.
@@ -56,10 +59,12 @@ if (expected.noGranum) {
 }
 else {
   runDoctor()
+  const audit = auditFailure(dir)
+  if (audit)
+    failures.push(audit)
 }
 
 function runDoctor() {
-const bin = createRequire(join(dir, 'package.json')).resolve('@feugene/granum/package.json').replace(/package\.json$/, 'dist/bin.js')
 const doctor = spawnSync(process.execPath, [bin, 'doctor', 'granum.config.ts', '--json'], { cwd: dir, encoding: 'utf8' })
 if (doctor.status !== 0) {
   failures.push(`granum doctor завершился кодом ${doctor.status}:\n${doctor.stderr || doctor.stdout}`)

@@ -10,9 +10,9 @@
     "@granum-fixtures/mini-ds": "0.1.0"
   },
   "scripts": {
-    "audit:dist": "node scripts/audit-dist.mjs",
+    "audit:dist": "granum audit dist",
     "build": "vite build",
     "dev": "vite",
-    "verify": "node ../../scripts/verify-app.mjs && node scripts/audit-dist.mjs"
+    "verify": "node ../../scripts/verify-app.mjs"
   }
 }

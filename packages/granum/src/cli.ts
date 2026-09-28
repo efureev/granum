@@ -9,11 +9,11 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { formatCodegenReport, parseCodegenTargets, runCodegenCommand } from './cli/codegen'
 import { loadGranumConfigFile } from './cli/loadConfig'
-import { formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
+import { formatAuditDistReport, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumAuditDist, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
 import { prepareApp } from './node/prepare'
 import { GRANUM_VERSION } from './version'
 
-export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'prune', 'report', 'codegen'] as const
+export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'prune', 'report', 'codegen', 'audit'] as const
 export type CliCommand = typeof CLI_COMMANDS[number]
 
 export interface CliIo {
@@ -32,9 +32,17 @@ usage:
   granum tokens  <config> <providerId:Component> [--deep] [--json]
   granum prune   <config> [--json] [--strict]
   granum report  [<report.json>] [--json] [--strict]
+  granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
   granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,manifest,registry]
                  [--prefix=Gr] [--components-dir=src/components] [--barrel=src/index.ts]
                  [--registry=src/granum-provider/index.ts] [--subcomponents] [--exports=object|import]
+
+  'audit' works on a BUILT application and needs no config: the selection and
+  the provider list come from dist/granum-report.json, the components and the
+  declared tokens from each provider's manifest. It answers one question — is
+  there anything in the dist that should not be there, and is everything there
+  that should be. Point it at any application built by granum, including one in
+  another repository.
 
   <config> — path to granum.config.{ts,js,mjs} of the application; the
   application root is its directory. All commands work from manifests only,
@@ -46,7 +54,7 @@ usage:
 flags:
   --json      structured report instead of text
   --strict    doctor: warnings fail; prune: anything removable fails;
-              report: unmatched classes or undefined tokens fail
+              report, audit: unmatched classes or undefined tokens fail
   --allow     doctor: comma-separated codes that --strict tolerates (recorded
               debt); they are still counted and printed
   --code      doctor: print every finding of one code in full, with its lists
@@ -54,6 +62,8 @@ flags:
   --components doctor: expand the list of selected components
   --deep      tokens: include the component's dependencies
   --check     codegen: only compare, exit 1 when registries are out of date
+  --root      audit: directory the providers' manifests resolve from
+              (default: the parent of <dist-dir>)
   --help, --version`
 
 interface ParsedArgs {
@@ -126,6 +136,16 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
       })
       emit(io, json, report, () => formatCodegenReport(report, cwd))
       return report.check && report.stale.length > 0 ? 1 : 0
+    }
+    if (command === 'audit') {
+      const dist = resolve(cwd, positionals[0] ?? 'dist')
+      const report = granumAuditDist({
+        dist,
+        strict: flags.has('--strict'),
+        ...(values.has('--root') ? { root: resolve(cwd, values.get('--root')!) } : {}),
+      })
+      emit(io, json, report, () => formatAuditDistReport(report))
+      return report.ok ? 0 : 1
     }
     if (command === 'report') {
       const file = resolve(cwd, positionals[0] ?? 'dist/granum-report.json')

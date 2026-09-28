@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { auditFailure } from './audit-dist.mjs'
 
 const LAYERS = ['tokens', 'base', 'themes', 'components', 'utilities']
 const dir = process.cwd()
@@ -161,6 +162,11 @@ check(
   report.classes.unmatched.map(u => u.className).join(',') === 'shadow-legacy',
   `unmatched: ${JSON.stringify(report.classes.unmatched)}`,
 )
+
+// Аудит здесь не лишний: разделённый CSS — единственная раскладка, где его
+// ассетов пять, а не один: потерянный слой виден именно так.
+const auditFailed = auditFailure(dir)
+check(auditFailed === null, auditFailed ?? '')
 
 const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
 if (failures.length > 0) {
