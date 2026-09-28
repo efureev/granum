@@ -62,6 +62,104 @@ export function reachableTokens(css, js) {
   return reachable
 }
 
+/**
+ * Тело слоя `@layer granum.<layer> { … }`. Скобки считаются вручную, потому что
+ * CSS здесь минифицирован и слой — не строка, а блок произвольной вложенности
+ * (внутри бывают `@media`).
+ */
+export function cssLayerBody(css, layer) {
+  const marker = new RegExp(`@layer\\s+granum\\.${layer}\\s*\\{`, 'g')
+  const parts = []
+  for (const m of css.matchAll(marker)) {
+    let depth = 1
+    let i = m.index + m[0].length
+    const start = i
+    while (i < css.length && depth > 0) {
+      const ch = css[i]
+      if (ch === '{')
+        depth++
+      else if (ch === '}')
+        depth--
+      i++
+    }
+    parts.push(css.slice(start, i - 1))
+  }
+  return parts.join('\n')
+}
+
+/**
+ * Классы, объявленные в CSS. Читаются только преамбулы правил, а не значения:
+ * иначе `padding:1.5rem` даёт «класс» `5rem`.
+ *
+ * Берётся субъект правила — правый compound. В `.dark .xh-panel__title`
+ * правило объявляет `xh-panel__title`, а `.dark` — область темы; считать её
+ * классом дистрибутива — всё равно что требовать доказательства от темы. По той же
+ * причине из счёта выпадают маркеры вариантов (`.group:hover .group-hover\:flex`).
+ *
+ * Экранирование снимается ПОСЛЕ разбора имени: снятое заранее, оно обрезало бы
+ * `.bg-\[var\(--x\)\]` до `bg-`, потому что `[` — конец имени, а `\[` — нет.
+ */
+export function cssClassesOf(css) {
+  const out = new Set()
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const rule of source.matchAll(/([^{}]*)\{/g)) {
+    const prelude = rule[1]
+    if (prelude.trim().startsWith('@'))
+      continue
+    for (const selector of prelude.split(',')) {
+      const subject = selector.trim().split(/[\s>+~]+/).pop() ?? ''
+      for (const m of subject.matchAll(/\.((?:\\.|[\w-])+)/g))
+        out.add(m[1].replace(/\\(.)/g, '$1'))
+    }
+  }
+  return out
+}
+
+/** Целые токены текста, разделённые пробелами. Корпус JS передаётся уже без кавычек. */
+export function whitespaceTokens(text) {
+  return new Set(text.split(/\s+/).filter(Boolean))
+}
+
+/** Классы из атрибутов `class="…"` разметки. */
+export function htmlClassTokens(html) {
+  const out = new Set()
+  for (const m of html.matchAll(/class\s*=\s*["']([^"']*)["']/g)) {
+    for (const token of m[1].split(/\s+/)) {
+      if (token)
+        out.add(token)
+    }
+  }
+  return out
+}
+
+/**
+ * Лестница доказательств использования класса — по убыванию силы.
+ *
+ * Доказательством считается ТОЛЬКО целый токен. `js-fragment` (в бандле нашёлся
+ * лишь литерал-префикс `"p-"`, из которого класс собирают конкатенацией)
+ * доказательством не является: двухсимвольный префикс обелил бы вообще всё.
+ *
+ * Колонка переехала из бюджета пресета v1, но делит классы точнее: «структурный»
+ * здесь — объявленный в слое `granum.components`, а не угаданный по имени ассета.
+ */
+export function classifyClassEvidence(klass, { htmlClasses, jsTokens, jsText, structuralClasses }) {
+  const evidence = []
+  if (htmlClasses.has(klass))
+    evidence.push('html')
+  if (jsTokens.has(klass))
+    evidence.push('js-literal')
+  if (structuralClasses.has(klass))
+    evidence.push('component-css')
+
+  if (evidence.length === 0) {
+    const dash = klass.lastIndexOf('-')
+    if (dash > 0 && jsText.includes(klass.slice(0, dash + 1)))
+      evidence.push('js-fragment')
+  }
+
+  return { evidence, proven: evidence.includes('html') || evidence.includes('js-literal') }
+}
+
 export function formatBytes(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 }
@@ -84,6 +182,11 @@ export function strictCheck(expected, report) {
       push('tokens.maxUnused', report.tokens.unused.length <= expected.tokens.maxUnused, report.tokens.unused.length, `<= ${expected.tokens.maxUnused}`)
     if (expected.tokens.minDeclared !== undefined)
       push('tokens.minDeclared', report.tokens.declared >= expected.tokens.minDeclared, report.tokens.declared, `>= ${expected.tokens.minDeclared}`)
+  }
+  if (expected.classes?.unproven !== undefined) {
+    // Список, а не потолок: новый недоказанный класс надо объяснить, а
+    // исчезновение ожидаемого — такое же расхождение (сверка идёт в обе стороны).
+    push('classes.unproven', same(expected.classes.unproven, report.classes.unproven), report.classes.unproven, expected.classes.unproven)
   }
   if (expected.granum && report.granum) {
     push('granum.unmatched', same(expected.granum.unmatched ?? [], report.granum.unmatched), report.granum.unmatched, expected.granum.unmatched ?? [])

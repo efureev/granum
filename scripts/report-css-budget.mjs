@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
-import { classifyAsset, declaredTokens, formatBytes, formatDelta, reachableTokens, strictCheck } from './lib/cssBudget.mjs'
+import { classifyAsset, classifyClassEvidence, cssClassesOf, cssLayerBody, declaredTokens, formatBytes, formatDelta, htmlClassTokens, reachableTokens, strictCheck, whitespaceTokens } from './lib/cssBudget.mjs'
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const args = process.argv.slice(2)
@@ -43,7 +43,14 @@ function readStand(name) {
   if (unknown.length)
     throw new Error(`раскладка стенда '${name}' разошлась с классификатором: не опознаны ${unknown.map(a => a.file).join(', ')}. Корзины «прочее» нет намеренно — правьте ASSET_ROLES в scripts/lib/cssBudget.mjs`)
   const reportPath = join(dir, 'dist', 'granum-report.json')
-  return { name, dir, assets, report: existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : null }
+  const htmlPath = join(dir, 'dist', 'index.html')
+  return {
+    name,
+    dir,
+    assets,
+    html: existsSync(htmlPath) ? readFileSync(htmlPath, 'utf8') : '',
+    report: existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : null,
+  }
 }
 
 function rolesOf(stand) {
@@ -66,6 +73,28 @@ const reachable = reachableTokens(css, js)
 const subject = [...declared].filter(t => !t.startsWith('un-'))
 const unused = subject.filter(t => !reachable.has(t)).sort()
 const roles = rolesOf(stand)
+
+/*
+ * Чем доказан каждый класс дистрибутива (колонка бюджета пресета v1).
+ *
+ * Деление точное, а не по имени ассета: «структурный» класс объявлен в слое
+ * `granum.components` — это собственный CSS компонента, — «утилита» в
+ * `granum.utilities`. Класс, за которым не стоит ни разметка, ни литерал в JS,
+ * попадает в «недоказанные»: он либо собран конкатенацией в рантайме, либо в
+ * дистрибутиве ему делать нечего.
+ */
+const structural = cssClassesOf(cssLayerBody(css, 'components'))
+const utilities = cssClassesOf(cssLayerBody(css, 'utilities'))
+const jsText = js.replace(/["'`]/g, ' ')
+const jsTokens = whitespaceTokens(jsText)
+const htmlClasses = htmlClassTokens(stand.html)
+const classRows = [...new Set([...utilities, ...structural])].sort().map(klass => ({
+  class: klass,
+  kind: utilities.has(klass) ? 'utility' : 'structural',
+  ...classifyClassEvidence(klass, { htmlClasses, jsTokens, jsText, structuralClasses: structural }),
+}))
+const byChannel = channel => classRows.filter(r => r.evidence.includes(channel)).length
+
 const total = kind => stand.assets.filter(a => !kind || a.kind === kind).reduce((s, a) => ({ raw: s.raw + a.raw, gzip: s.gzip + a.gzip, brotli: s.brotli + a.brotli }), { raw: 0, gzip: 0, brotli: 0 })
 
 const report = {
@@ -80,6 +109,16 @@ const report = {
     return { raw: t.raw - v.raw, gzip: t.gzip - v.gzip, brotli: t.brotli - v.brotli }
   })() },
   tokens: { declared: subject.length, reachable: subject.length - unused.length, unused },
+  classes: {
+    total: classRows.length,
+    utilities: classRows.filter(r => r.kind === 'utility').length,
+    structural: classRows.filter(r => r.kind === 'structural').length,
+    html: byChannel('html'),
+    jsLiteral: byChannel('js-literal'),
+    componentCss: byChannel('component-css'),
+    jsFragment: byChannel('js-fragment'),
+    unproven: classRows.filter(r => !r.proven).map(r => r.class),
+  },
   engineInBundle: /granularity-spin|\bcreateGenerator\b|presetMini/.test(js),
   granum: stand.report
     ? { selection: stand.report.selection.map(s => s.key), layers: stand.report.sizes, sizesSource: stand.report.sizesSource ?? 'emission', emissionLayers: stand.report.emissionSizes ?? stand.report.sizes, unmatched: stand.report.classes.unmatched.map(u => u.className), undefinedTokens: stand.report.tokens.undefined, prune: stand.report.prune ?? { mode: 'off' } }
@@ -123,6 +162,12 @@ else {
       out.push(`  обрезка (${report.granum.prune.mode}): удаляемых ${report.granum.prune.removable.length}, сохранённых ${report.granum.prune.kept}, мёртвых шаблонов ${report.granum.prune.deadPatterns.length}`)
   }
   out.push('', `ТОКЕНЫ В ДИСТРИБУТИВЕ: объявлено ${report.tokens.declared}, достижимо ${report.tokens.reachable}, мёртвый груз ${unused.length}${unused.length ? `:\n  ${unused.join(' ')}` : ''}`)
+  const c = report.classes
+  out.push('', `КЛАССЫ В ДИСТРИБУТИВЕ: ${c.total} (утилит ${c.utilities}, структурных ${c.structural})`)
+  if (c.total > 0) {
+    out.push(`  доказаны: разметкой ${c.html}, литералом JS ${c.jsLiteral}, собственным CSS компонента ${c.componentCss}, фрагментом JS ${c.jsFragment}`)
+    out.push(`  недоказаны (нет ни в разметке, ни целым токеном в JS): ${c.unproven.length}${c.unproven.length ? `:\n  ${c.unproven.join(' ')}` : ''}`)
+  }
   if (expected?.hints)
     out.push('', `ОРИЕНТИРЫ (не гейт): ${Object.entries(expected.hints).map(([k, v]) => `${k}=${formatBytes(v)}`).join(', ')}`)
   if (expected) {

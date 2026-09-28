@@ -143,6 +143,23 @@ has no side effects: tree-shaking removes what is unused. Plain imports of
 `@acme/ui/components/XhPanel` work too; the plugin neither rewrites provider
 code nor changes the chunk layout.
 
+The channels differ, and that matters: JS follows the imports, CSS follows the
+selection. A component that is in the selection but not imported does not make
+it into the bundle, while its CSS does. To drop both, narrow the selection
+rather than the imports.
+
+The package does not ship types for the virtual modules yet, so the
+declarations are written in the application:
+
+```ts
+// src/granum.d.ts
+declare module 'virtual:granum/components' {
+  import type { DefineComponent } from 'vue'
+
+  export const XhPanel: DefineComponent
+}
+```
+
 ## Auto-import
 
 For `unplugin-vue-components` and compatible tools there is a resolver: given

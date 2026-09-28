@@ -7,4 +7,6 @@ export default {
   purpose: 'нулевая отметка: только vue и код приложения',
   assets: { roles: ['vue', 'entry'] },
   report: false,
+  // Стенд без granum: классов в слоях нет вовсе, доказывать нечего.
+  classes: { unproven: [] },
 }

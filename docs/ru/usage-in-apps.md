@@ -142,6 +142,22 @@ import { XhPanel } from 'virtual:granum/components'
 импорты `@acme/ui/components/XhPanel` тоже работают; плагин не переписывает
 код провайдера и не меняет раскладку чанков.
 
+Важно, что каналы разные: JS идёт по импортам, CSS — по селекции.
+Компонент, который есть в селекции, но не импортирован, в бандл не попадёт, а
+его CSS попадёт. Чтобы ушло и то и другое, сужайте селекцию, а не импорты.
+
+Типы виртуальных модулей пакет пока не поставляет, поэтому объявления пишутся
+в приложении:
+
+```ts
+// src/granum.d.ts
+declare module 'virtual:granum/components' {
+  import type { DefineComponent } from 'vue'
+
+  export const XhPanel: DefineComponent
+}
+```
+
 ## Auto-import
 
 Для `unplugin-vue-components` и совместимых инструментов есть резолвер: по
