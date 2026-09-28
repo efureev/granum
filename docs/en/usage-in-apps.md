@@ -230,13 +230,19 @@ byte-identical between builds, and time never is. It is printed as a line in
 the build log instead:
 
 ```
-[granum] time 80 ms (prepare 3, emit 38, report 41)
+[granum] time 997 ms (prepare 646 [manifests 547, scan 92, resolve 7], emit 335, report 16)
 ```
 
-`prepare` — manifests, class re-extraction, source scanning and resolution;
-`emit` — the utility generator and layer assembly; `report` — layer sizes with
-compression and writing the file. Everything else in the build — vue, the
-bundler, minification — is not granum. A large `prepare` almost always means
-re-extraction: the package's vocabulary fingerprint drifted from the
-application's engine and classes are read from the package's files
-(`granum doctor` names the reason).
+`prepare` is the preparation split into three parts: `manifests` — reading the
+manifests and re-extracting classes, `scan` — extracting classes from the
+application's sources, `resolve` — the resolution itself. Then `emit` — the
+utility generator and layer assembly, `report` — layer sizes and writing the
+file. Everything else in the build — vue, the bundler, minification — is not
+granum.
+
+A large `manifests` almost always means re-extraction: the package's vocabulary
+fingerprint drifted from the application's engine — for instance because the
+application passed its own rules to the engine — and classes are read from the
+package's files (`granum doctor` names the reason). On a design system with
+eight providers that is half a second per build; if the price matters, move the
+application's rules into a provider package of their own.

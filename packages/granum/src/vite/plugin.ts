@@ -380,7 +380,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       // Время — отдельной строкой: её читает человек, ища медленную фазу, и
       // скрипт замера стендов, которому негде больше взять эти числа (в отчёте их нет).
       const ms = (n: number): number => Math.round(n)
-      log(`time ${ms(timings.prepare + timings.emit + timings.report)} ms (prepare ${ms(timings.prepare)}, emit ${ms(timings.emit)}, report ${ms(timings.report)})`)
+      log(
+        `time ${ms(timings.prepare + timings.emit + timings.report)} ms `
+        + `(prepare ${ms(timings.prepare)} [manifests ${ms(app.timings.providers)}, scan ${ms(app.timings.appScan)}, resolve ${ms(app.timings.resolve)}], `
+        + `emit ${ms(timings.emit)}, report ${ms(timings.report)})`,
+      )
     },
   }
 }

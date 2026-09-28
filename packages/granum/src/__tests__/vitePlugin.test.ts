@@ -120,7 +120,7 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.report?.emissionSizes.total.raw).toBeGreaterThan(0)
     // Итог сборки — предпоследняя строка: последняя несёт время фаз (N-4).
     expect(app.logs.at(-2)).toMatch(/2 components/)
-    expect(app.logs.at(-1)).toMatch(/^time \d+ ms \(prepare \d+, emit \d+, report \d+\)$/)
+    expect(app.logs.at(-1)).toMatch(/^time \d+ ms \(prepare \d+ \[manifests \d+, scan \d+, resolve \d+\], emit \d+, report \d+\)$/)
   })
 
   it('virtual:granum/components реэкспортирует селекцию, virtual:granum/themes отдаёт манифест (A-5, T-4)', async () => {

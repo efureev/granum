@@ -13,6 +13,7 @@ import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
 import type { ProviderEngineDecision } from './dialects'
 import { resolve as resolvePath } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { TokenRefError } from '../core/errors'
@@ -31,6 +32,8 @@ export interface PreparedApp {
   readonly root: string
   readonly resolution: GranumResolution
   readonly engine: GranumEngine
+  /** Время частей подготовки в миллисекундах: манифесты с пересчётом, скан исходников, резолюция. */
+  readonly timings: { readonly providers: number, readonly appScan: number, readonly resolve: number }
   readonly appScan: AppSourcesScan
   /** Правила/варианты/preflights провайдеров графа, с источниками (E-9). */
   readonly engineContribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
@@ -159,13 +162,25 @@ export function tagSelection(tags: readonly string[], inputs: readonly GranumPro
 
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {
   const engine = config.engine
+  /*
+   * Время трёх частей подготовки: манифесты и пересчёт классов, скан исходников
+   * приложения, резолюция. Печатается в строке времени сборки — без этой
+   * раскладки `prepare` на дизайн-системе был просто большим числом, по
+   * которому не понять, чинить сканер, кэшировать пересчёт или не трогать
+   * ничего (N-4).
+   */
+  const started = performance.now()
   const loaded = loadProviderInputs(config, root)
+  const appScanStarted = performance.now()
   const appScan = scanAppSources(config.appSources, root, engine)
+  const appScanMs = performance.now() - appScanStarted
   const warnings: PreparedWarning[] = []
+  const providersStarted = performance.now()
   const { resolver: scanned, engineSources } = await scanProviderInputs(loaded, engine, warnings)
   // Сверка диалектов и отпечатков идёт ДО резолюции: она может заменить список
   // классов провайдера, а резолюция уже считает его данностью (A-E3).
   const reconciled = await reconcileProviderEngines(scanned, engineSources, engine)
+  const providersMs = performance.now() - providersStarted
   const inputs = reconciled.inputs
 
   let components: ComponentSelection | undefined
@@ -194,6 +209,11 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     root,
     resolution,
     engine,
+    timings: {
+      providers: providersMs,
+      appScan: appScanMs,
+      resolve: performance.now() - started - providersMs - appScanMs,
+    },
     appScan,
     engineContribution: reconciled.contribution,
     engineDecisions: reconciled.decisions,
