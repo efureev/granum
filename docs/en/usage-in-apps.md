@@ -209,3 +209,19 @@ without a rule with their sources, safelist entries covered by static
 classes, the prune plan, undefined tokens, layer sizes raw/gzip/brotli from
 the built asset after minification (`sizesSource: 'bundle'`) and from the
 emission (`emissionSizes`). Read it with `granum report`.
+
+Build time is not in the report and never will be: the report must stay
+byte-identical between builds, and time never is. It is printed as a line in
+the build log instead:
+
+```
+[granum] time 80 ms (prepare 3, emit 38, report 41)
+```
+
+`prepare` — manifests, class re-extraction, source scanning and resolution;
+`emit` — the utility generator and layer assembly; `report` — layer sizes with
+compression and writing the file. Everything else in the build — vue, the
+bundler, minification — is not granum. A large `prepare` almost always means
+re-extraction: the package's vocabulary fingerprint drifted from the
+application's engine and classes are read from the package's files
+(`granum doctor` names the reason).

@@ -115,7 +115,9 @@ describe('granum() с настоящим Vite', async () => {
     // Сборка теста без минификации, поэтому блок бандла с обёрткой `@layer …{}` не меньше эмиссии слоя.
     expect(app.report?.sizes.components.raw).toBeGreaterThan(0)
     expect(app.report?.emissionSizes.total.raw).toBeGreaterThan(0)
-    expect(app.logs.at(-1)).toMatch(/2 components/)
+    // Итог сборки — предпоследняя строка: последняя несёт время фаз (N-4).
+    expect(app.logs.at(-2)).toMatch(/2 components/)
+    expect(app.logs.at(-1)).toMatch(/^time \d+ ms \(prepare \d+, emit \d+, report \d+\)$/)
   })
 
   it('virtual:granum/components реэкспортирует селекцию, virtual:granum/themes отдаёт манифест (A-5, T-4)', async () => {

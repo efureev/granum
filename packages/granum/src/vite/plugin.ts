@@ -12,6 +12,7 @@ import type { PreparedApp } from '../node/prepare'
 import type { GranumThemeManifestOptions } from '../node/themeManifest'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { ComponentOutsideSelectionError } from '../core/errors'
 import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
@@ -62,17 +63,44 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   /** Делим ли слои в этой сборке. */
   const splitting = (): boolean => config.css?.split === true && isBuild && !isSsrBuild
 
+  /*
+   * Время фаз granum, миллисекунды. Печатается в итоговой строке сборки и НЕ
+   * попадает в отчёт: `granum-report.json` обязан быть побайтно стабильным
+   * между сборками (INV-DET-2), а время стабильным не бывает.
+   *
+   * Фазы: `prepare` — манифесты, пересчёт классов, скан исходников и резолюция;
+   * `emit` — генератор утилит и сборка слоёв; `report` — размеры слоёв со
+   * сжатием и запись файла. Всё остальное в сборке (vue, rolldown) — не granum.
+   */
+  const timings = { prepare: 0, emit: 0, report: 0 }
+
   const prepare = (): Promise<PreparedApp> => {
-    prepared ??= prepareApp(config, root)
+    if (prepared === undefined) {
+      const started = performance.now()
+      prepared = prepareApp(config, root).then((app) => {
+        timings.prepare = performance.now() - started
+        return app
+      })
+    }
     return prepared
   }
   const emit = (): Promise<EmittedCss> => {
-    emitted ??= prepare().then(emitCss)
+    // Часы запускаются ВНУТРИ `then`: иначе в `emit` попало бы и время
+    // подготовки, от которой эмиссия зависит.
+    emitted ??= prepare().then(async (app) => {
+      const started = performance.now()
+      const css = await emitCss(app)
+      timings.emit = performance.now() - started
+      return css
+    })
     return emitted
   }
   const invalidate = (): void => {
     prepared = undefined
     emitted = undefined
+    timings.prepare = 0
+    timings.emit = 0
+    timings.report = 0
     bundleCss = undefined
     splitLayers = []
     splitLinked = false
@@ -280,6 +308,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           + `— the CSS will not load. Drop css.split or add an HTML entry.`,
         )
       }
+      const reportStarted = performance.now()
       const report = buildReport(app, css, bundleCss !== undefined ? { bundleCss } : {})
       const file = config.report?.file ?? 'granum-report.json'
       if (file !== false) {
@@ -287,12 +316,17 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         mkdirSync(dirname(target), { recursive: true })
         writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`)
       }
+      timings.report = performance.now() - reportStarted
       log(
         `${report.selection.length} components, ${report.classes.matched} classes matched, `
         + `${report.classes.unmatched.length} without a rule, themes [${report.themes.names.join(', ')}]${
           report.prune ? `, prune: ${report.prune.removable.length} removable` : ''
         }${splitting() && splitLayers.length > 0 ? `, css: ${splitLayers.length} layer assets` : ''}${file !== false ? ` → ${join(outDir, file)}` : ''}`,
       )
+      // Время — отдельной строкой: её читает человек, ища медленную фазу, и
+      // скрипт замера стендов, которому негде больше взять эти числа (в отчёте их нет).
+      const ms = (n: number): number => Math.round(n)
+      log(`time ${ms(timings.prepare + timings.emit + timings.report)} ms (prepare ${ms(timings.prepare)}, emit ${ms(timings.emit)}, report ${ms(timings.report)})`)
     },
   }
 }

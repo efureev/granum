@@ -12,6 +12,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "time:check": "node ../../scripts/report-build-time.mjs --strict",
     "verify": "node ../../scripts/verify-app.mjs"
   }
 }
