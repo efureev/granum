@@ -36,11 +36,14 @@ const HEADER = `# \`@feugene/granum\` — спецификация
 const SECTIONS = [
   ['## 5. Контракт провайдера', '## 10. Плагин приложения'],
   ['## 14. Ошибки', '## 15. Совместимость'],
+  // Обещание стабильности читает потребитель, а у него есть только пакетный SPEC.
+  ['## 18. Стабильность контракта', null],
 ]
 
 function section(text, start, end) {
   const from = text.indexOf(start)
-  const to = text.indexOf(end, from)
+  // `null` вместо конца — секция до конца файла.
+  const to = end === null ? text.length : text.indexOf(end, from)
   if (from < 0 || to < 0)
     throw new Error(`в docs/spec.md нет раздела '${start}' … '${end}' — поправьте SECTIONS в scripts/generate-spec.mjs`)
   return text.slice(from, to)

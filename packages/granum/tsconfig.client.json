@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "strict": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@feugene/granum/runtime": ["./src/runtime.ts"]
+    }
+  },
+  "include": ["client.d.ts", "client.usage.ts"]
+}

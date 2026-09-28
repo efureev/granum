@@ -10,6 +10,19 @@ Step-by-step guides, mirrored in two languages:
 - English: [`docs/en/migration.md`](../../docs/en/migration.md)
 - Русский: [`docs/ru/migration.md`](../../docs/ru/migration.md)
 
+## From 0.x to 1.0
+
+Nothing to change. 1.0 adds no breaking changes to 0.9: it states what is now
+frozen (the provider contract, the manifest format, the entry points, the shape
+of `GranumConfig`, the layer names, the virtual module ids, the CLI commands
+with their exit codes, the error classes) and what deliberately is not — above
+all the engine's vocabulary fingerprint, which changes with every change to the
+rule set. See §18 of [`docs/SPEC.md`](./docs/SPEC.md).
+
+A provider's peer range is best kept wide (`>=1.0.0 <2.0.0`): a manifest built
+by any granum 1.x is read by any other granum 1.x, and the application picks the
+version.
+
 ## In short
 
 Provider: `defineGranularComponent` → `defineGranumComponent`,

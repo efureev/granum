@@ -8,8 +8,11 @@ themes. The utility engine is picked by the application, not by granum: it comes
 as an instance, declares the vocabulary of class names it speaks, and every
 manifest records which engine filtered its class list.
 
-Successor of `@feugene/unocss-preset-granular`. Status: **0.2.0** — all eight
-stages of the plan are done; the CSS of the benchmark stand matches the v1 preset.
+Successor of `@feugene/unocss-preset-granular`. Status: **1.0.0** — all ten
+stages of the plan are done, the CSS of the benchmark stand matches the v1
+preset, and the contract is frozen: it changes only with a major release
+(§18 of the specification). The engine's vocabulary fingerprint is deliberately
+outside that promise — re-extracting a package's classes is a normal path.
 
 ## Repository
 
