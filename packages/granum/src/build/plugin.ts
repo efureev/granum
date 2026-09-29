@@ -383,8 +383,18 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         const redundant = declaredSafelist.filter(c => info.classes.includes(c))
         const safelist = declaredSafelist.filter(c => !info.classes.includes(c))
         safelistRedundantTotal += redundant.length
-        if (info.cssImportedByChunk.length > 0)
-          warnings.push({ code: 'css-double-delivery', component: descriptor.name, files: info.cssImportedByChunk })
+        /*
+         * Двойная доставка ищется в двух местах, и оба нужны.
+         *
+         * `info.cssImportedByChunk` — свидетельство из объекта бандла: чанк
+         * ссылался на свой CSS уже на `generateBundle`. `cssImportedOnDisk` —
+         * по записанным файлам: плагины с `enforce: 'post'` вшивают импорт
+         * позже нашего хука, и в бандле его на тот момент не видно.
+         */
+        const importedOnDisk = cssImportedOnDisk(outDir, info.files, css, copiedCss)
+        const doubleDelivered = sortedUnique([...info.cssImportedByChunk, ...importedOnDisk])
+        if (doubleDelivered.length > 0)
+          warnings.push({ code: 'css-double-delivery', component: descriptor.name, files: doubleDelivered })
 
         const digest = createHash('sha256')
         for (const file of [...info.files, ...css].sort())
@@ -512,6 +522,62 @@ function writeOut(outDir: string, path: string, content: string): void {
     throw new Error(`granum: '${path}' escapes the output directory`)
   mkdirSync(dirname(dest), { recursive: true })
   writeFileSync(dest, content)
+}
+
+/**
+ * Чанки компонента, которые в ЗАПИСАННОМ виде импортируют свой же CSS-ассет.
+ *
+ * Почему по диску, а не по объекту бандла. `analyzeBundle` работает в
+ * `generateBundle`, а плагины, вшивающие CSS в чанк, объявляют себя
+ * `enforce: 'post'` — Vite сортирует pre → normal → post, и их `generateBundle`
+ * идёт после нашего независимо от порядка в массиве плагинов. В `chunk.code`
+ * на тот момент импорта ещё нет, и увидеть его оттуда нельзя никаким сравнением
+ * строк. Ровно так `css-double-delivery` молчал на двух опубликованных
+ * пакетах экосистемы (INV-CSS-5 не охранялся ничем).
+ *
+ * `closeBundle` вызывается после всех `generateBundle`, файлы уже на диске —
+ * значит видно то, что реально уедет потребителю.
+ *
+ * Совпадение ищется только в формах ИМПОРТА, а не в любом строковом литерале:
+ * специфкатор бывает `'./styles.css'`, `'../styles.css'`, `'styles.css'` и без
+ * пробела после `import` у минифицированного вывода. Литерал сам по себе не
+ * подходит: в чанке лежит и скомпилированный конфиг компонента со строкой
+ * `cssFiles: ["./styles.css"]` — на нём первая редакция этой проверки дала
+ * ложное срабатывание на собственной фикстуре репозитория.
+ */
+function cssImportedOnDisk(
+  outDir: string,
+  files: readonly string[],
+  cssAssets: readonly string[],
+  copied: ReadonlyMap<string, string>,
+): string[] {
+  if (cssAssets.length === 0)
+    return []
+
+  const names = cssAssets.map(asset => asset.slice(asset.lastIndexOf('/') + 1))
+  const found: string[] = []
+
+  for (const file of files) {
+    if (!file.endsWith('.js'))
+      continue
+    const code = readOut(outDir, file, copied)
+    if (!code)
+      continue
+    if (names.some(name => importsSpecifier(code, name)))
+      found.push(file)
+  }
+  return found
+}
+
+/** Импортирует ли код специфкатор, оканчивающийся на это имя файла. */
+function importsSpecifier(code: string, name: string): boolean {
+  const spec = `['"\`][^'"\`]*${escapeRegExp(name)}['"\`]`
+  return new RegExp(`(?:^|[^\\w$])import\\s*\\(?\\s*${spec}`).test(code)
+    || new RegExp(`require\\s*\\(\\s*${spec}`).test(code)
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function readOut(outDir: string, file: string, copied: ReadonlyMap<string, string>): string {

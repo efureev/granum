@@ -78,13 +78,17 @@ function makeFixture(options: {
   return { root, provider }
 }
 
-async function run(fixture: Fixture, pluginOptions: Partial<Parameters<typeof granumProvider>[0]> = {}): Promise<{ manifest: GranumManifest, dist: string, logs: string[] }> {
+async function run(
+  fixture: Fixture,
+  pluginOptions: Partial<Parameters<typeof granumProvider>[0]> = {},
+  extraPlugins: unknown[] = [],
+): Promise<{ manifest: GranumManifest, dist: string, logs: string[] }> {
   const logs: string[] = []
   await build({
     root: fixture.root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: l => logs.push(l), ...pluginOptions })],
+    plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: l => logs.push(l), ...pluginOptions }), ...extraPlugins] as never,
     build: { minify: false, rolldownOptions: { external: ['vue'] } },
   })
   const dist = join(fixture.root, 'dist')
@@ -233,5 +237,51 @@ describe('granumProvider с настоящим Vite', () => {
     const failure = run(makeFixture({ brokenCss: true }))
     await expect(failure).rejects.toBeInstanceOf(CssReadError)
     await expect(failure).rejects.toMatchObject({ providerId: '@t/kit', section: 'component', subject: 'Panel' })
+  })
+
+  /*
+   * Двойная доставка от плагина, который вшивает CSS ПОЗЖЕ нас (INV-CSS-5).
+   *
+   * Так устроен `vite-plugin-lib-inject-css` и всё, что делает то же самое: он
+   * объявлен `enforce: 'post'`, а Vite сортирует плагины pre → normal → post.
+   * Наш `generateBundle` идёт раньше, и в `chunk.code` импорта на тот момент
+   * ещё нет — увидеть его из объекта бандла нельзя никаким сравнением строк.
+   *
+   * Прежняя проверка искала литерал `'styles.css'` в `chunk.code` и молчала на
+   * двух опубликованных пакетах экосистемы. Её тест проходил, потому что
+   * фикстура клала CSS-ассет в `chunk.imports` — форма, которой бандлер не
+   * порождает. Здесь стенд настоящий: плагин ниже повторяет поведение
+   * `libInjectCss` буквально.
+   */
+  const injectCssPost = {
+    name: 'test:inject-css',
+    enforce: 'post' as const,
+    generateBundle(_options: unknown, bundle: Record<string, { type: string, code?: string, viteMetadata?: { importedCss?: Set<string> } }>) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk')
+          continue
+        for (const css of chunk.viteMetadata?.importedCss ?? [])
+          chunk.code = `import './${css.slice(css.lastIndexOf('/') + 1)}';\n${chunk.code ?? ''}`
+      }
+    },
+  }
+
+  it('css-double-delivery ловится, когда CSS вшивает post-плагин', async () => {
+    const { manifest } = await run(makeFixture(), {}, [injectCssPost])
+    const doubled = manifest.warnings.filter(w => w.code === 'css-double-delivery')
+
+    // `Card`, а не `Panel`: стили `Card` лежат в `<style>` её SFC, и бандлер
+    // связывает эмитированный ассет с её чанком — туда post-плагин и пишет.
+    // CSS `Panel` объявлен в `cssFiles` и копируется нами, чанк о нём не знает.
+    expect(doubled.map(w => w.component)).toEqual(['Card'])
+    // `files` в предупреждении — открытая деталь (`[detail: string]: unknown`),
+    // поэтому сужается здесь, а не берётся из типа.
+    const files = doubled[0]?.files as string[] | undefined
+    expect(files?.every(f => f.endsWith('.js'))).toBe(true)
+  })
+
+  it('без такого плагина предупреждения нет', async () => {
+    const { manifest } = await run(makeFixture())
+    expect(manifest.warnings.filter(w => w.code === 'css-double-delivery')).toEqual([])
   })
 })

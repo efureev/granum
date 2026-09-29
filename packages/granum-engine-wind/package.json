@@ -1,7 +1,7 @@
 {
   "name": "@feugene/granum-engine-wind",
   "description": "Utility engine for @feugene/granum: a vendored fork of the UnoCSS core with preset-wind3, exposed as a GranumEngine instance with an explicit dialect and vocabulary fingerprint.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "author": {
     "name": "Evgeniy Fureev",

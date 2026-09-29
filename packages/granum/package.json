@@ -1,7 +1,7 @@
 {
   "name": "@feugene/granum",
   "description": "Build pipeline for granular UI packages: components, styles, design tokens and themes flow from provider manifests to the application bundle through one resolution. Framework-agnostic, zero dependencies.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "author": {
     "name": "Evgeniy Fureev",

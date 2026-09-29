@@ -172,7 +172,13 @@ await runRegistryCodegen({
 ## Release checklist
 
 - `vite build` passes without `safelist-redundant` and `css-double-delivery`
-  warnings, or they are explained;
+  warnings, or they are explained. The most common source of the second one is a
+  plugin that injects a component's CSS into its JS chunk
+  (`vite-plugin-lib-inject-css` and friends): before granum that was the only
+  delivery channel, and with granum the same file arrives from the manifest, so
+  the consumer gets two copies. The second one is **outside the `granum.*`
+  layers** and therefore beats the whole library. Drop such a plugin from a
+  provider's config;
 - `granum.manifest.json` is in `exports`; `sideEffects: false`;
 - a package with rules declares `engine.dialect`, is built by an engine of that
   dialect, and `engineModule` points at the built rule module;
