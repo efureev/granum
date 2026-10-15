@@ -13,9 +13,9 @@ import { fileThemeProvider, prepareTestApp } from './helpers'
 
 /**
  * Тема, которую провайдер поставил файлом (так устроено ядро granularity):
- * `define` и `tokenOverrides` приложения обязаны действовать на неё каскадом
- * (INV-THM-2). Блок приложения встаёт под селектор файла и идёт в слое `themes`
- * после файла своей темы, но раньше файлов следующих тем.
+ * `define` и `tokenOverrides` приложения обязаны действовать на неё каскадом —
+ * у приложения приоритет над пакетом. Блок приложения встаёт под селектор файла
+ * и идёт в слое `themes` после файла своей темы, но раньше файлов следующих тем.
  */
 
 /** Позиция первого вхождения в слое `themes`; −1 — нет. */
@@ -30,7 +30,7 @@ function blockOf(css: string, declaration: string): string {
   return css.slice(css.lastIndexOf('}', at) + 1, at).trim()
 }
 
-describe('tokenOverrides к теме-файлу (INV-THM-2)', () => {
+describe('tokenOverrides к теме-файлу', () => {
   it('override тёмной темы — под селектором её файла и после файла', async () => {
     const { root, provider } = fileThemeProvider()
     const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'], tokenOverrides: { dark: { 'p-primary': '#4fd1e0' } } } }, root)
@@ -179,7 +179,7 @@ describe('факты о файле темы читает подготовка', 
   })
 })
 
-describe('манифест тем для темы-файла (T-4)', () => {
+describe('манифест тем для темы-файла', () => {
   it('активация выводится из селектора файла и не зависит от селекции', async () => {
     const { root, provider } = fileThemeProvider()
     const themes = { names: ['light', 'dark'] }

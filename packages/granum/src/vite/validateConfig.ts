@@ -170,7 +170,7 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
       throw new InvalidConfigError('themes.define', 'expected an object')
     if (themes.tokenOverrides !== undefined && !isRecord(themes.tokenOverrides))
       throw new InvalidConfigError('themes.tokenOverrides', 'expected an object')
-    // Имена токенов пишутся без `--` — префикс добавляет генератор (INV-CON-7).
+    // Имена токенов пишутся без `--` — префикс добавляет генератор.
     // Ключ с ним уехал бы в CSS как `----имя` и не действовал бы молча.
     for (const [theme, definition] of Object.entries(themes.define ?? {})) {
       if (!isRecord(definition))

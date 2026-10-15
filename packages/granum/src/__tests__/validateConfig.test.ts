@@ -67,7 +67,7 @@ describe('validateGranumConfig (A-1)', () => {
     [{ providers: ['a'], engine, components: 42 }, 'components'],
     [{ providers: ['a'], engine, components: 'imports' }, 'components'],
     [{ providers: ['a'], engine, themes: { names: 'light' } }, 'themes.names'],
-    // Имена токенов — без `--` (INV-CON-7): ключ с ним дал бы в CSS `----имя`.
+    // Имена токенов — без `--`: ключ с ним дал бы в CSS `----имя`.
     [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '--p-primary': '#000' } } } }, 'themes.tokenOverrides.dark'],
     [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '.dark': { '--p-primary': '#000' } } } } }, 'themes.tokenOverrides.dark'],
     [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: '#000' } } }, 'themes.tokenOverrides.dark'],

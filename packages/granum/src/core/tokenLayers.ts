@@ -67,7 +67,7 @@ export function collectTokenLayers(
     const blocks = entry?.blocks ?? []
     // Тема, которую провайдер поставил файлом: блоки без своего селектора
     // встают под селектор файла (как в `resolveThemes`). `:root` — селектор
-    // светлой темы, и override тёмной лёг бы в неё (INV-THM-2).
+    // светлой темы, и override тёмной лёг бы в неё.
     const primarySelector = themeFileSelector(themes.items, themeName) ?? blocks[0]?.selector ?? ':root'
 
     // Провенанс по паре (селектор, токен); запасной — по имени токена, потому

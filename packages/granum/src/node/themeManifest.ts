@@ -20,8 +20,8 @@ export function getThemeManifest(resolution: GranumResolution, options: GranumTh
   const entries: GranumThemeEntry[] = themes.names.map((name) => {
     const registry = themes.tokenRegistry[name]
     const blocks = tokenLayers.get(name)
-    // Селектор файла темы — первым: файл идёт в CSS раньше блоков своей темы
-    // (A-10). Без него активация темы-файла зависела бы от того, есть ли в
+    // Селектор файла темы — первым: в слое тем файл идёт раньше блоков своей
+    // темы. Без него активация темы-файла зависела бы от того, есть ли в
     // селекции компонент со своим блоком этой темы.
     const fileSelectors = themes.items.flatMap(item => (item.themeName === name && item.file ? [item.file.selector] : []))
     const blockSelectors = blocks?.length
