@@ -54,6 +54,11 @@ file theme is opaque, and the report says `theme-extends-unresolved`).
 `tokensRef` is an application CSS file whose tokens are materialised at build
 time. `label` and `colorScheme` go to the theme manifest for the runtime.
 
+The selector of an application theme: an explicit `selector`; for a theme a
+provider supplies structurally, that theme's selector (`dark: { tokens }`
+lands under `.dark`); for a theme nobody supplies, `[data-theme="<name>"]`,
+and the runtime switches it with that attribute.
+
 ## Component tokens
 
 ```ts

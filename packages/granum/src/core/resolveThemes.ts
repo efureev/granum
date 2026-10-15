@@ -220,8 +220,14 @@ function applyAppThemeDefinition(
     const tokens = { ...baseTokens, ...flattenThemeTokens(registry[themeName]), ...definition.tokens }
     registry[themeName] = { selector, tokens, blocks: [{ selector, tokens }] }
   }
-  else {
+  else if (items.some(item => item.themeName === themeName)) {
     mergeIntoRegistry(registry, themeName, { tokens: definition.tokens! })
+  }
+  else {
+    // Тему не поставляет никто — ни структурно, ни файлом: она целиком своя и
+    // встаёт под свой селектор, как в структурной ветке. Под `:root` она
+    // перекрыла бы тему по умолчанию и получила бы активацию `root`.
+    mergeIntoRegistry(registry, themeName, { selector: defaultAppThemeSelector(themeName), tokens: definition.tokens! })
   }
 
   items.push({

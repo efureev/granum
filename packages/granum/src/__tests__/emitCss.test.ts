@@ -78,6 +78,12 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(css.layers.themes).not.toContain(':root')
   })
 
+  it('тема приложения из одних tokens — в слое themes под своим селектором', async () => {
+    const { css } = await run({ components: ['@x/kit:Card'], themes: { names: ['light', 'brand'], define: { brand: { tokens: { bg: 'red' } } } } })
+    expect(css.layers.themes).toContain('[data-theme="brand"] {\n  --bg: red;\n}')
+    expect(css.layers.tokens).not.toContain('--bg: red')
+  })
+
   it('конкатенация срезов по слоям равна целому (INV-CSS-4); плоский режим без @layer', async () => {
     const { css } = await run()
     expect(wrapLayers(css.layers, {})).toBe(css.css)

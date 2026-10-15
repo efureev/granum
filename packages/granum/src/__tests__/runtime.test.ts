@@ -69,6 +69,12 @@ describe('getThemeManifest — из той же резолюции, что и CS
     expect(getThemeManifest(only, { includeTokens: true }).themes[0]!.tokens).toEqual({ ':root': { accent: '#f0f' } })
   })
 
+  it('тема приложения из одних tokens активируется атрибутом, а не root', () => {
+    const r = resolveGranum({ providers: [provider], themes: { names: ['light', 'brand'], define: { brand: { tokens: { brd: '#f0f' } } } } })
+    const brand = getThemeManifest(r).themes.find(t => t.name === 'brand')!
+    expect(brand.activation).toEqual({ type: 'attribute', name: 'data-theme', value: 'brand' })
+  })
+
   it('тема из CSS-файла даёт unknown, но чинится явной активацией', () => {
     const fileThemed = makeProvider('file', { theme: { defaultThemes: ['dark'], themes: { dark: 'theme/dark.css' } } })
     const r = resolveGranum({ providers: [fileThemed] })

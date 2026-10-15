@@ -191,6 +191,14 @@ describe('themes.define — набор тем принадлежит прило�
     expect(resolveNeededThemeNames(nodes(structural), { names: ['ocean'], define: { ocean: { extends: 'dark' } } })).toEqual(new Set(['ocean', 'dark']))
   })
 
+  it('тема приложения, которую не поставляет никто, встаёт под свой селектор, а не под :root', () => {
+    // Под `:root` она перекрыла бы светлую тему и получила бы активацию `root`:
+    // переключение тем ничего бы не меняло.
+    const r = resolveThemes(nodes(structural), { names: ['light', 'brand'], define: { brand: { tokens: { bg: 'red' } } } })
+    expect(r.tokenRegistry.brand!.blocks).toEqual([{ selector: defaultAppThemeSelector('brand'), tokens: { bg: 'red' } }])
+    expect(r.tokenRegistry.light!.blocks[0]!.selector).toBe(':root')
+  })
+
   it('цепочка extends: базы раньше наследников; define без extends — точечный мерж', () => {
     const r = resolveThemes(nodes(structural), {
       names: ['ocean-hc'],
