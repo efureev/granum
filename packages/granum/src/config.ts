@@ -55,8 +55,6 @@ export interface GranumCssOptions {
 }
 
 export interface GranumJsOptions {
-  /** Отдавать `virtual:granum/components`. По умолчанию `true`. */
-  readonly virtualComponents?: boolean
   /**
    * Куда писать объявления для `virtual:granum/components` (путь от корня
    * проекта, например `src/granum.d.ts`). По умолчанию не пишутся.

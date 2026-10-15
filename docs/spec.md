@@ -415,7 +415,7 @@ export default defineGranumConfig({
   css: { layers: true, layerPrefix: 'granum' },
   appSources: { dirs: ['./src'], extensions?: string[] },
   pruneTokens: { mode: 'off' | 'report' | 'on', keep?: (string | RegExp)[] },
-  js: { virtualComponents: true, guard: 'error' | 'warn' | 'off' },
+  js: { guard: 'error' | 'warn' | 'off', dts?: string },
   report: { file: 'granum-report.json' | false },
 })
 ```

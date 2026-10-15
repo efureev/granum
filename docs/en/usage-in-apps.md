@@ -19,7 +19,7 @@ export default defineGranumConfig({
   themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
   appSources: { dirs: ['src'] },
   css: { layers: true, layerPrefix: 'granum' },
-  js: { virtualComponents: true, guard: 'error' },
+  js: { guard: 'error' },
   pruneTokens: { mode: 'off' },
   report: { file: 'granum-report.json' },
 })
