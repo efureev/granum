@@ -28,7 +28,7 @@ export default defineGranumConfig({
 | Field | Default | Meaning |
 |---|---|---|
 | `engine` | — (required) | a utility engine instance: `windEngine()` from `@feugene/granum-engine-wind` or your own; the `'builtin'` string and an options object are not accepted |
-| `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects; an object whose `baseUrl` points at an existing `dist` is scanned by the application itself (slow path, `provider-scanned`) |
+| `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects; an object whose `baseUrl` points at an existing `dist` is scanned by the application itself (slow path, `provider-scanned`). The order inside the layers follows the providers' `dependencies` graph: a donor comes before its dependent; independent providers keep the list order |
 | `components` | `'all'` | a list of `id:Name` keys / `{ provider, names }` or `'imports'` — from imports in `appSources` |
 | `themes.names` | by `define` → providers' `defaultThemes` → `['light']` | the active set of themes |
 | `themes.define` | — | application themes: `{ extends, tokens, tokensRef, label, colorScheme }` |

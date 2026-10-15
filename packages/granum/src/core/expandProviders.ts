@@ -7,7 +7,10 @@
  *     тот же инстанс в ромбе — норма;
  *   - цикл — `CircularProviderDependencyError` с цепочкой;
  *   - строковые зависимости мягкие: ничего не тянут, но к концу обхода id
- *     обязан быть в реестре — иначе `UnresolvedProviderDependencyError`;
+ *     обязан быть в реестре — иначе `UnresolvedProviderDependencyError`.
+ *     Порядок они задают наравне с объектными (INV-SEL-2): у манифестов других
+ *     зависимостей нет, и без этого донор вставал бы после зависящего, если так
+ *     стоят строки в конфиге;
  *   - каждый объект проходит `validateProvider` (INV-ERR-1); манифест считается
  *     проверенным читателем.
  */
@@ -64,7 +67,37 @@ export function expandProviders(roots: readonly GranumProviderInput[]): Provider
       throw new UnresolvedProviderDependencyError(id, from)
   }
 
-  return order
+  return graphOrder(order, byId)
+}
+
+/**
+ * Порядок графа по обоим видам рёбер. Обход выше уже поставил объектных доноров
+ * раньше зависящих; повторный post-order по всем рёбрам добавляет строковые и
+ * ловит циклы через них. Узлы без связи между собой сохраняют порядок
+ * обнаружения, то есть порядок конфига.
+ */
+function graphOrder(nodes: readonly ProviderNode[], byId: ReadonlyMap<string, ProviderNode>): ProviderNode[] {
+  const out: ProviderNode[] = []
+  const done = new Set<string>()
+  const stack: string[] = []
+
+  const visit = (node: ProviderNode): void => {
+    if (done.has(node.id))
+      return
+    const at = stack.indexOf(node.id)
+    if (at >= 0)
+      throw new CircularProviderDependencyError([...stack.slice(at), node.id])
+    stack.push(node.id)
+    for (const dep of node.dependencies)
+      visit(byId.get(typeof dep === 'string' ? dep : dep.id)!)
+    stack.pop()
+    done.add(node.id)
+    out.push(node)
+  }
+
+  for (const node of nodes)
+    visit(node)
+  return out
 }
 
 /** Два прочитанных манифеста одного файла — один провайдер, а не конфликт. */

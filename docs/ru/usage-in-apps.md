@@ -28,7 +28,7 @@ export default defineGranumConfig({
 | Поле | Значение по умолчанию | Смысл |
 |---|---|---|
 | `engine` | — (обязательно) | инстанс движка утилит: `windEngine()` из `@feugene/granum-engine-wind` или свой; строка `'builtin'` и объект опций не принимаются |
-| `providers` | — | имена пакетов (манифест ищется через `exports["./granum.manifest.json"]`) или объекты контракта; объект с `baseUrl` на существующий `dist` сканируется приложением само (медленный путь, `provider-scanned`) |
+| `providers` | — | имена пакетов (манифест ищется через `exports["./granum.manifest.json"]`) или объекты контракта; объект с `baseUrl` на существующий `dist` сканируется приложением само (медленный путь, `provider-scanned`). Порядок в слоях задаёт граф `dependencies` провайдеров: донор раньше зависящего; независимые провайдеры идут в порядке списка |
 | `components` | `'all'` | список ключей `id:Name` / `{ provider, names }` либо `'imports'` — по импортам в `appSources` |
 | `themes.names` | по `define` → `defaultThemes` провайдеров → `['light']` | активный набор тем |
 | `themes.define` | — | темы приложения: `{ extends, tokens, tokensRef, label, colorScheme }` |

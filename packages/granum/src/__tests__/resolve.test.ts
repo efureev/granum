@@ -95,3 +95,12 @@ describe('resolveGranum (R-1…R-6)', () => {
     expect(backward.componentCss.map(c => c.path).sort()).toEqual(forward.componentCss.map(c => c.path).sort())
   })
 })
+
+describe('resolveGranum: порядок провайдеров (INV-SEL-2, INV-CSS-2)', () => {
+  it('донор по строковой зависимости раньше зависящего, хотя в конфиге стоит позже', () => {
+    const ui = makeManifest('@x/ui', { Card: {} }, { dependencies: ['@x/base'] })
+    const base = makeManifest('@x/base', { Box: {} })
+    const resolution = resolveGranum({ providers: [ui, base], components: 'all' })
+    expect(resolution.providers.map(p => p.id)).toEqual(['@x/base', '@x/ui'])
+  })
+})

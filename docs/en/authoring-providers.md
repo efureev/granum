@@ -80,6 +80,11 @@ export default defineGranumProvider({
 })
 ```
 
+The provider's `dependencies` are ids of packages that must be in the
+application graph. Their tokens, base, themes and engine rules come before
+this provider however the application lists the packages in `providers`; a
+cycle is a `CircularProviderDependencyError`.
+
 `defineGranumProvider` validates the shape when called: `contractVersion`,
 the id, component names, token keys, `cssFiles` paths. Errors are typed
 classes with `providerId`, `component` and `reason` fields.

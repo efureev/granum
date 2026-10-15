@@ -66,7 +66,8 @@ describe('expandProviders', () => {
   it('манифесты: зависимости — id, обязаны присутствовать; один и тот же манифест дважды — не конфликт', () => {
     const heavy = makeManifest('@x/heavy', {}, { dependencies: ['@x/simple'] })
     const simple = makeManifest('@x/simple')
-    expect(expandProviders([heavy, simple]).map(p => `${p.form}:${p.id}`)).toEqual(['manifest:@x/heavy', 'manifest:@x/simple'])
+    // Строковая зависимость задаёт порядок так же, как объектная: донор раньше (INV-SEL-2).
+    expect(expandProviders([heavy, simple]).map(p => `${p.form}:${p.id}`)).toEqual(['manifest:@x/simple', 'manifest:@x/heavy'])
     expect(() => expandProviders([heavy])).toThrow(UnresolvedProviderDependencyError)
 
     const again = makeManifest('@x/simple')
@@ -75,5 +76,30 @@ describe('expandProviders', () => {
 
   it('манифест и объект с одним id — конфликт', () => {
     expect(() => expandProviders([makeManifest('p'), mk('p')])).toThrow(DuplicateProviderIdError)
+  })
+})
+
+describe('expandProviders: порядок графа по строковым зависимостям (INV-SEL-2, INV-SEL-3)', () => {
+  it('донор раньше зависящего, как бы ни стояли в конфиге', () => {
+    expect(expandProviders([mk('ui', ['base']), mk('base')]).map(p => p.id)).toEqual(['base', 'ui'])
+    expect(expandProviders([mk('app', ['ui']), mk('ui', ['base']), mk('base')]).map(p => p.id)).toEqual(['base', 'ui', 'app'])
+  })
+
+  it('независимые провайдеры — в порядке конфига', () => {
+    expect(expandProviders([mk('c'), mk('a'), mk('b', ['a'])]).map(p => p.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('цикл через строковые зависимости — ошибка с цепочкой', () => {
+    expect(() => expandProviders([mk('a', ['b']), mk('b', ['a'])])).toThrow(CircularProviderDependencyError)
+    expect(() => expandProviders([mk('a', ['b']), mk('b', ['a'])])).toThrow(/a -> b -> a/)
+    // Смешанный: объектом a тянет b, строкой b ссылается на a. Цепочка
+    // начинается с узла, на котором обход вошёл в цикл.
+    expect(() => expandProviders([mk('a', [mk('b', ['a'])])])).toThrow(/b -> a -> b/)
+  })
+
+  it('манифесты: зависимость в конфиге после зависящего', () => {
+    const ui = makeManifest('@x/ui', {}, { dependencies: ['@x/base'] })
+    const base = makeManifest('@x/base')
+    expect(expandProviders([ui, base]).map(p => p.id)).toEqual(['@x/base', '@x/ui'])
   })
 })

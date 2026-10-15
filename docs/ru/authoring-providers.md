@@ -79,6 +79,11 @@ export default defineGranumProvider({
 })
 ```
 
+`dependencies` провайдера — id пакетов, которые обязаны быть в графе
+приложения. Их токены, base, темы и правила движка идут раньше этого
+провайдера, как бы приложение ни перечислило пакеты в `providers`; цикл —
+`CircularProviderDependencyError`.
+
 `defineGranumProvider` проверяет форму при вызове: `contractVersion`, id,
 имена компонентов, ключи токенов, пути `cssFiles`. Ошибки — типизированные
 классы с полями `providerId`, `component`, `reason`.
