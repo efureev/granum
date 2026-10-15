@@ -228,6 +228,17 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       devServer.watcher.on('unlink', onChange)
     },
 
+    /*
+     * `vite build --watch`: файл изменился — следующая сборка новая, и всё
+     * мемоизированное (резолюция, эмиссия, «отчёт уже написан») обязано
+     * сброситься. Не в `buildStart`: многосредовый хост зовёт его на каждое
+     * окружение одной сборки, и отчёт писался бы по разу на окружение. Сюда же
+     * хост без watch не приходит вовсе.
+     */
+    watchChange(): void {
+      invalidate()
+    },
+
     async buildStart(): Promise<void> {
       const app = await prepare()
       for (const w of app.warnings) {
