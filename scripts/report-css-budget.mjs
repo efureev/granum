@@ -16,7 +16,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL, URL } from 'node:url'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
-import { classifyAsset, classifyClassEvidence, cssClassesOf, cssLayerBody, declaredTokens, formatBytes, formatDelta, htmlClassTokens, reachableTokens, strictCheck, whitespaceTokens } from './lib/cssBudget.mjs'
+import { classifyAsset, classifyClassEvidence, cssClassesOf, cssLayerBody, declaredTokens, engineMarkers, engineTracesIn, formatBytes, formatDelta, htmlClassTokens, reachableTokens, strictCheck, whitespaceTokens } from './lib/cssBudget.mjs'
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url))
 const args = process.argv.slice(2)
@@ -97,6 +97,9 @@ const byChannel = channel => classRows.filter(r => r.evidence.includes(channel))
 
 const total = kind => stand.assets.filter(a => !kind || a.kind === kind).reduce((s, a) => ({ raw: s.raw + a.raw, gzip: s.gzip + a.gzip, brotli: s.brotli + a.brotli }), { raw: 0, gzip: 0, brotli: 0 })
 
+// INV-ENG-6: литералы движка, а не идентификаторы — их минификатор переименовывает.
+const engineTraces = engineTracesIn(js, engineMarkers(stand.report))
+
 const report = {
   stand: standName,
   baseline: baseline?.name ?? null,
@@ -119,7 +122,8 @@ const report = {
     jsFragment: byChannel('js-fragment'),
     unproven: classRows.filter(r => !r.proven).map(r => r.class),
   },
-  engineInBundle: /granularity-spin|\bcreateGenerator\b|presetMini/.test(js),
+  engineInBundle: engineTraces.length > 0,
+  engineTraces,
   granum: stand.report
     ? { selection: stand.report.selection.map(s => s.key), layers: stand.report.sizes, sizesSource: stand.report.sizesSource ?? 'emission', emissionLayers: stand.report.emissionSizes ?? stand.report.sizes, unmatched: stand.report.classes.unmatched.map(u => u.className), undefinedTokens: stand.report.tokens.undefined, prune: stand.report.prune ?? { mode: 'off' } }
     : null,

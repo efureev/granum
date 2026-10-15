@@ -1,5 +1,7 @@
+import { fileURLToPath, URL } from 'node:url'
+import { rolldown } from 'rolldown'
 import { describe, expect, it } from 'vitest'
-import { classifyAsset, classifyClassEvidence, cssClassesOf, cssLayerBody, declaredTokens, htmlClassTokens, reachableTokens, referencedTokens, strictCheck, whitespaceTokens } from '../lib/cssBudget.mjs'
+import { classifyAsset, classifyClassEvidence, cssClassesOf, cssLayerBody, declaredTokens, engineMarkers, engineTracesIn, htmlClassTokens, reachableTokens, REFERENCE_ENGINE_MARKERS, referencedTokens, strictCheck, whitespaceTokens } from '../lib/cssBudget.mjs'
 
 describe('cssBudget', () => {
   it('классифицирует ассеты стендов и не знает лишних', () => {
@@ -70,5 +72,27 @@ describe('cssBudget', () => {
     expect(strictCheck({ classes: { unproven: ['p-2', 'p-3'] } }, withClasses).find(c => c.name === 'classes.unproven')?.ok).toBe(true)
     expect(strictCheck({ classes: { unproven: ['p-2'] } }, withClasses).find(c => c.name === 'classes.unproven')?.ok).toBe(false)
     expect(strictCheck({ classes: { unproven: ['p-2', 'p-3', 'p-4'] } }, withClasses).find(c => c.name === 'classes.unproven')?.ok).toBe(false)
+  })
+
+  /**
+   * INV-ENG-6 на настоящем минифицированном бандле движка. Минификатор
+   * переименовывает идентификаторы — `createGenerator`, `presetMini`, — и гейт,
+   * искавший их, не мог покраснеть никогда. Строковые литералы он не трогает.
+   */
+  it('следы движка ищутся по литералам и находятся в минифицированном бандле (INV-ENG-6)', async () => {
+    const bundle = await rolldown({
+      input: fileURLToPath(new URL('../../packages/granum-engine-wind/src/index.ts', import.meta.url)),
+      external: [/^@feugene\/granum(?:\/|$)/],
+      logLevel: 'silent',
+    })
+    const { output } = await bundle.generate({ format: 'esm', minify: true })
+    const code = output.map(chunk => chunk.code ?? '').join('\n')
+
+    expect(code).not.toMatch(/\bcreateGenerator\b|presetMini/)
+    expect(engineTracesIn(code, engineMarkers(null))).toEqual(REFERENCE_ENGINE_MARKERS)
+    expect(engineTracesIn('const a={b:1};export{a}', engineMarkers(null))).toEqual([])
+
+    // Движок стенда называет отчёт сборки: имя и диалект — литералы его кода.
+    expect(engineMarkers({ engine: { name: 'x-engine', dialect: 'x/atoms@1' } })).toEqual([...REFERENCE_ENGINE_MARKERS, 'x-engine', 'x/atoms@1'])
   })
 })

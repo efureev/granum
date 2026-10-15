@@ -168,6 +168,27 @@ export function formatDelta(n) {
   return n === 0 ? '0' : `${n > 0 ? '+' : '−'}${formatBytes(Math.abs(n))}`
 }
 
+/**
+ * Литералы референсного движка: его имя и оба диалекта. Проверяются на любом
+ * стенде, даже без отчёта сборки.
+ */
+export const REFERENCE_ENGINE_MARKERS = ['granum-engine-wind', 'unocss/preset-wind3+granum@66', 'unocss/preset-wind3@66']
+
+/**
+ * Следы движка в клиентском JS ищутся по строковым литералам, а не по
+ * идентификаторам (INV-ENG-6): минификатор переименовывает `createGenerator`
+ * и `presetMini`, а строки оставляет как есть. Движок стенда называет отчёт
+ * сборки — имя и диалект лежат литералами в его коде.
+ */
+export function engineMarkers(granumReport) {
+  const own = granumReport?.engine ? [granumReport.engine.name, granumReport.engine.dialect] : []
+  return [...new Set([...REFERENCE_ENGINE_MARKERS, ...own].filter(Boolean))]
+}
+
+export function engineTracesIn(js, markers) {
+  return markers.filter(marker => js.includes(marker))
+}
+
 /** Проверка ожиданий `expected-budget.mjs` против отчёта — в обе стороны. */
 export function strictCheck(expected, report) {
   const checks = []
@@ -193,8 +214,8 @@ export function strictCheck(expected, report) {
     push('granum.undefinedTokens', same(expected.granum.undefinedTokens ?? [], report.granum.undefinedTokens), report.granum.undefinedTokens, expected.granum.undefinedTokens ?? [])
     push('granum.pruneMode', report.granum.prune.mode === (expected.granum.pruneMode ?? 'off'), report.granum.prune.mode, expected.granum.pruneMode ?? 'off')
     if (expected.granum.noEngineInBundle)
-      // INV-ENG-6: сигнатур генератора в клиентском бандле нет.
-      push('granum.noEngineInBundle', !report.engineInBundle, report.engineInBundle, false)
+      // INV-ENG-6: литералов движка в клиентском бандле нет; провал называет найденные.
+      push('granum.noEngineInBundle', !report.engineInBundle, report.engineTraces ?? report.engineInBundle, [])
   }
   return checks
 }
