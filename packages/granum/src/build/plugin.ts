@@ -5,7 +5,7 @@
  * бандла, копирует объявленный CSS, раскрывает `@apply`, проверяет границу
  * browser/node и пишет `granum.manifest.json`.
  */
-import type { Plugin, ResolvedConfig, UserConfig } from 'vite'
+import type { Plugin, ResolvedConfig, Rolldown, UserConfig } from 'vite'
 import type { GranumComponentDescriptor, GranumManifest, GranumManifestWarning, GranumProvider } from '../contract'
 import type { GranumEngine } from '../engine/types'
 import type { BoundaryViolation, BundleAnalysis, BundleLike } from './graph'
@@ -62,6 +62,23 @@ interface ComponentSourceEntry {
   readonly descriptor: GranumComponentDescriptor
   readonly dir: string
   readonly entry: string
+}
+
+/** Ядро granum — peer пакета провайдера, а не его содержимое: в сборку не вклеивается. */
+const GRANUM_EXTERNAL = /^@feugene\/granum(?:\/.*)?$/
+
+/**
+ * `external` пользователя плюс правило ядра — в той форме, в какой его задал
+ * пользователь. Слиянием конфигов Vite этого не выразить: оно склеивает
+ * массивы, и функция превращается в `[fn, RegExp]`, которого rolldown не
+ * принимает.
+ */
+function withGranumExternal(user: Rolldown.InputOptions['external']): NonNullable<Rolldown.InputOptions['external']> {
+  if (user === undefined)
+    return [GRANUM_EXTERNAL]
+  if (typeof user === 'function')
+    return (id, parent, isResolved) => GRANUM_EXTERNAL.test(id) || user(id, parent, isResolved)
+  return [...(Array.isArray(user) ? user : [user]), GRANUM_EXTERNAL]
 }
 
 /**
@@ -183,7 +200,6 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
             fileName: (_format, entryName) => `${entryName}.js`,
           },
           rolldownOptions: {
-            external: [/^@feugene\/granum(?:\/.*)?$/],
             output: {
               chunkFileNames: granumChunkFileNames(componentSources),
               assetFileNames: granumAssetFileNames(componentSources),
@@ -191,6 +207,12 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           },
         },
       }
+    },
+
+    // Опции rolldown — уже после слияния конфигов: `external` здесь в той
+    // форме, в какой его задал пользователь (см. `withGranumExternal`).
+    options(input) {
+      return { ...input, external: withGranumExternal(input.external) }
     },
 
     configResolved(config: ResolvedConfig): void {

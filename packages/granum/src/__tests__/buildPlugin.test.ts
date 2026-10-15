@@ -1,5 +1,5 @@
 import type { GranumManifest, GranumProvider } from '../contract'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -344,6 +344,28 @@ describe('granumProvider с настоящим Vite', () => {
     expect(manifest.theme.tokensCss).toBe('theme/tokens.css')
     expect(manifest.theme.themes).toEqual({ dark: 'theme/dark.css' })
     expect(manifest.engine.module).toBe('engine.js')
+  })
+
+  /**
+   * Плагин добавляет к `external` своё правило для `@feugene/granum/*`. Через
+   * слияние конфигов Vite функция пользователя превращалась в массив
+   * `[fn, RegExp]`, которого rolldown не принимает, и сборка падала.
+   */
+  it('external функцией: внешними остаются и имена пользователя, и @feugene/granum', async () => {
+    const fixture = makeFixture()
+    writeFileSync(join(fixture.root, 'src/index.ts'), `${readFileSync(join(fixture.root, 'src/index.ts'), 'utf8')}export { createThemeController } from '@feugene/granum/runtime'\n`)
+    await build({
+      root: fixture.root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: () => {} })],
+      build: { minify: false, rolldownOptions: { external: id => id === 'vue' || id.startsWith('vue/') } },
+    })
+    const dist = join(fixture.root, 'dist')
+    expect(readManifestSync(join(dist, 'granum.manifest.json')).manifest.id).toBe(fixture.provider.id)
+    expect(readFileSync(join(dist, 'index.js'), 'utf8')).toContain('from "@feugene/granum/runtime"')
+    const chunks = join(dist, 'components/Card/chunks')
+    expect(readdirSync(chunks).map(f => readFileSync(join(chunks, f), 'utf8')).join('\n')).toContain('from "vue"')
   })
 
   it('путь темы за пределами пакета — ошибка при создании плагина', () => {
