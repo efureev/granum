@@ -43,7 +43,9 @@ export default defineGranumConfig({
 | `report.brotli` | `false` | whether to measure layer sizes in brotli: quality 11 is 151 ms on 222 kB against 2 ms for gzip |
 
 The config shape is validated on load: `InvalidConfigError` names the path
-to the field.
+to the field. An unknown key is an error too: for a typo it suggests the nearest
+key (`appSource` → `appSources`), for a v1 preset key it says where it went.
+`defineGranumConfig` catches an extra key already in the editor.
 
 ## Selection
 

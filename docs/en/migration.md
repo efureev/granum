@@ -92,6 +92,8 @@ now also feeds the extraction of application classes. There is no swap of
 provider files (`themes.themeFiles`, `baseFile`, `tokensFile`): theme values are
 changed by `tokenOverrides`, a whole theme by `define` with `tokensRef` to your
 CSS, also over a theme the provider ships as a file ([Themes and tokens](./themes-and-tokens.md)).
+A v1 key left in the config is a load error that says where it went, not a silently
+ignored option.
 
 One thing has no v1 counterpart at all: the engine. In the preset it was part
 of the package and configured through `uno.config.ts`; in granum the application

@@ -9,13 +9,11 @@ import vue from '@vitejs/plugin-vue'
 import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
-import { defineGranumConfig } from '../config'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
 import { granum } from '../vite/plugin'
-import { validateGranumConfig } from '../vite/validateConfig'
-import { fileThemeProvider, prepareTestApp, TEST_ENGINE } from './helpers'
+import { fileThemeProvider, prepareTestApp } from './helpers'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
@@ -36,20 +34,6 @@ describe('пункт ТЗ-2: тема приложения поверх темы
     expect(bare.resolution.warnings).toContainEqual(expect.objectContaining({ kind: 'theme-extends-unresolved', theme: 'ocean' }))
     const tinted = await prepareTestApp({ providers: [provider], components: ['@p/ds:Tinted'], themes: ocean }, root)
     expect(tinted.resolution.warnings).toEqual([])
-  })
-})
-
-describe('пункт ТЗ-6: неизвестные ключи конфига', () => {
-  it('6: опечатка и ключи v1 проходят рантайм-проверку', () => {
-    const config = { engine: TEST_ENGINE, providers: ['@p/ds'], appSource: { dirs: ['src'] }, themes: { themeFiles: { dark: './dark.css' } }, pruneTokens: { appSources: ['src'] } }
-    expect(() => validateGranumConfig(config)).not.toThrow()
-  })
-
-  it('6: опечатка проходит и проверку типов `defineGranumConfig`', () => {
-    // Компилируется: обобщённый параметр отключает проверку лишних свойств.
-    // Починка типа сделает эту строку ошибкой компиляции — и `yarn typecheck` это покажет.
-    const config = defineGranumConfig({ engine: TEST_ENGINE, providers: ['@p/ds'], appSource: { dirs: ['src'] } })
-    expect(config.appSource).toEqual({ dirs: ['src'] })
   })
 })
 

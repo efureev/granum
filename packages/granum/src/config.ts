@@ -96,7 +96,13 @@ export interface GranumConfig {
   readonly report?: GranumReportOptions
 }
 
-/** Типизированный конфиг; форма проверяется плагином при загрузке (A-1). */
-export function defineGranumConfig<T extends GranumConfig>(config: T): T {
+/**
+ * Типизированный конфиг; форма проверяется плагином при загрузке.
+ *
+ * Параметр — сам `GranumConfig`, а не обобщённый: у обобщённого TypeScript не
+ * проверяет лишние свойства литерала, и опечатка вроде `appSource` компилировалась
+ * бы молча.
+ */
+export function defineGranumConfig(config: GranumConfig): GranumConfig {
   return config
 }

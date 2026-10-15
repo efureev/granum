@@ -2,7 +2,10 @@
  * Рантайм-проверка формы `granum.config` (A-1): типы ловят большинство, но
  * конфиг часто пишут в JS. Ошибка называет путь до поля.
  */
-import type { GranumConfig } from '../config'
+import type { GranumAppSources, GranumConfig, GranumCssOptions, GranumJsOptions, GranumPruneTokensOptions, GranumReportOptions } from '../config'
+import type { GranumTokenRef } from '../contract'
+import type { GranumThemesInput } from '../core/resolve'
+import type { GranumAppThemeDefinition } from '../core/resolveThemes'
 import { GranumError } from '../core/errors'
 import { isDialect } from '../engine/dialect'
 
@@ -16,6 +19,92 @@ export class InvalidConfigError extends GranumError {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+/**
+ * Ключи типа списком, сверенным с типом в обе стороны: чужой ключ не пройдёт
+ * ограничение `keyof T`, пропущенный — потребует свойство `missing`. Новое поле
+ * конфига без строки здесь — ошибка `yarn typecheck`, а не ключ, который проверка
+ * формы молча отвергнет.
+ */
+function keysOf<T>() {
+  return <const K extends readonly (keyof T & string)[]>(
+    keys: K & ([Exclude<keyof T, K[number]>] extends [never] ? unknown : { missing: Exclude<keyof T, K[number]> }),
+  ): readonly string[] => keys
+}
+
+const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'themes', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
+const THEMES_KEYS = keysOf<GranumThemesInput>()(['names', 'define', 'tokenOverrides', 'strictTokens'])
+const THEME_DEFINITION_KEYS = keysOf<GranumAppThemeDefinition>()(['extends', 'selector', 'tokens', 'tokensRef', 'label', 'colorScheme'])
+const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
+const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split'])
+const APP_SOURCES_KEYS = keysOf<GranumAppSources>()(['dirs', 'extensions'])
+const PRUNE_TOKENS_KEYS = keysOf<GranumPruneTokensOptions>()(['mode', 'keep', 'keepPrefixes'])
+const JS_KEYS = keysOf<GranumJsOptions>()(['dts', 'guard'])
+const REPORT_KEYS = keysOf<GranumReportOptions>()(['file', 'brotli'])
+
+const V1_SCAN = `granum does not scan files for package classes: they come from provider manifests; application sources go to 'appSources'`
+const ENGINE_RULES = `application rules go to the engine factory, e.g. windEngine({ rules }) from '@feugene/granum-engine-wind'`
+const THEME_FILES = `a provider file cannot be swapped: change theme values with 'themes.tokenOverrides' or a whole theme with 'themes.define.<name>.tokensRef'`
+
+/**
+ * Ключи, которых в конфиге нет, но которые пишут по памяти: пресет v1 и опции,
+ * удалённые в 2.0. Вместо «неизвестный ключ» — куда он делся.
+ */
+const KEY_HINTS: Readonly<Record<string, string>> = {
+  'scan': V1_SCAN,
+  'content': V1_SCAN,
+  'unocss': ENGINE_RULES,
+  'rules': ENGINE_RULES,
+  'variants': ENGINE_RULES,
+  'preflights': ENGINE_RULES,
+  'themes.themeFiles': THEME_FILES,
+  'themes.baseFile': THEME_FILES,
+  'themes.tokensFile': THEME_FILES,
+  'pruneTokens.appSources': `moved to the top-level 'appSources': it also feeds the extraction of application classes`,
+  'js.virtualComponents': `removed: virtual:granum/components is built only when the application imports it; to forbid the import, use ESLint no-restricted-imports`,
+  'css.expandDirectives': `removed: @apply is expanded by the provider build (granumProvider()), and granum doctor reports what is left (apply-not-expanded)`,
+}
+
+/** Расстояние Левенштейна — для подсказки при опечатке в ключе. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i]
+    for (let j = 1; j <= b.length; j++)
+      current[j] = Math.min(previous[j]! + 1, current[j - 1]! + 1, previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+    previous = current
+  }
+  return previous[b.length]!
+}
+
+/**
+ * Неизвестный ключ уровня — ошибка с путём до него: опечатка или ключ v1 иначе
+ * молча не действует (`appSource` — и классы разметки не генерируются).
+ */
+function rejectUnknownKeys(value: Record<string, unknown>, allowed: readonly string[], path: string): void {
+  for (const key of Object.keys(value)) {
+    if (allowed.includes(key))
+      continue
+    const full = path ? `${path}.${key}` : key
+    const near = allowed
+      .map(candidate => ({ candidate, distance: editDistance(key.toLowerCase(), candidate.toLowerCase()) }))
+      .filter(({ distance }) => distance <= 2)
+      .sort((a, b) => a.distance - b.distance)[0]
+      ?.candidate
+    const details = KEY_HINTS[full]
+      ?? (near !== undefined ? `did you mean '${near}'?` : `expected one of: ${allowed.join(', ')}`)
+    throw new InvalidConfigError(full, `unknown option — ${details}`)
+  }
+}
+
+/** Необязательный раздел конфига: если задан — объект с известными ключами. */
+function assertSection(value: unknown, allowed: readonly string[], path: string): asserts value is Record<string, unknown> | undefined {
+  if (value === undefined)
+    return
+  if (!isRecord(value))
+    throw new InvalidConfigError(path, 'expected an object')
+  rejectUnknownKeys(value, allowed, path)
 }
 
 /** Строковые значения записи — токены; ключ с `--` среди них — ошибка формы. */
@@ -59,6 +148,7 @@ function validateEngine(engine: unknown): void {
 export function validateGranumConfig(config: unknown): asserts config is GranumConfig {
   if (!isRecord(config))
     throw new InvalidConfigError('', 'expected an object')
+  rejectUnknownKeys(config, ROOT_KEYS, '')
   if (!Array.isArray(config.providers) || config.providers.length === 0)
     throw new InvalidConfigError('providers', 'expected a non-empty array of package names, provider objects or loaded manifests')
   config.providers.forEach((p, i) => {
@@ -73,6 +163,7 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
   if (themes !== undefined) {
     if (!isRecord(themes))
       throw new InvalidConfigError('themes', 'expected an object')
+    rejectUnknownKeys(themes, THEMES_KEYS, 'themes')
     if (themes.names !== undefined && !Array.isArray(themes.names))
       throw new InvalidConfigError('themes.names', 'expected an array of theme names')
     if (themes.define !== undefined && !isRecord(themes.define))
@@ -84,6 +175,13 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
     for (const [theme, definition] of Object.entries(themes.define ?? {})) {
       if (!isRecord(definition))
         throw new InvalidConfigError(`themes.define.${theme}`, 'expected an object')
+      rejectUnknownKeys(definition, THEME_DEFINITION_KEYS, `themes.define.${theme}`)
+      const ref = definition.tokensRef
+      if (ref !== undefined && typeof ref !== 'string') {
+        if (!isRecord(ref))
+          throw new InvalidConfigError(`themes.define.${theme}.tokensRef`, `expected a CSS URL or { url, selector?, as?, strict? }`)
+        rejectUnknownKeys(ref, TOKEN_REF_KEYS, `themes.define.${theme}.tokensRef`)
+      }
       if (isRecord(definition.tokens))
         rejectPrefixedTokens(definition.tokens, `themes.define.${theme}.tokens`)
     }
@@ -99,21 +197,23 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
     }
   }
   const prune = config.pruneTokens
-  if (prune !== undefined) {
-    if (!isRecord(prune))
-      throw new InvalidConfigError('pruneTokens', 'expected an object')
-    if (prune.mode !== undefined && !['off', 'report', 'on'].includes(prune.mode as string))
-      throw new InvalidConfigError('pruneTokens.mode', `expected 'off', 'report' or 'on', got ${JSON.stringify(prune.mode)}`)
-  }
+  assertSection(prune, PRUNE_TOKENS_KEYS, 'pruneTokens')
+  if (prune?.mode !== undefined && !['off', 'report', 'on'].includes(prune.mode as string))
+    throw new InvalidConfigError('pruneTokens.mode', `expected 'off', 'report' or 'on', got ${JSON.stringify(prune.mode)}`)
   const sources = config.appSources
+  if (isRecord(sources))
+    rejectUnknownKeys(sources, APP_SOURCES_KEYS, 'appSources')
   if (sources !== undefined && (!isRecord(sources) || !Array.isArray(sources.dirs)))
     throw new InvalidConfigError('appSources', 'expected { dirs: string[] }')
   if (c === 'imports' && sources === undefined)
     throw new InvalidConfigError('components', `'imports' requires appSources.dirs to scan`)
   const js = config.js
-  if (js !== undefined && isRecord(js) && js.guard !== undefined && !['error', 'warn', 'off'].includes(js.guard as string))
+  assertSection(js, JS_KEYS, 'js')
+  if (js?.guard !== undefined && !['error', 'warn', 'off'].includes(js.guard as string))
     throw new InvalidConfigError('js.guard', `expected 'error', 'warn' or 'off'`)
   const css = config.css
-  if (css !== undefined && isRecord(css) && css.layerPrefix !== undefined && !/^[a-z][\w-]*$/i.test(String(css.layerPrefix)))
+  assertSection(css, CSS_KEYS, 'css')
+  if (css?.layerPrefix !== undefined && !/^[a-z][\w-]*$/i.test(String(css.layerPrefix)))
     throw new InvalidConfigError('css.layerPrefix', 'expected an identifier')
+  assertSection(config.report, REPORT_KEYS, 'report')
 }
