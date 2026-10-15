@@ -213,3 +213,26 @@ describe('windEngine: кэш вывода и словарь (A-17, E-1, E-4, INV
     expect(a.vocabulary).toMatch(/^fnv64-[0-9a-f]{16}$/)
   })
 })
+
+describe('windEngine: альфа на цвете в скобках (E-4, INV-ENG-3)', () => {
+  const engine = windEngine({ preflight: false })
+  const body = async (cls: string): Promise<string | undefined> => {
+    const out = await engine.generate({ classes: new Set([cls]) })
+    return out.unmatched.includes(cls) ? undefined : out.css
+  }
+
+  it('цвет, который wind3 не разбирает, получает color-mix', async () => {
+    expect(await body('bg-[var(--gr-bg)]/55')).toContain('background-color:color-mix(in srgb, var(--gr-bg) 55%, transparent)')
+    expect(await body('bg-[--x]/50')).toContain('background-color:color-mix(in srgb, var(--x) 50%, transparent)')
+  })
+
+  it('разбираемый цвет wind3 раскрашивает сам — альфа в функции, гамма не теряется', async () => {
+    expect(await body('bg-[rgb(0_0_0)]/50')).toContain('background-color:rgb(0 0 0 / 0.5)')
+    expect(await body('bg-[oklch(0.5_0.1_200)]/50')).toContain('background-color:oklch(0.5 0.1 200 / 0.5)')
+  })
+
+  it('не цвет остаётся без правила, а не получает мусорный color-mix', async () => {
+    expect(await body('border-[2px]/50')).toBeUndefined()
+    expect(await body('bg-[length:10px_10px]/50')).toBeUndefined()
+  })
+})

@@ -53,10 +53,12 @@ export default defineGranumConfig({
 
 An option that changes the set of generated names **or what they mean** must
 change the dialect: `extraRules: false` turns off the one extra rule — alpha on
-an arbitrary colour. The set of names does not change (`bg-[var(--x)]/55` matches
+a bracket colour wind3 cannot parse itself: `var(--x)`, `[--x]`, a named colour,
+`currentColor`. The set of names does not change (`bg-[var(--x)]/55` matches
 either way), but the meaning does: without the rule wind3 emits
 `background-color: var(--x)` and silently drops the `/55`; with it, a
-`color-mix`. So that is another vocabulary, `unocss/preset-wind3@66` instead of
+`color-mix`. Hex, `rgb`, `hsl` and `oklch` are coloured by wind3 itself
+(`rgb(0 0 0 / 0.5)`) whatever the option says. So that is another vocabulary, `unocss/preset-wind3@66` instead of
 `unocss/preset-wind3+granum@66`. An option that only changes the output leaves
 the dialect alone.
 
