@@ -273,3 +273,29 @@ describe('парсер: вложенность и at-rules', () => {
     expect(result).toEqual({ selector: ':root', tokens: { a: '1px' } })
   })
 })
+
+describe('парсер: значение целиком и повторные блоки (C-13)', () => {
+  it('`;` и фигурные скобки в url(data:…) и в строке значение не обрывают', () => {
+    expect(parseCssTokenBlocks(`:root { --icon: url('data:image/svg+xml;utf8,<svg/>'); --sep: "a;b{}"; --next: 1px }`)).toEqual([
+      { selector: ':root', tokens: { icon: `url('data:image/svg+xml;utf8,<svg/>')`, sep: '"a;b{}"', next: '1px' } },
+    ])
+    expect(parseCssTokenBlocks(':root { --bg: url(data:image/png;base64,AAAA); --c: red }')).toEqual([
+      { selector: ':root', tokens: { bg: 'url(data:image/png;base64,AAAA)', c: 'red' } },
+    ])
+  })
+
+  it('блоки с одним селектором объединяются, последнее объявление побеждает', () => {
+    const css = ':root { --a: 1; --b: 2 }\n.dark { --a: 9 }\n:root { --b: 3; --c: 4 }'
+    expect(parseCssTokenBlocks(css)).toEqual([
+      { selector: ':root', tokens: { a: '1', b: '3', c: '4' } },
+      { selector: '.dark', tokens: { a: '9' } },
+    ])
+    expect(tokenSetFromCssSync(toDataUrl(css))).toEqual({ selector: ':root', tokens: { a: '1', b: '3', c: '4' } })
+  })
+
+  it('комментарий перед селектором и внутри значения в результат не попадает', () => {
+    expect(parseCssTokenBlocks('/* light */\n:root { --a: red /* brand */; --b: "/* kept */" }')).toEqual([
+      { selector: ':root', tokens: { a: 'red', b: '"/* kept */"' } },
+    ])
+  })
+})

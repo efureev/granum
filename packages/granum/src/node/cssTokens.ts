@@ -3,10 +3,18 @@
  * Поддерживаются только ПЛОСКИЕ блоки верхнего уровня: вложенные и блоки
  * внутри at-rules парой «селектор → токены» не выражаются и в strict-режиме
  * дают ошибку, а не тихо пустую тему.
+ *
+ * Блоки и значения читает `scanCssBlocks`: значение токена вправе содержать
+ * `;`, скобки и кавычки (`url(data:…;base64,…)`, `"a;b"`), и берётся целиком.
+ * Блоки с одним селектором объединяются, последнее объявление побеждает — как
+ * в каскаде.
  */
 import type { GranumTokenSet } from '../contract'
+import type { CssBlock } from './cssDeclarations'
 import { TokenParseError } from '../core/errors'
+import { stripComments } from '../engine/extract'
 import { isCssDataUrl, readCss, readCssSync, resolveCssFilePath } from './css'
+import { scanCssBlocks } from './cssDeclarations'
 
 export interface ParsedTokenBlock {
   readonly selector: string
@@ -86,65 +94,55 @@ function parseAndPick(css: string, source: string, options: TokenSetFromCssOptio
 function looksLikeCssLiteral(source: string): boolean {
   if (isCssDataUrl(source) || /^[a-z]+:\/\//i.test(source))
     return false
-  if (source.startsWith('/') || /^[a-z]:[\\/]/i.test(source))
+  // `/*` — комментарий в начале CSS-текста, а не абсолютный путь.
+  if ((source.startsWith('/') && source[1] !== '*') || /^[a-z]:[\\/]/i.test(source))
     return false
   return source.includes('{')
 }
-
-const DECL_RE = /--([\w-]+)\s*:([^;]*)(?:;|$)/g
 
 export interface SkippedBlock {
   readonly path: readonly string[]
   readonly reason: 'at-rule' | 'nested'
 }
 
-function extractBlocksDetailed(rawCss: string): { blocks: ParsedTokenBlock[], skipped: SkippedBlock[] } {
-  const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, '')
-  const blocks: ParsedTokenBlock[] = []
+function extractBlocksDetailed(css: string): { blocks: ParsedTokenBlock[], skipped: SkippedBlock[] } {
+  const bySelector = new Map<string, Record<string, string>>()
   const skipped: SkippedBlock[] = []
-  const stack: Array<{ prelude: string, body: string[] }> = []
-  let chunkStart = 0
 
-  for (let i = 0; i < css.length; i++) {
-    const ch = css[i]
-    if (ch !== '{' && ch !== '}')
-      continue
-
-    if (ch === '{') {
-      const raw = css.slice(chunkStart, i)
-      const cut = raw.lastIndexOf(';')
-      if (cut >= 0)
-        stack[stack.length - 1]?.body.push(raw.slice(0, cut + 1))
-      stack.push({ prelude: raw.slice(cut + 1).trim().replace(/\s+/g, ' '), body: [] })
-      chunkStart = i + 1
-      continue
+  const visit = (block: CssBlock, parents: readonly string[]): void => {
+    const path = [...parents, cleanPrelude(block.prelude)]
+    const tokens = ownTokens(block)
+    if (Object.keys(tokens).length > 0) {
+      if (path.some(p => p.startsWith('@')))
+        skipped.push({ path, reason: 'at-rule' })
+      else if (parents.length > 0)
+        skipped.push({ path, reason: 'nested' })
+      else if (path[0])
+        bySelector.set(path[0], { ...bySelector.get(path[0]), ...tokens })
     }
-
-    const level = stack.pop()
-    if (!level)
-      break
-    level.body.push(css.slice(chunkStart, i))
-    chunkStart = i + 1
-
-    const tokens: Record<string, string> = {}
-    for (const decl of level.body.join(';').matchAll(DECL_RE)) {
-      const value = decl[2]!.trim()
-      if (value)
-        tokens[decl[1]!] = value
-    }
-    if (Object.keys(tokens).length === 0)
-      continue
-
-    const path = [...stack.map(l => l.prelude), level.prelude]
-    if (path.some(p => p.startsWith('@')))
-      skipped.push({ path, reason: 'at-rule' })
-    else if (stack.length > 0)
-      skipped.push({ path, reason: 'nested' })
-    else if (level.prelude)
-      blocks.push({ selector: level.prelude, tokens })
+    for (const child of block.children)
+      visit(child, path)
   }
+  for (const block of scanCssBlocks(css).blocks)
+    visit(block, [])
 
-  return { blocks, skipped }
+  return { blocks: [...bySelector].map(([selector, tokens]) => ({ selector, tokens })), skipped }
+}
+
+/** Прелюдия без комментариев: `scanCssBlocks` захватывает в неё комментарий перед селектором. */
+function cleanPrelude(prelude: string): string {
+  return prelude.replace(/\/\*[\s\S]*?\*\//g, ' ').trim().replace(/\s+/g, ' ')
+}
+
+/** Собственные объявления блока; комментарий внутри значения срезается с учётом строк. */
+function ownTokens(block: CssBlock): Record<string, string> {
+  const tokens: Record<string, string> = {}
+  for (const decl of block.declarations) {
+    const value = stripComments(decl.value, 'value.css').trim()
+    if (value)
+      tokens[decl.token] = value
+  }
+  return tokens
 }
 
 function describeSkipped(skipped: readonly SkippedBlock[]): string {

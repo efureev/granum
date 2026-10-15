@@ -67,7 +67,10 @@ defineGranumComponent(import.meta.url, {
 
 `tokenDefinitionsRef` is read at provider build time and materialised into
 the manifest: the application does not need the file. `strict` by default:
-no selector or nesting is a `TokenParseError`, not an empty theme.
+no selector or nesting is a `TokenParseError`, not an empty theme. A token
+value is taken whole, including `url(data:…)` and strings with `;`; several
+blocks with the same selector are merged, the last declaration wins. An
+application theme's `tokensRef` is read the same way.
 
 ## Consumption and the report
 
