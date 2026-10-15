@@ -30,6 +30,9 @@ const RESOLVED_CSS = `\0${VIRTUAL_CSS}`
 const RESOLVED_LAYER_PREFIX = `\0${VIRTUAL_LAYER_PREFIX}`
 const RESOLVED_COMPONENTS = `\0${VIRTUAL_COMPONENTS}`
 const RESOLVED_THEMES = `\0${VIRTUAL_THEMES}`
+/** Слой при `css.split`: отдельная CSS-точка входа без объявления порядка (A-21). */
+const VIRTUAL_SPLIT_PREFIX = 'virtual:granum/split/'
+const RESOLVED_SPLIT_PREFIX = `\0${VIRTUAL_SPLIT_PREFIX}`
 
 export interface GranumPluginOptions {
   /** Опции манифеста тем для `virtual:granum/themes`. */
@@ -110,7 +113,10 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   /** Проставлены ли `<link>` на них: без HTML-точки входа этого не произойдёт. */
   let splitLinked = false
   /** Делим ли слои в этой сборке. */
-  const splitting = (): boolean => config.css?.split === true && isBuild && !isSsrBuild
+  /** Делит ли Vite CSS по чанкам: без этого он склеит слои обратно в один файл. */
+  let cssCodeSplit = true
+  let splitWarned = false
+  const splitting = (): boolean => config.css?.split === true && isBuild && !isSsrBuild && cssCodeSplit
 
   /*
    * Время фаз granum, миллисекунды. Печатается в итоговой строке сборки и НЕ
@@ -216,6 +222,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       // Серверная сборка HTML не порождает, ссылки проставлять некуда: слои там
       // не делятся, CSS приезжает одним модулем, как и раньше.
       isSsrBuild = Boolean(resolved.build.ssr)
+      cssCodeSplit = resolved.build.cssCodeSplit !== false
+      if (config.css?.split === true && isBuild && !isSsrBuild && !cssCodeSplit && !splitWarned) {
+        splitWarned = true
+        log(`warning: css.split needs build.cssCodeSplit — Vite merges all CSS into one file, so the layers ship as one asset`)
+      }
     },
 
     configureServer(devServer: ViteDevServer): void {
@@ -254,6 +265,26 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           log(`warning: components: 'imports' needs appSources.dirs — the selection is empty`)
       }
       writeComponentTypes(app)
+
+      /*
+       * Ассеты слоёв (A-21) — CSS-точки входа, а не готовые строки: так каждый
+       * слой проходит CSS-конвейер Vite, как любой CSS сборки, — PostCSS,
+       * минификацию и `build.cssTarget`. JS-заглушку «чисто CSS» Vite убирает
+       * сам. Имя чанка — с `.css`: из него Vite строит имя ассета, и
+       * `granum.tokens` без расширения превратилось бы в `granum.css` у всех
+       * слоёв. Пустые слои пропускаются — ассета и запроса за ним быть не должно.
+       */
+      if (splitting()) {
+        const css = await emit()
+        const options = config.css ?? {}
+        splitLayers = []
+        for (const layer of LAYER_NAMES) {
+          if (!wrapLayer(css.layers, layer, options, { declareOrder: false }))
+            continue
+          this.emitFile({ type: 'chunk', id: `${VIRTUAL_SPLIT_PREFIX}${layer}.css`, name: assetNameOf(layer) })
+          splitLayers.push(layer)
+        }
+      }
     },
 
     async resolveId(source, importer) {
@@ -265,6 +296,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         return RESOLVED_COMPONENTS
       if (source === VIRTUAL_THEMES)
         return RESOLVED_THEMES
+      if (source.startsWith(VIRTUAL_SPLIT_PREFIX))
+        return `\0${source}`
 
       const guard = config.js?.guard ?? 'error'
       if (guard === 'off' || !importer || importer.startsWith('\0') || importer.includes('/node_modules/'))
@@ -296,6 +329,12 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
         return wrapLayer((await emit()).layers, name, config.css ?? {})
       }
+      if (id.startsWith(RESOLVED_SPLIT_PREFIX)) {
+        const name = id.slice(RESOLVED_SPLIT_PREFIX.length).replace(/\.css$/, '') as LayerName
+        if (!LAYER_NAMES.includes(name))
+          throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
+        return wrapLayer((await emit()).layers, name, config.css ?? {}, { declareOrder: false })
+      }
       if (id === RESOLVED_COMPONENTS) {
         const app = await prepare()
         return `${componentExports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
@@ -305,29 +344,6 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         return `export default ${JSON.stringify(getThemeManifest(app.resolution, options.themeManifest ?? {}))}\n`
       }
       return null
-    },
-
-    /**
-     * Ассеты слоёв (A-21).
-     *
-     * Эмитятся здесь, а не в `generateBundle`: имя с хешем присваивается
-     * бандлером позже, и сослаться на него можно только через `getFileName` по
-     * ссылке, выданной сейчас. Пустые слои пропускаются — ассета и запроса за
-     * ним быть не должно.
-     */
-    async renderStart(): Promise<void> {
-      if (!splitting())
-        return
-      const css = await emit()
-      const options = config.css ?? {}
-      splitLayers = []
-      for (const layer of LAYER_NAMES) {
-        const source = wrapLayer(css.layers, layer, options, { declareOrder: false })
-        if (!source)
-          continue
-        this.emitFile({ type: 'asset', name: assetNameOf(layer), source })
-        splitLayers.push(layer)
-      }
     },
 
     /**

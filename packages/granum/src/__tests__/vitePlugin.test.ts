@@ -1,3 +1,4 @@
+import type { InlineConfig } from 'vite'
 import type { GranumConfig } from '../config'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -55,7 +56,7 @@ async function buildProvider(): Promise<string> {
   return root
 }
 
-async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string) {
+async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string, vite: Pick<InlineConfig, 'build' | 'css'> = {}) {
   // `reuseRoot` — для второй сборки ТОГО ЖЕ приложения: без него не проверить,
   // что плагин не переписывает файлы, которые не менялись.
   const root = reuseRoot ?? mkdtempSync(join(tmpdir(), 'granum-app-'))
@@ -75,7 +76,8 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
     configFile: false,
     logLevel: 'silent',
     plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, ...config }, { log: l => logs.push(l) })],
-    build: { minify: false },
+    build: { minify: false, ...vite.build },
+    ...(vite.css ? { css: vite.css } : {}),
   })
   const assets = join(root, 'dist/assets')
   const files = readdirSync(assets)
@@ -228,6 +230,42 @@ describe('granum() с настоящим Vite', async () => {
         for (const other of ['tokens', 'base', 'themes', 'components', 'utilities'].filter(l => l !== layer))
           expect(css).not.toContain(`@layer granum.${other} {`)
       }
+    })
+
+    it('ассет слоя проходит CSS-конвейер Vite: PostCSS и минификация', async () => {
+      // Метка, которую ставит PostCSS-плагин из конфига Vite: без конвейера её
+      // нет. С декларацией — пустое правило минификатор выбросил бы.
+      const mark = { postcssPlugin: 'granum-test-mark', Once(root: { append: (css: string) => void }) {
+        root.append('.postcss-ran{color:red}')
+      } }
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'], css: { split: true } },
+        `<template><div class="p-4"/></template>`,
+        undefined,
+        undefined,
+        { build: { minify: true }, css: { postcss: { plugins: [mark as never] } } },
+      )
+      const tokens = app.cssFiles.find(f => f.startsWith('granum.tokens-'))!
+      expect(tokens).toBeDefined()
+      const css = app.cssOf(tokens)
+      expect(css).toContain('@layer granum.tokens{')
+      expect(css).not.toContain('\n  ')
+      expect(app.cssFiles.filter(f => f.startsWith('granum.')).every(f => app.cssOf(f).includes('.postcss-ran'))).toBe(true)
+    })
+
+    it('без build.cssCodeSplit — предупреждение и один файл', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'], css: { split: true } },
+        `<template><div class="p-4"/></template>`,
+        undefined,
+        undefined,
+        { build: { cssCodeSplit: false } },
+      )
+      expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])
+      expect(app.css).toContain('@layer granum.tokens {')
+      expect(app.logs.join('\n')).toContain('css.split needs build.cssCodeSplit')
     })
 
     it('без split — один ассет со всеми слоями', async () => {

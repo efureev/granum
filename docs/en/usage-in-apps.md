@@ -149,11 +149,13 @@ Every non-empty layer goes out as its own asset with its own hash, and the
 `<link>` tags are injected into the HTML in layer order — the order of the links
 is the order of the cascade. After that, a change in the markup changes one asset
 out of five; the browser takes the other four from cache. The `apps/bench-split`
-stand checks exactly this: two builds and a comparison of names.
+stand checks exactly this: two builds and a comparison of names. Each layer
+asset goes through Vite's CSS pipeline: PostCSS, minification, `build.cssTarget`.
 
 The limits of the option: it applies to an application build only, and only where
 there is an HTML entry — that is where the links go, and without HTML the plugin
-says so with a warning. A server build produces no HTML, and in dev there are no
+says so with a warning. It also needs `build.cssCodeSplit` (on by default):
+without it Vite merges all CSS into one file, and the plugin says so too. A server build produces no HTML, and in dev there are no
 hashed assets at all, so CSS still arrives as a single module. The price is the
 total weight, and it is not symbolic: every file is compressed with its own
 dictionary. On a design system with 222 kB of CSS that is 41.6 kB gzip in five

@@ -147,13 +147,15 @@ const joined = [
   ...LAYERS.map(layer => readFileSync(join(assetsDir, restored.get(layer)), 'utf8')),
 ].join('')
 const report = JSON.parse(readFileSync(join(dist, 'granum-report.json'), 'utf8'))
+// Ассеты слоёв проходят минификацию Vite: `@layer granum.tokens{`, без пробела.
+const blockAt = layer => joined.search(new RegExp(`@layer granum\\.${layer}\\s*\\{`))
 check(
-  joined.includes('@layer granum.tokens {') && joined.includes('@layer granum.utilities {'),
+  blockAt('tokens') > -1 && blockAt('utilities') > -1,
   'в конкатенации слоёв нет обёрток @layer',
 )
 check(
-  LAYERS.every(layer => joined.indexOf(`@layer granum.${layer} {`) > -1)
-  && LAYERS.slice(1).every((layer, i) => joined.indexOf(`@layer granum.${layer} {`) > joined.indexOf(`@layer granum.${LAYERS[i]} {`)),
+  LAYERS.every(layer => blockAt(layer) > -1)
+  && LAYERS.slice(1).every((layer, i) => blockAt(layer) > blockAt(LAYERS[i])),
   'порядок слоёв в конкатенации не совпадает с порядком каскада',
 )
 // У фикстуры `heavy` одна намеренно мёртвая запись safelist (INV-CON-4); ничего
