@@ -18,6 +18,8 @@ export type {
   ResolvedThemeTokens,
   ResolvedThemeWarning,
   ResolveThemesInput,
+  ThemeFileFacts,
+  ThemeFilesInput,
   ThemeNamesSource,
 } from './resolveThemes'
 export { APP_THEME_SOURCE, defaultAppThemeSelector, GRANUM_DEFAULT_THEME_NAMES, resolveNeededThemeNames, resolveThemes } from './resolveThemes'
