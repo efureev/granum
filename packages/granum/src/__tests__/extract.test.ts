@@ -121,6 +121,17 @@ describe('collectImportSpecifiers: комментарии срезаются с 
     expect(collectImportSpecifiers(code)).toContain('node:fs')
   })
 
+  it('require() — тоже импорт', () => {
+    expect(collectImportSpecifiers(`const fs = require('node:fs')\nconst x = require("css-tree")\n`)).toEqual(['css-tree', 'node:fs'])
+  })
+
+  it('спецификатор без пробелов: строка "import" в коде не склеивает текст до ближайшей кавычки', () => {
+    // Так выглядит собранный codegen: закрывающая кавычка строки `"import"`
+    // давала «голый импорт» со спецификатором в полстраницы кода.
+    const code = 'const entryFor = options.entryStyle === "import" ? (c) => c : (c) => ({\n  types: \'x\' })\n'
+    expect(collectImportSpecifiers(code)).toEqual([])
+  })
+
   it('импорт в комментарии не считается, URL в строке не режется', () => {
     const code = `const u = 'https://cdn.example/x' // import 'node:path'\n/* import 'node:os' */\nimport a from './a.js'\n`
     expect(collectImportSpecifiers(code)).toEqual(['./a.js'])

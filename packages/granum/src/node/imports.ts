@@ -9,10 +9,13 @@ export function collectImportSpecifiers(code: string): string[] {
   // Срез с учётом строк: `/*` внутри `'./icons/*.svg'` не съедает импорты дальше по файлу.
   const source = stripCommentsWith(code, 'module.js', 'all')
   const out = new Set<string>()
+  // Спецификатор не содержит пробелов: иначе закрывающая кавычка строки
+  // `"import"` в коде давала «голый импорт» длиной до следующей кавычки.
   for (const re of [
-    /\b(?:import|export)\b[^'";]+?\bfrom\s*['"]([^'"]+)['"]/g,
-    /\bimport\s*['"]([^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /\b(?:import|export)\b[^'";]+?\bfrom\s*['"]([^'"\s]+)['"]/g,
+    /\bimport\s*['"]([^'"\s]+)['"]/g,
+    /\bimport\s*\(\s*['"]([^'"\s]+)['"]\s*\)/g,
+    /\brequire\s*\(\s*['"]([^'"\s]+)['"]\s*\)/g,
   ]) {
     for (const m of source.matchAll(re))
       out.add(m[1]!)

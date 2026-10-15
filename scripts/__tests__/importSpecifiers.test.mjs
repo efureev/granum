@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectImportSpecifiers, isRelative, stripComments } from '../lib/importSpecifiers.mjs'
+import { collectImportSpecifiers, isRelative } from '../lib/importSpecifiers.mjs'
 
 describe('collectImportSpecifiers', () => {
   it('collects static, bare, dynamic and require specifiers', () => {
@@ -34,7 +34,12 @@ describe('collectImportSpecifiers', () => {
   })
 
   it('keeps URLs with // inside strings', () => {
-    expect(stripComments(`const u = 'https://a.b/c'`)).toBe(`const u = 'https://a.b/c'`)
+    expect(collectImportSpecifiers(`const u = 'https://a.b/c'\nimport x from './x.js'`)).toEqual(['./x.js'])
+  })
+
+  it('a /* inside a string does not swallow the imports after it', () => {
+    const code = `const glob = './icons/*.svg'\nimport { readFileSync } from 'node:fs'\n/** doc */\n`
+    expect(collectImportSpecifiers(code)).toEqual(['node:fs'])
   })
 
   it('isRelative', () => {

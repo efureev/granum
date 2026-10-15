@@ -1,30 +1,16 @@
 /**
- * Извлекает спецификаторы импортов из собранного ES-модуля.
+ * Спецификаторы импортов собранного ES-модуля — для проверки границ `dist`.
  *
- * Регэкспы, а не парсер: `dist` не минифицирован, а ложное срабатывание лишь
- * делает проверку строже. Комментарии срезаются заранее — иначе JSDoc вида
- * «импорт из `@unocss/core`» даёт ложное нарушение границы.
+ * Разбор — тот же, что у самого пакета (`collectImportSpecifiers` из
+ * `@feugene/granum/node`): комментарии срезаются с учётом строк, `require()`
+ * считается импортом, спецификатор без пробелов. Своя копия здесь была
+ * регэкспом без строк: `/*` внутри литерала съел бы импорты до ближайшего
+ * закрывающего, и гейт пропустил бы нарушение.
+ *
+ * Скрипт работает по собранному `dist`, так что пакет к этому моменту собран;
+ * тесты скриптов берут исходник через алиас в `vitest.config.mjs`.
  */
-export function stripComments(code) {
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
-}
-
-const STATIC_FROM = /\b(?:import|export)\b[^'";]*?\bfrom\s*['"]([^'"]+)['"]/g
-const STATIC_BARE = /\bimport\s*['"]([^'"]+)['"]/g
-const DYNAMIC = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
-const REQUIRE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g
-
-export function collectImportSpecifiers(code) {
-  const source = stripComments(code)
-  const out = new Set()
-  for (const re of [STATIC_FROM, STATIC_BARE, DYNAMIC, REQUIRE]) {
-    for (const m of source.matchAll(re))
-      out.add(m[1])
-  }
-  return [...out].sort()
-}
+export { collectImportSpecifiers } from '@feugene/granum/node'
 
 export function isRelative(specifier) {
   return specifier.startsWith('./') || specifier.startsWith('../')
