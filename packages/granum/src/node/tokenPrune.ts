@@ -1,8 +1,9 @@
 /**
  * План обрезки токенов (T-2, INV-TOK-2, INV-TOK-3). Корни — потребление,
  * известное из манифестов селекции (`consumes`, `dynamic`, `var()` в safelist),
- * `var()` в правилах инлайнимых файлов и CSS компонентов, ключи
- * `tokenOverrides`, исходники приложения и шаблоны `keep`. Замыкание — по
+ * `var()` в правилах инлайнимых файлов, CSS компонентов и выводе движка
+ * (утилиты и preflight), ключи `tokenOverrides`, исходники приложения и
+ * шаблоны `keep`. Замыкание — по
  * графу «токен → токены в его значении». Множество сохранённых глобально по
  * темам: токен, нужный только тёмной теме, обязан уцелеть и в светлой.
  */
@@ -18,6 +19,7 @@ export type TokenKeepReason
   = | { readonly kind: 'usage' }
     | { readonly kind: 'inlined-rule' }
     | { readonly kind: 'component-css' }
+    | { readonly kind: 'engine-css' }
     | { readonly kind: 'override' }
     | { readonly kind: 'structural' }
     | { readonly kind: 'app-source' }
@@ -103,6 +105,14 @@ export interface PlanTokenPruneInput {
   readonly componentCss: readonly string[]
   /** Потребление исходниками приложения, с `--`. */
   readonly appConsumes: readonly string[]
+  /**
+   * CSS, сгенерированный движком: утилиты и preflight. Правило держит токен
+   * телом декларации (`atom-frame{border:…var(--x)}`, `bg-[--x]`), а не именем
+   * класса, поэтому в `consumes` манифеста такого токена нет. Без этого входа
+   * обрезка режет токены, на которые ссылаются только утилиты; необязателен
+   * лишь ради совместимости вызовов из `./node`.
+   */
+  readonly engineCss?: readonly string[]
 }
 
 export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
@@ -122,7 +132,7 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
     }
   }
 
-  // R2 — `var()` в правилах инлайнимых файлов (без их же объявлений) и в CSS компонентов.
+  // R2 — `var()` в правилах инлайнимых файлов (без их же объявлений), в CSS компонентов и в выводе движка.
   const declarationsBySection = new Map<PrunableSection, CssDeclarationOccurrence[]>()
   for (const section of input.inlined) {
     const decls = scanCssDeclarations(section.css)
@@ -135,6 +145,10 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
   for (const css of input.componentCss) {
     for (const token of extractTokenUses(unescapeCss(css)).keys())
       keep(token, { kind: 'component-css' })
+  }
+  for (const css of input.engineCss ?? []) {
+    for (const token of extractTokenUses(unescapeCss(css)).keys())
+      keep(token, { kind: 'engine-css' })
   }
 
   // R3 — ключи tokenOverrides, сырые, до strictTokens.

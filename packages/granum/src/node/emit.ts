@@ -111,8 +111,29 @@ export function wrapLayer(
   return `${parts.join('\n')}\n`
 }
 
+/**
+ * Утилиты движка: классы манифестов ∪ safelist ∪ приложение (INV-CSS-3).
+ *
+ * `reextractLost` — классы, которые были в манифесте и не нашлись при
+ * пересчёте. Они обязаны остаться видны в `unmatched`: пересчёт не имеет права
+ * делать потерю тише, чем она была (A-E7, INV-DIAG-2).
+ *
+ * Отдельной функцией, потому что тот же вывод нужен `granum prune`: утилиты —
+ * корень обрезки, и план диагностики обязан совпадать с планом сборки
+ * (INV-DIAG-1).
+ */
+export async function generateEngineCss(app: PreparedApp): Promise<{ engineInput: string[], generated: EngineOutput }> {
+  const { resolution } = app
+  const engineInput = sortedUnique([...resolution.classes, ...resolution.safelist, ...app.appScan.classes, ...app.reextractLost])
+  const generated = await app.engine.generate({
+    classes: new Set(engineInput),
+    ...app.engineContribution,
+  })
+  return { engineInput, generated }
+}
+
 export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
-  const { resolution, config, engine } = app
+  const { resolution, config } = app
   const byId = new Map(resolution.providers.map(p => [p.id, p]))
 
   // 1. Инлайнимые файлы: tokens → base → файлы тем.
@@ -148,16 +169,8 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     }
   }))
 
-  // 4. Утилиты: классы манифестов ∪ safelist ∪ приложение (INV-CSS-3).
-  // `reextractLost` — классы, которые были в манифесте и не нашлись при
-  // пересчёте. Они обязаны остаться видны в `unmatched`: пересчёт не имеет
-  // права делать потерю тише, чем она была (A-E7, INV-DIAG-2).
-  const engineInput = sortedUnique([...resolution.classes, ...resolution.safelist, ...app.appScan.classes, ...app.reextractLost])
-  const generated = await engine.generate({
-    classes: new Set(engineInput),
-    ...(config.themes && 'engineTheme' in config.themes ? {} : {}),
-    ...app.engineContribution,
-  })
+  // 4. Утилиты движка.
+  const { engineInput, generated } = await generateEngineCss(app)
   const safelistRedundant = resolution.safelist.filter(c => resolution.classes.includes(c))
 
   // 5. Обрезка: `off` не читает лишнего и не меняет ни байта (INV-TOK-1).
@@ -173,6 +186,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
       inlined: sections,
       componentCss,
       appConsumes: app.appScan.consumes,
+      engineCss: [generated.css, generated.preflight ?? ''],
     })
     if (mode === 'on') {
       const cut = (s: PrunableSection): string => (s.source.kind === 'base' ? s.css : pruneCssDeclarations(s.css, prune!.isKept).css)

@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
 import { makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
+import { testEngine } from './testEngine'
 
 interface Fixture {
   root: string
@@ -279,6 +280,15 @@ describe('granum tokens', () => {
 })
 
 describe('granum prune', () => {
+  it('токен из вывода движка сохраняется по той же причине, что в сборке (INV-DIAG-1, INV-TOK-2)', async () => {
+    const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
+    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine })
+    const report = await granumTokenPrune(a)
+    expect(report.removed).toEqual(['dark-unused'])
+    expect(report.kept.find(k => k.token === 'unused')?.reason).toEqual({ kind: 'engine-css' })
+    expect(formatTokenPruneReport(report, a.root)).toContain('--unused — used by engine utilities or preflight')
+  })
+
   it('план совпадает с planTokenPrune, base не режется, размеры считаются', async () => {
     const a = await app(fixture(), { pruneTokens: { mode: 'on' } })
     const report = await granumTokenPrune(a)

@@ -7,6 +7,7 @@ import type { TokenKeepReason } from '../tokenPrune'
 import { Buffer } from 'node:buffer'
 import { readCss } from '../css'
 import { scanCssDeclarations } from '../cssDeclarations'
+import { generateEngineCss } from '../emit'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { pruneCssDeclarations } from '../pruneCssDeclarations'
 import { planTokenPrune } from '../tokenPrune'
@@ -41,6 +42,7 @@ export async function granumTokenPrune(app: PreparedApp): Promise<TokenPruneRepo
   const sources = resolveInlinedCssSources(resolution)
   const inlined = await Promise.all(sources.map(async source => ({ source, css: await readCss(source.path) })))
   const componentCss = await Promise.all(resolution.componentCss.map(ref => readCss(resolveProviderPath(ref.path, byId.get(ref.providerId)?.baseUrl))))
+  const { generated } = await generateEngineCss(app)
 
   const plan = planTokenPrune({
     resolution,
@@ -49,6 +51,7 @@ export async function granumTokenPrune(app: PreparedApp): Promise<TokenPruneRepo
     inlined,
     componentCss,
     appConsumes: app.appScan.consumes,
+    engineCss: [generated.css, generated.preflight ?? ''],
   })
 
   const files: TokenPruneFileReport[] = inlined.map(({ source, css }) => {
@@ -86,6 +89,7 @@ function reasonText(reason: TokenKeepReason): string {
     case 'usage': return 'consumed by a selected component'
     case 'inlined-rule': return 'used by a rule in an inlined file'
     case 'component-css': return 'used by component CSS'
+    case 'engine-css': return 'used by engine utilities or preflight'
     case 'override': return 'written by tokenOverrides'
     case 'structural': return 'defined by a structural layer'
     case 'app-source': return 'used by application sources'

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { CssReadError, TokenRefError } from '../core/errors'
 import { emitCss, LAYER_NAMES, wrapLayer, wrapLayers } from '../node/emit'
 import { buildReport } from '../node/report'
-import { makeManifest, makeProvider, prepareTestApp } from './helpers'
+import { makeManifest, makeProvider, prepareTestApp, TEST_ENGINE } from './helpers'
 import { testEngine } from './testEngine'
 
 /** Провайдер-манифест с файлами на диске: tokens, base, тема, CSS компонента. */
@@ -156,6 +156,18 @@ describe('emitCss: обрезка токенов (INV-TOK-1, INV-TOK-2)', () => 
     // `--space` держит правило base (inlined-rule); `--derived` — потребление Card (usage).
     expect(on.css.prune?.kept.get('space')?.kind).toBe('inlined-rule')
     expect(on.css.prune?.kept.get('derived')?.kind).toBe('usage')
+  })
+
+  it('токен, на который ссылается только вывод движка, не режется', async () => {
+    // Утилита держит `--unused` телом декларации: ни `consumes`, ни CSS компонента о нём не знают.
+    const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { flex: 'display:flex;gap:var(--unused);' } })
+    const utility = await run({ components: ['@x/kit:Card'], pruneTokens: { mode: 'on' }, engine })
+    expect(utility.css.layers.utilities).toContain('var(--unused)')
+    expect(utility.css.layers.tokens).toContain('--unused: 1px')
+    expect(utility.css.prune?.kept.get('unused')?.kind).toBe('engine-css')
+
+    const preflight = await run({ components: ['@x/kit:Card'], pruneTokens: { mode: 'on' }, engine: testEngine({ preflight: 'body{color:var(--unused)}' }) })
+    expect(preflight.css.layers.tokens).toContain('--unused: 1px')
   })
 
   it('исходники приложения держат токен и дают классы', async () => {

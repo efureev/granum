@@ -75,7 +75,7 @@
 | INV-THM-8 | Контроллер, поднятый поверх уже применённой темы, не меняет состояние корня: серверный кадр и первый клиентский совпадают | new | `./runtime` | `verify-ssr.mjs`: старт контроллера не трогает корень, переключение трогает |
 | INV-THM-9 | `./runtime` работает в Node без DOM: контроллер конструируется, отвечает на запросы и молча не применяет тему | new | `./runtime` | `verify-ssr.mjs` под `document === undefined` |
 | INV-TOK-1 | `pruneTokens.mode: 'off'` не меняет эмиссию ни на байт и не читает лишних файлов | v1 (gotchas) | `./vite` | снапшот CSS off vs baseline; mock FS |
-| INV-TOK-2 | Обрезка никогда не удаляет токен, достижимый от корней: потребление в CSS селекции, `consumes` и `dynamic` манифестов, исходники приложения, `keep` | v1 (prune), усилен | `./vite` | unit на граф достижимости; фикстура с `dynamicTokens` |
+| INV-TOK-2 | Обрезка никогда не удаляет токен, достижимый от корней: потребление в CSS селекции (CSS компонентов, утилиты и preflight движка), `consumes` и `dynamic` манифестов, исходники приложения, `keep` | v1 (prune), усилен | `./vite` | unit на граф достижимости; фикстура с `dynamicTokens` |
 | INV-TOK-3 | Достижимость считается по графу «токен → токены в его значении», корни — только потребление вне значений custom properties | v1 (measuring) | `./node` | unit с цепочкой `--soft → --danger` |
 | INV-TOK-4 | Токен, потребляемый без fallback и не объявленный ни одним слоем для активной темы, попадает в отчёт как `token-undefined` | v1 §10 | `./vite`, `doctor` | `diagnostics.test.ts` (`undefinedTokens`); `apps/bench-one/expected.mjs` (`tokens.undefined` пуст) |
 

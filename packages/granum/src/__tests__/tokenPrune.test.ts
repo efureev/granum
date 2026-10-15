@@ -33,6 +33,7 @@ function plan(input: Partial<Parameters<typeof planTokenPrune>[0]> & { component
     inlined: input.inlined ?? [tokensSection],
     componentCss: input.componentCss ?? [],
     appConsumes: input.appConsumes ?? [],
+    ...(input.engineCss ? { engineCss: input.engineCss } : {}),
   })
 }
 
@@ -56,6 +57,13 @@ describe('planTokenPrune: корни (INV-TOK-2)', () => {
 
   it('исходники приложения — корень', () => {
     expect(plan({ appConsumes: ['--by-app'] }).kept.get('by-app')?.kind).toBe('app-source')
+  })
+
+  it('вывод движка — утилиты и preflight — корень', () => {
+    // Правило держит токен телом декларации, а не именем класса: в `consumes` манифеста его нет.
+    expect(plan({ components: ['pkg:B'], engineCss: ['.atom-frame{border:1px solid var(--lonely)}'] }).kept.get('lonely')?.kind).toBe('engine-css')
+    expect(plan({ components: ['pkg:B'], engineCss: ['', 'body{color:var(--lonely)}'] }).kept.get('lonely')?.kind).toBe('engine-css')
+    expect(plan({ components: ['pkg:B'] }).removable).toContain('lonely')
   })
 })
 
