@@ -28,7 +28,13 @@ export interface GranumCssOptions {
   readonly layers?: boolean
   /** Префикс имён слоёв. По умолчанию `granum`. */
   readonly layerPrefix?: string
-  /** Раскрывать `@apply` в CSS провайдеров объектной формы. По умолчанию `false`. */
+  /**
+   * @deprecated Не действует и будет удалено в 2.0. `@apply` раскрывается
+   * только на сборке провайдера (`granumProvider()`, B-11, ADR-3); раскрытие в
+   * приложении развернуло бы классы провайдера движком приложения, то есть,
+   * возможно, чужим словарём. Остаток директив ловит `granum doctor`
+   * (`apply-not-expanded`). При `true` плагин печатает предупреждение.
+   */
   readonly expandDirectives?: boolean
   /**
    * Отдельный ассет на слой вместо одного файла. По умолчанию `false`.

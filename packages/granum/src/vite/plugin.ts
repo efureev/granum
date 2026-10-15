@@ -80,6 +80,10 @@ function assetNameOf(layer: LayerName): string {
 export function granum(config: GranumConfig, options: GranumPluginOptions = {}): Plugin {
   validateGranumConfig(config)
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
+  // `@apply` раскрывает только сборка провайдера (B-11, ADR-3): опция ничего не
+  // делает, и молчание о ней обещало бы раскрытие, которого нет.
+  if (config.css?.expandDirectives === true)
+    log(`warning: css.expandDirectives has no effect — @apply is expanded only when the provider is built (ADR-3); rebuild the provider with granumProvider()`)
 
   let root = process.cwd()
   let outDir = 'dist'

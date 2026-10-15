@@ -258,6 +258,17 @@ describe('granum() с настоящим Vite', async () => {
     expect(byImports.report?.selection.map((s: { key: string }) => s.key)).toEqual(['@t/kit:Table'])
   })
 
+  it('css.expandDirectives не действует — предупреждение при создании плагина (ADR-3)', () => {
+    // `@apply` раскрывает только сборка провайдера; опция в приложении ничего не
+    // делала, и молчать о ней значило бы обещать то, чего нет.
+    const logs: string[] = []
+    granum({ providers: ['@t/kit'], engine: testEngine(), css: { expandDirectives: true } }, { log: l => logs.push(l) })
+    expect(logs.join('\n')).toContain('css.expandDirectives has no effect')
+    const quiet: string[] = []
+    granum({ providers: ['@t/kit'], engine: testEngine() }, { log: l => quiet.push(l) })
+    expect(quiet).toEqual([])
+  })
+
   it('плоский режим без @layer (A-14)', async () => {
     const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], css: { layers: false } }, `<template><div/></template>`)
     expect(app.css).not.toContain('@layer')

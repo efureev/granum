@@ -96,9 +96,11 @@ is removed and why.
 ## `@apply` in the output
 
 `apply-not-expanded` in `doctor`: the provider was built without
-`granumProvider()`. For object-form providers `css: { expandDirectives: true }`
-can be enabled in the application, but the right path is to rebuild the
-provider.
+`granumProvider()`. `@apply` is expanded only when the provider is built
+(ADR-3); the application does not expand directives: otherwise the
+provider's classes would be expanded by the application's engine, possibly
+with a different vocabulary. Rebuild the provider with `granumProvider()`; an
+object-form provider too — then the application takes its manifest.
 
 ## `ApplyExpansionError` when building a provider
 
