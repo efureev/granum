@@ -42,7 +42,10 @@ const theme = inject(activeThemeKey)!
     </XhCard>
 
     <!-- Токены темы, объявленные структурно. -->
-    <XTokenized />
+    <div class="flex items-center gap-4">
+      <XTokenized class="h-12 w-20 shrink-0 rounded-lg" />
+      <span>XTokenized — фон из структурного токена темы</span>
+    </div>
 
     <!--
       Класс, который есть только в разметке приложения: обрезка токенов обязана

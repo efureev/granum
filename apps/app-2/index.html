@@ -3,10 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>granum app-2 — safelist и tokenOverrides</title>
+    <link rel="icon" href="data:," />
+    <title>granum app-2 — safelist и токены приложения</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-2</code></p>
+      <h1>Классы из рантайма и токены приложения</h1>
+      <p class="demo-lead">
+        Классы <code>XTestStyled</code> склеиваются в JS из строки, поэтому сборка пакета
+        кладёт их в <code>safelist</code> манифеста. Цвета, которые компонент потребляет,
+        задаёт само приложение через <code>themes.tokenOverrides</code>.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>
+          Рамка бирюзовая (<code>--brd</code>), текст малиновый (<code>--card-fg</code>): оба
+          токена объявлены в <code>tokenOverrides.light</code>.
+        </li>
+        <li>
+          Фона и скругления у карточки нет: <code>--card</code> и <code>--ds-radius-lg</code>
+          никто не объявил, и доктор называет оба.
+        </li>
+        <li>
+          Правило <code>x-app-only</code> в фабрике движка меняет отпечаток словаря. granum
+          пересчитывает классы пакета своим движком, и наборы совпадают.
+        </li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-2 verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

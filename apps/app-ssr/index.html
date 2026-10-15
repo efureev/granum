@@ -3,10 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-ssr — серверный рендер</title>
   </head>
   <body>
-    <div id="app"><!--app-html--></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-ssr</code></p>
+      <h1>Серверный рендер</h1>
+      <p class="demo-lead">
+        Первый кадр собирает Node: сервер выбирает тему по <code>?theme=</code> и пишет её
+        активацию в корень документа, а клиент при гидрации читает применённую тему, а не
+        выбирает заново.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>Метка справа от кнопок — активная тема: у сервера и первого клиентского кадра она одна.</li>
+        <li>
+          <code>XgQuick</code> с <code>XTest1</code> из другого пакета, <code>XhCard</code> на
+          токенах темы из CSS-файлов провайдера, образец <code>XTokenized</code> на
+          структурных токенах.
+        </li>
+        <li>
+          Строка «Токен приложения» держит <code>--x-tokenized</code>: до него обрезка токенов
+          добирается только через разметку приложения.
+        </li>
+      </ul>
+      <p class="demo-run">
+        Запуск: <code>yarn workspace @granum-apps/app-ssr dev</code>, тёмная тема —
+        <code>?theme=dark</code>. Проверка: <code>yarn workspace @granum-apps/app-ssr verify</code>.
+      </p>
+    </header>
+    <div id="app" class="demo-stage"><!--app-html--></div>
     <script type="module" src="/src/entry-client.ts"></script>
   </body>
 </html>

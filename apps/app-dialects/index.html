@@ -3,10 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-dialects — расхождение словарей</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-dialects</code></p>
+      <h1>Чужой словарь</h1>
+      <p class="demo-lead">
+        Пакет <code>@granum-fixtures/atoms</code> собран движком словаря
+        <code>granum-fixtures/atoms@1</code>, приложение — на <code>windEngine()</code>.
+        Правила пакета в такую сборку не загружаются, классы пакета пересчитываются движком
+        приложения, и ни одно имя не пропадает молча.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>Блок без оформления, и так и должно быть: правил для <code>atom-*</code> в словаре приложения нет.</li>
+        <li>
+          Все семь потерянных имён названы в отчёте сборки (<code>lost</code>,
+          <code>unmatched</code>) и в трёх предупреждениях доктора.
+        </li>
+        <li>
+          Токены пакета доехали: это CSS-файлы, от словаря утилит они не зависят. Починку
+          подсказывает <code>granum why-css granum.config.ts atom-stack</code>.
+        </li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-dialects verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -22,6 +22,7 @@ outside that promise — re-extracting a package's classes is a normal path.
 | `packages/granum-engine-wind` | reference utility engine: vendored UnoCSS 66.7.5 fork behind a `GranumEngine` instance |
 | `fixtures/*` | reference provider packages, plus a toy engine of a second vocabulary |
 | `apps/*` | integration apps `app-*` and size benchmarks `bench-*` |
+| `apps/shared` | shell of the `app-*` demo stands: a style reset in its own layer and a header saying what the stand shows; view one with `yarn workspace @granum-apps/app-1 dev` |
 | `docs/` | technical specification, invariants, manifest format, decisions, plan |
 | `docs/en`, `docs/ru` | user guides, mirrored |
 

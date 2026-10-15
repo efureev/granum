@@ -5,6 +5,8 @@ import manifest from 'virtual:granum/themes'
 import App from './App.vue'
 import { activeThemeKey, readActiveTheme } from './theme'
 
+// Сброс и оболочка стенда — раньше CSS granum: слои, объявленные первыми, проигрывают его слоям.
+import '../../shared/demo.css'
 // Весь CSS granum одним модулем: пять каскадных слоёв. Импортирует его ТОЛЬКО
 // клиентский вход — серверу стили не нужны, он отдаёт ссылку на готовый ассет.
 import 'virtual:granum.css'

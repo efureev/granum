@@ -13,7 +13,9 @@ export default {
     providers: 1,
     reextract: ['dialect'],
     classSources: ['re-extracted'],
-    classesInput: 34,
+    // Сюда входят и кандидаты из разметки App.vue — слова подписи тоже: правка
+    // текста стенда сдвигает число, и это честный сдвиг работы.
+    classesInput: 44,
     classesMatched: 1,
     selection: 1,
   },

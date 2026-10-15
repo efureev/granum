@@ -6,7 +6,7 @@ export default {
       { what: 'блок темы ocean', css: '[data-theme=ocean]' },
       { what: 'блок темы crimson', css: '[data-theme=crimson]' },
       { what: 'токен приложения из литерала (emerald)', css: '--app-accent:#10b981' },
-      { what: 'токен приложения из CSS-файла (crimson, tokensRef)', css: '--app-accent:#e11d48' },
+      { what: 'токен приложения из CSS-файла (crimson, tokensRef)', css: '--app-accent:#f43f5e' },
       { what: 'унаследованный от light токен провайдерского компонента', css: '--x-tokenized:red' },
       { what: 'класс компонента, использующий токен темы', css: 'var(--x-tokenized)' },
     ],

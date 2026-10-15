@@ -3,10 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-1 — один компонент</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-1</code></p>
+      <h1>Один компонент из манифеста</h1>
+      <p class="demo-lead">
+        Приложение выбирает <code>XTest1</code> из пакета <code>@granum-fixtures/simple</code>.
+        Весь CSS собирается по манифесту: каскадные слои, собственный CSS компонента,
+        утилиты из его шаблона и из разметки приложения.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>
+          Крупный жирный красный текст — <code>@apply</code> из <code>&lt;style&gt;</code> компонента.
+          Директиву раскрыла ещё сборка пакета, в приложение она не доезжает.
+        </li>
+        <li>
+          Рамка в цвет текста: цвет границы <code>--brd</code> компонент ждёт от приложения,
+          а здесь его нет. <code>granum doctor</code> предупреждает <code>token-undefined</code>,
+          и браузер берёт <code>currentColor</code>.
+        </li>
+        <li>Ширину колонки задаёт <code>max-w-3xl</code> из разметки самого приложения.</li>
+      </ul>
+      <p class="demo-run">
+        Проверка: <code>yarn workspace @granum-apps/app-1 verify</code>;
+        каскад и HMR в браузере — <code>yarn e2e</code>.
+      </p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

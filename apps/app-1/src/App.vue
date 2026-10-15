@@ -5,7 +5,7 @@ import { XTest1 } from '@granum-fixtures/simple/components/XTest1'
 <template>
   <main class="mx-auto max-w-3xl p-8">
     <XTest1>
-      Test
+      Компонент XTest1
     </XTest1>
   </main>
 </template>

@@ -5,7 +5,7 @@ import { AtBox } from '@granum-fixtures/atoms/components/AtBox'
 <template>
   <main class="p-6">
     <AtBox>
-      Row
+      AtBox: классы пакета без правил — словарь приложения их не знает
     </AtBox>
   </main>
 </template>

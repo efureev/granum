@@ -3,10 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-atoms — свой движок</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-atoms</code></p>
+      <h1>Свой движок</h1>
+      <p class="demo-lead">
+        Движок <code>@granum-engines/atoms</code> написан с нуля на публичных хелперах ядра,
+        без UnoCSS. В одной сборке два пакета: <code>@granum-fixtures/atoms</code> на том же
+        словаре и <code>@granum-fixtures/plain</code> без словаря вовсе.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>
+          Рамка вокруг карточки — <code>atom-frame</code>, правило пакета: словари совпали, и
+          правила пакета загружены.
+        </li>
+        <li>Линия под блоком — <code>atom-hairline</code>, правило приложения из фабрики движка.</li>
+        <li>
+          Карточка — <code>PlCard</code>, собственный CSS пакета без словаря: пересчёта
+          классов он не требует ни при каком движке.
+        </li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-atoms verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

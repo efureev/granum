@@ -3,8 +3,17 @@ import { XTokenized } from '@granum-fixtures/simple/components/XTokenized'
 import { ref } from 'vue'
 import { themes } from './theme'
 
+/** Значение токена на корне документа: контроллер зовёт подписчиков уже после применения темы. */
+function tokenValue(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--x-tokenized').trim()
+}
+
 const current = ref(themes.get())
-themes.subscribe(name => (current.value = name))
+const token = ref(tokenValue())
+themes.subscribe((name) => {
+  current.value = name
+  token.value = tokenValue()
+})
 </script>
 
 <template>
@@ -25,8 +34,11 @@ themes.subscribe(name => (current.value = name))
         cycle
       </button>
     </header>
-    <XTokenized>
-      XTokenized — цвет приходит из токена активной темы
-    </XTokenized>
+    <div class="flex items-center gap-4">
+      <XTokenized class="h-16 w-24 shrink-0 rounded-lg" />
+      <p>
+        XTokenized — фон из токена активной темы: <code>--x-tokenized: {{ token }}</code>
+      </p>
+    </div>
   </main>
 </template>

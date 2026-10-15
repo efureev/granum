@@ -12,7 +12,7 @@ import { XxCard } from 'virtual:granum/components'
        поле `classes.app` отчёта, ради которого оно и заведено. -->
   <div class="mx-auto max-w-md p-[var(--xxx-space-2)]">
     <XxCard>
-      Канал JS
+      XxCard — импорт из <code>virtual:granum/components</code>
     </XxCard>
   </div>
 </template>

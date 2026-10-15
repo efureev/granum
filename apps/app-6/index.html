@@ -3,10 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-6 — темы приложения</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-6</code></p>
+      <h1>Темы приложения</h1>
+      <p class="demo-lead">
+        Набор тем принадлежит приложению: три темы из <code>themes.define</code> наследуют
+        <code>light</code> провайдера через <code>extends</code>. Палитру «Багрянца» конфиг
+        читает из CSS-файла (<code>tokensRef</code>). Тем <code>light</code> и
+        <code>dark</code> провайдера в сборке нет.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>Фон, текст и кнопки красятся токенами приложения <code>--app-*</code>.</li>
+        <li>
+          Образец — токен компонента <code>--x-tokenized</code>: Изумруд и Океан задают свой,
+          Багрянец наследует <code>red</code> из <code>light</code>.
+        </li>
+        <li>
+          Первую тему контроллер выбирает по <code>prefers-color-scheme</code>: у каждой темы
+          объявлена <code>colorScheme</code>.
+        </li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-6 verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -3,10 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>granum app-4 — вложенные SFC и доп-правила</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-4</code></p>
+      <h1>Вложенные компоненты и дополнительные правила</h1>
+      <p class="demo-lead">
+        <code>XNestedReverse</code> рендерит два вложенных SFC. Бандлер провайдера положил
+        их в свой чанк, и сборка пакета извлекла классы оттуда в манифест. Ниже — по строке
+        на каждый набор дополнительных правил движка; движок работает с
+        <code>variablePrefix: 'ds-'</code>.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>
+          Огромное «header» и разреженное «— END —» — <code>text-7xl</code> и
+          <code>tracking-widest</code> из вложенных компонентов.
+        </li>
+        <li>
+          Переменные утилит объявлены под <code>--ds-*</code>, а не <code>--un-*</code>:
+          preflight движка лежит в слое <code>base</code> под тем же префиксом.
+        </li>
+        <li>Ссылка «перейти к содержимому» скрыта, пока на неё не перейти клавишей Tab.</li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-4 verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

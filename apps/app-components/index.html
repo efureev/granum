@@ -3,10 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>granum app-components</title>
+    <link rel="icon" href="data:," />
+    <title>granum app-components — канал JS</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-components</code></p>
+      <h1>Канал JS</h1>
+      <p class="demo-lead">
+        Компонент импортируется из <code>virtual:granum/components</code>, который granum
+        собирает по селекции. В селекции оба компонента пакета
+        <code>@granum-fixtures/mini-ds</code>, разметка берёт один, и второй вырезает
+        tree-shaking. CSS идёт по селекции, поэтому стили обоих в дистрибутиве есть.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>
+          Карточка — <code>XxCard</code>: рамка и поверхность из собственного CSS пакета,
+          отступ — утилита <code>p-[var(--xxx-space-2)]</code>, общая у пакета и приложения.
+        </li>
+        <li>Объявления модуля для TypeScript плагин пишет сам — в <code>src/granum.d.ts</code>.</li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-components verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
