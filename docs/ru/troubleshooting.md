@@ -71,8 +71,9 @@
 - `granum doctor` → раздел `Themes`: имя есть в активном наборе? Набор
   определяется по `themes.names` → `themes.define` → `defaultThemes` →
   `['light']`.
-- Файл темы провайдера с необычным селектором: рантайм не выведет способ
-  активации — задайте `granum(config, { themeManifest: { activations: { dark: { kind: 'class', value: 'dark' } } } })`.
+- Селектор темы сложнее одного класса, атрибута или `:root` (комбинатор, `:not(…)`):
+  рантайм не выведет способ активации — задайте
+  `granum(config, { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } })`.
 - `theme-extends-unresolved`: `extends` ссылается на тему из файла — она
   непрозрачна, наследовать можно только структурные значения.
 

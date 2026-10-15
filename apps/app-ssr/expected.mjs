@@ -7,6 +7,20 @@ export default {
 
   themes: ['light', 'dark'],
 
+  /**
+   * Манифест тем: селекторы в порядке CSS и активация. `heavy` ставит темы
+   * файлами, и селектор его файла идёт первым — манифест читает файлы тем, а
+   * не только блоки компонентов (T-4), так что активация не зависит от того,
+   * выбран ли `XTokenized` со своими блоками.
+   */
+  manifest: {
+    light: { selectors: [':root'], activation: { type: 'root' } },
+    dark: {
+      selectors: ["[data-theme='dark'], .dark", '.dark, [data-theme="dark"]'],
+      activation: { type: 'attribute', name: 'data-theme', value: 'dark' },
+    },
+  },
+
   /** URL, которые рендерим. */
   render: {
     light: '/',

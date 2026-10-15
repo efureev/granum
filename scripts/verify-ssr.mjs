@@ -65,6 +65,11 @@ check(
   manifest.themes.map(t => t.name).join(',') === expected.themes.join(','),
   `темы манифеста: ${manifest.themes.map(t => t.name)}, ожидались ${expected.themes}`,
 )
+for (const theme of manifest.themes) {
+  const want = expected.manifest[theme.name]
+  const got = { selectors: theme.selectors, activation: theme.activation }
+  check(JSON.stringify(got) === JSON.stringify(want), `тема ${theme.name} в манифесте: ${JSON.stringify(got)}, ожидалось ${JSON.stringify(want)}`)
+}
 
 // 2. Шаблон и подстановка ------------------------------------------------------
 

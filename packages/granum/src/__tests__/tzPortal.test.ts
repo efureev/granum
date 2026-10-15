@@ -1,7 +1,6 @@
 import type { GranumProviderPluginOptions } from '../build/plugin'
 import type { GranumConfig } from '../config'
 import type { GranumLoadedManifest, GranumProvider } from '../contract'
-import type { PreparedApp } from '../node/prepare'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,8 +13,6 @@ import { defineGranumConfig } from '../config'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
-import { getThemeManifest } from '../node/themeManifest'
-import { createThemeController } from '../runtime/controller'
 import { granum } from '../vite/plugin'
 import { validateGranumConfig } from '../vite/validateConfig'
 import { fileThemeProvider, prepareTestApp, TEST_ENGINE } from './helpers'
@@ -39,42 +36,6 @@ describe('пункт ТЗ-2: тема приложения поверх темы
     expect(bare.resolution.warnings).toContainEqual(expect.objectContaining({ kind: 'theme-extends-unresolved', theme: 'ocean' }))
     const tinted = await prepareTestApp({ providers: [provider], components: ['@p/ds:Tinted'], themes: ocean }, root)
     expect(tinted.resolution.warnings).toEqual([])
-  })
-})
-
-describe('пункт ТЗ-5: манифест тем для темы-файла', () => {
-  const activations = (app: PreparedApp): Record<string, unknown> =>
-    Object.fromEntries(getThemeManifest(app.resolution).themes.map(t => [t.name, t.activation]))
-
-  it('5.1: активация темы-файла зависит от селекции', async () => {
-    const { root, provider } = fileThemeProvider()
-    const themes = { names: ['light', 'dark'] }
-    const plain = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes }, root)
-    expect(activations(plain)).toEqual({ light: { type: 'unknown' }, dark: { type: 'unknown' } })
-    const tinted = await prepareTestApp({ providers: [provider], components: ['@p/ds:Tinted'], themes }, root)
-    expect(activations(tinted).dark).toEqual({ type: 'attribute', name: 'data-theme', value: 'dark' })
-  })
-
-  it('5.3: пример `activations` из troubleshooting (`kind`) не проходит типы', () => {
-    // Форма из docs/{ru,en}/troubleshooting.md; тип активации — `{ type, value }`.
-    const plugin = granum({ engine: TEST_ENGINE, providers: ['@p/ds'] }, {
-      themeManifest: {
-        activations: {
-          // @ts-expect-error `kind` вместо `type` — так написано в доке
-          dark: { kind: 'class', value: 'dark' },
-        },
-      },
-    })
-    expect(plugin.name).toBe('granum:app')
-  })
-})
-
-describe('пункт ТЗ-10: мелкие расхождения', () => {
-  it('10.3: ошибка контроллера тем объясняет `unknown` словами пресета v1', async () => {
-    const { root, provider } = fileThemeProvider()
-    const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'] } }, root)
-    expect(() => createThemeController(getThemeManifest(app.resolution), { storage: null }))
-      .toThrow(/the preset inlines it/)
   })
 })
 

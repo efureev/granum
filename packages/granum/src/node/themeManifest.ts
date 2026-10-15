@@ -9,7 +9,7 @@ import { resolveThemeActivation } from '../runtime/manifest'
 export interface GranumThemeManifestOptions {
   /** Класть ли значения токенов по селекторам. По умолчанию `false`. */
   readonly includeTokens?: boolean
-  /** Явная активация для тем, у которых селектор из CSS-файла не вывести. */
+  /** Явная активация для тем, чей селектор не выразить одной операцией над элементом. */
   readonly activations?: Readonly<Record<string, GranumThemeActivation>>
 }
 
@@ -20,9 +20,14 @@ export function getThemeManifest(resolution: GranumResolution, options: GranumTh
   const entries: GranumThemeEntry[] = themes.names.map((name) => {
     const registry = themes.tokenRegistry[name]
     const blocks = tokenLayers.get(name)
-    const selectors = blocks?.length
+    // Селектор файла темы — первым: файл идёт в CSS раньше блоков своей темы
+    // (A-10). Без него активация темы-файла зависела бы от того, есть ли в
+    // селекции компонент со своим блоком этой темы.
+    const fileSelectors = themes.items.flatMap(item => (item.themeName === name && item.file ? [item.file.selector] : []))
+    const blockSelectors = blocks?.length
       ? blocks.map(block => block.selector)
       : registry?.blocks.map(block => block.selector) ?? []
+    const selectors = [...new Set([...fileSelectors, ...blockSelectors])]
     const activation = overrides[name] ?? resolveThemeActivation(selectors)
     const meta = themes.meta[name]
 

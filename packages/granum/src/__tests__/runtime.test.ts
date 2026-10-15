@@ -1,4 +1,5 @@
 import type { GranumThemeManifest, GranumThemeTarget } from '../runtime'
+import type { GranumPluginOptions } from '../vite/plugin'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { getThemeManifest } from '../node/themeManifest'
@@ -75,11 +76,40 @@ describe('getThemeManifest — из той же резолюции, что и CS
     expect(brand.activation).toEqual({ type: 'attribute', name: 'data-theme', value: 'brand' })
   })
 
-  it('тема из CSS-файла даёт unknown, но чинится явной активацией', () => {
+  it('тема-файл без фактов о файле даёт unknown, но чинится явной активацией', () => {
     const fileThemed = makeProvider('file', { theme: { defaultThemes: ['dark'], themes: { dark: 'theme/dark.css' } } })
     const r = resolveGranum({ providers: [fileThemed] })
     expect(getThemeManifest(r).themes[0]!.activation).toEqual({ type: 'unknown' })
     expect(getThemeManifest(r, { activations: { dark: { type: 'class', value: 'dark' } } }).themes[0]!.activation).toEqual({ type: 'class', value: 'dark' })
+  })
+
+  describe('тема-файл: активация из селектора файла, а не из селекции', () => {
+    const fileThemed = makeProvider('file', { theme: { defaultThemes: ['light', 'dark'], themes: { light: 'theme/light.css', dark: 'theme/dark.css' } } })
+    const facts = (light: string, dark: string): NonNullable<Parameters<typeof resolveGranum>[0]['themeFiles']> => ({
+      file: { light: { selector: light, tokens: ['bg'] }, dark: { selector: dark, tokens: ['bg'] } },
+    })
+
+    it('`:root` — корень, атрибут с классом — атрибут; селектор файла в `selectors`', () => {
+      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', `[data-theme='dark'], .dark`) })
+      const [light, dark] = getThemeManifest(r).themes
+      expect(light).toMatchObject({ selectors: [':root'], activation: { type: 'root' } })
+      expect(dark).toMatchObject({ selectors: [`[data-theme='dark'], .dark`], activation: { type: 'attribute', name: 'data-theme', value: 'dark' } })
+    })
+
+    it('блок под селектором файла не дублирует его в `selectors`', () => {
+      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', '.dark'), themes: { tokenOverrides: { dark: { bg: '#000' } } } })
+      expect(getThemeManifest(r).themes[1]).toMatchObject({ selectors: ['.dark'], activation: { type: 'class', value: 'dark' } })
+    })
+
+    it('селектор файла идёт раньше блоков темы', () => {
+      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', '.dark'), themes: { tokenOverrides: { dark: { '[data-mode="night"]': { bg: '#000' } } } } })
+      expect(getThemeManifest(r).themes[1]!.selectors).toEqual(['.dark', '[data-mode="night"]'])
+    })
+
+    it('селектор файла сложнее класса или атрибута — `unknown`', () => {
+      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', 'html:not(.light)') })
+      expect(getThemeManifest(r).themes[1]!.activation).toEqual({ type: 'unknown' })
+    })
   })
 
   it('label и colorScheme из themes.define доезжают', () => {
@@ -136,7 +166,18 @@ describe('createThemeController', () => {
     const { controller } = setup()
     expect(() => controller.set('nope')).toThrow(/light, dark, hc/)
     const broken = manifestOf([{ name: 'light', selectors: [':root'], activation: { type: 'root' } }, { name: 'dark', selectors: [], activation: { type: 'unknown' } }])
-    expect(() => createThemeController(broken, { target: createTarget(), storage: null }).set('dark')).toThrow(/tokenDefinitions|activations/)
+    const error = ((): Error => {
+      try {
+        createThemeController(broken, { target: createTarget(), storage: null }).set('dark')
+      }
+      catch (e) {
+        return e as Error
+      }
+      throw new Error('should have thrown')
+    })()
+    // Сообщение называет лекарство в форме, которую примут типы, — и не пресет v1.
+    expect(error.message).toMatch(/themeManifest: \{ activations: \{ dark: \{ type: 'attribute', name: 'data-theme', value: 'dark' \} \} \}/)
+    expect(error.message).not.toMatch(/preset/)
     expect(() => createThemeController({ themes: [], defaultTheme: '' })).toThrow(/manifest is empty/)
   })
 
@@ -150,5 +191,16 @@ describe('createThemeController', () => {
     expect(setup({ prefersDark: () => true }).controller.get()).toBe('dark')
     expect(setup({ prefersDark: () => false }).controller.get()).toBe('light')
     expect(setup({ storage: { getItem: () => 'dark', setItem: vi.fn() }, prefersDark: () => true, initial: 'hc' }).controller.get()).toBe('hc')
+  })
+})
+
+describe('пример `activations` из troubleshooting проходит типы', () => {
+  it('`{ type, value }` — да, `kind` — нет', () => {
+    // Форма из docs/{ru,en}/troubleshooting.md; `yarn typecheck` сверяет её с типом опций плагина.
+    const options: GranumPluginOptions = { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } }
+    // @ts-expect-error активация описывается полем `type`, а не `kind`
+    const wrong: GranumPluginOptions = { themeManifest: { activations: { dark: { kind: 'class', value: 'dark' } } } }
+    expect(options.themeManifest?.activations?.dark).toEqual({ type: 'class', value: 'dark' })
+    expect(wrong).toBeDefined()
   })
 })

@@ -160,11 +160,11 @@ export function createThemeController(
 
     if (theme.activation.type === 'unknown') {
       throw new Error(
-        `createThemeController: the build could not derive an activation selector for theme '${name}' `
+        `createThemeController: the build could not derive how to activate theme '${name}' `
         + `(selectors: ${theme.selectors.length ? theme.selectors.join(', ') : '—'}). `
-        + `This happens when a provider ships the theme as a ready-made CSS file: the preset inlines it `
-        + `as-is and does not know what is inside. Either switch the provider to 'tokenDefinitions', `
-        + `or set the activation explicitly via the 'activations' option when building the manifest.`,
+        + `Only a single class, a single attribute or :root can be applied to an element; a theme file `
+        + `without a flat block of custom properties gives no selector at all. Set the activation explicitly: `
+        + `granum(config, { themeManifest: { activations: { ${name}: { type: 'attribute', name: 'data-theme', value: '${name}' } } } }).`,
       )
     }
 

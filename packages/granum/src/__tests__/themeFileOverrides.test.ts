@@ -8,6 +8,7 @@ import { CssReadError } from '../core/errors'
 import { resolveTokenValue } from '../core/resolve'
 import { emitCss } from '../node/emit'
 import { getThemeManifest } from '../node/themeManifest'
+import { createThemeController } from '../runtime'
 import { fileThemeProvider, prepareTestApp } from './helpers'
 
 /**
@@ -175,5 +176,39 @@ describe('факты о файле темы читает подготовка', 
     const { root, provider } = fileThemeProvider({ dark: '@media (prefers-color-scheme: dark) {\n  :root {\n    --p-bg: #0f172a;\n  }\n}\n' })
     const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'], tokenOverrides: { dark: { 'p-primary': '#4fd1e0' } } } }, root)
     expect((await emitCss(app)).layers.tokens).toContain('--p-primary: #4fd1e0')
+  })
+})
+
+describe('манифест тем для темы-файла (T-4)', () => {
+  it('активация выводится из селектора файла и не зависит от селекции', async () => {
+    const { root, provider } = fileThemeProvider()
+    const themes = { names: ['light', 'dark'] }
+    const expected = {
+      light: { type: 'attribute', name: 'data-theme', value: 'light' },
+      dark: { type: 'attribute', name: 'data-theme', value: 'dark' },
+    }
+    for (const components of [[], ['@p/ds:Plain'], ['@p/ds:Tinted'], ['@p/ds:Bare']]) {
+      const app = await prepareTestApp({ providers: [provider], components, themes }, root)
+      const manifest = getThemeManifest(app.resolution)
+      expect(Object.fromEntries(manifest.themes.map(t => [t.name, t.activation])), JSON.stringify(components)).toEqual(expected)
+      expect(manifest.themes.find(t => t.name === 'dark')!.selectors[0]).toBe(`[data-theme='dark'], .dark`)
+    }
+  })
+
+  it('контроллер переключает тему-файл без ошибки', async () => {
+    const { root, provider } = fileThemeProvider()
+    const app = await prepareTestApp({ providers: [provider], components: [], themes: { names: ['light', 'dark'] } }, root)
+    const attributes = new Map<string, string>()
+    const target = {
+      classList: { add: () => {}, remove: () => {}, contains: () => false },
+      getAttribute: (name: string) => attributes.get(name) ?? null,
+      setAttribute: (name: string, value: string) => void attributes.set(name, value),
+      removeAttribute: (name: string) => void attributes.delete(name),
+    }
+    const controller = createThemeController(getThemeManifest(app.resolution), { target, storage: null })
+    controller.set('dark')
+    expect(attributes.get('data-theme')).toBe('dark')
+    controller.set('light')
+    expect(attributes.get('data-theme')).toBe('light')
   })
 })

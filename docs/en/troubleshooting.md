@@ -72,9 +72,9 @@ manifest is produced only by the build.
 - `granum doctor` → the `Themes` section: is the name in the active set? The
   set is determined by `themes.names` → `themes.define` → `defaultThemes` →
   `['light']`.
-- A provider theme file with an unusual selector: the runtime cannot derive
-  the activation — set
-  `granum(config, { themeManifest: { activations: { dark: { kind: 'class', value: 'dark' } } } })`.
+- A theme selector more complex than one class, attribute or `:root` (a combinator,
+  `:not(…)`): the runtime cannot derive the activation — set
+  `granum(config, { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } })`.
 - `theme-extends-unresolved`: `extends` points at a file theme — it is
   opaque; only structural values can be inherited.
 

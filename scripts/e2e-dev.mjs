@@ -19,9 +19,11 @@
  * его перезагружать — иначе обновление поднимается до входа приложения, и Vite
  * перезагружает страницу.
  *
- * Третий сценарий — каскад тем (INV-THM-2): `tokenOverrides` к теме, которую
- * провайдер поставил файлом (`@granum-fixtures/mini-ds`), обязан менять вычисленное
- * значение токена под активной темой и не задевать соседнюю.
+ * Третий сценарий — темы, которые провайдер поставил файлами
+ * (`@granum-fixtures/mini-ds`). `tokenOverrides` обязан менять вычисленное значение
+ * токена под активной темой и не задевать соседнюю (INV-THM-2). Манифест тем выводит
+ * активацию из селектора файла при любой селекции, и собранный
+ * `createThemeController` переключает темы на странице (T-4).
  *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
@@ -33,7 +35,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
-import { emitCss, prepareApp } from '@feugene/granum/node'
+import { emitCss, getThemeManifest, prepareApp } from '@feugene/granum/node'
 import { windEngine } from '@feugene/granum-engine-wind'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
@@ -224,9 +226,42 @@ try {
   }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
   const { css } = await emitCss(app)
 
+  // Активация темы-файла — из селектора файла, а не из того, какие компоненты выбраны.
+  const activations = manifest => JSON.stringify(Object.fromEntries(manifest.themes.map(t => [t.name, t.activation])))
+  const expectedActivations = JSON.stringify({ light: { type: 'root' }, dark: { type: 'attribute', name: 'data-theme', value: 'dark' } })
+  const manifest = getThemeManifest(app.resolution)
+  check(activations(manifest) === expectedActivations, `манифест тем, все компоненты: ${activations(manifest)}`)
+  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/mini-ds'], components: [], themes: { names: ['light', 'dark'] } }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
+  check(activations(getThemeManifest(bare.resolution)) === expectedActivations, `манифест тем, селекция []: ${activations(getThemeManifest(bare.resolution))}`)
+
+  // Страница с CSS сборки и собранным `@feugene/granum/runtime`: файлы `dist` отдаёт route.
+  const runtimeDir = fileURLToPath(new URL('../packages/granum/dist/', import.meta.url))
+  const html = `<!doctype html><html><head><style>${css}</style></head><body><script type="module">`
+    + `import { createThemeController } from '/runtime.js';`
+    + `window.themes = createThemeController(${JSON.stringify(manifest)}, { storage: null })</script></body></html>`
   browser = await chromium.launch()
   const page = await browser.newPage()
-  await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body></body></html>`)
+  await page.route('http://granum.test/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    return path === '/'
+      ? route.fulfill({ contentType: 'text/html', body: html })
+      : route.fulfill({ contentType: 'text/javascript', body: readFileSync(join(runtimeDir, path.slice(1))) })
+  })
+  // Ошибка контроллера на странице — причина провала, а не таймаут ожидания.
+  const pageErrors = []
+  page.on('pageerror', error => pageErrors.push(error.message))
+  await page.goto('http://granum.test/')
+  await page.waitForFunction(() => window.themes !== undefined, undefined, { timeout: 5000 })
+    .catch(() => { throw new Error(`контроллер тем не создан: ${pageErrors.join('; ') || 'без ошибки страницы'}`) })
+  const viaController = theme => page.evaluate((name) => {
+    window.themes.set(name)
+    return getComputedStyle(document.documentElement).getPropertyValue('--xxx-bg').trim()
+  }, theme)
+  const controllerDark = await viaController('dark')
+  const controllerLight = await viaController('light')
+  check(controllerDark === OVERRIDE, `контроллер включил тёмную тему-файл: ${controllerDark}`)
+  check(controllerLight === '#ffffff', `контроллер вернул светлую тему-файл: ${controllerLight}`)
+
   const bg = activate => page.evaluate((how) => {
     const root = document.documentElement
     root.removeAttribute('data-theme')
@@ -254,6 +289,6 @@ finally {
 
 process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема-файл mini-ds)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ INV-CSS-6, AC-9, A-16 и INV-THM-2 подтверждены в браузере\n'
+  ? '✓ INV-CSS-6, AC-9, A-16, INV-THM-2 и T-4 подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1

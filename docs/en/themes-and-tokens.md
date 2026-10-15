@@ -140,7 +140,7 @@ themes.list()      // ['light', 'dark', 'emerald']
 themes.set('dark') // data-theme / class / nothing — per the manifest
 ```
 
-The theme manifest is derived from block selectors: `[data-theme=dark]` →
-attribute, `.dark` → class, `:root` → nothing. For a theme file with an
-unusual selector the activation can be set explicitly via
-`granum(config, { themeManifest: { activations } })`.
+The theme manifest is derived from the theme's selectors — the first block of its file
+and its blocks: `[data-theme=dark]` → attribute, `.dark` → class, `:root` → nothing;
+it does not depend on the component selection. A selector more complex than one class
+or attribute gives no activation — set it via `granum(config, { themeManifest: { activations } })`.
