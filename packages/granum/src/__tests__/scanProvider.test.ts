@@ -87,3 +87,40 @@ describe('scanObjectProvider (R-6)', () => {
     expect(css.layers.components).toContain('.card{')
   })
 })
+
+describe('объектные доноры в dependencies (R-6, INV-CON-1)', () => {
+  const css = `data:text/css,${encodeURIComponent(':root { --b-bg: red; }')}`
+  const donor = (): ReturnType<typeof makeProvider> => makeProvider('b', { theme: { defaultThemes: ['light'], tokenDefinitionsRef: { light: css } } })
+  const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] =>
+    (app.resolution.tokenLayers.get('light') ?? []).flatMap(block => [...block.tokens.keys()])
+
+  it('донор с tokenDefinitionsRef и в providers, и в dependencies — один провайдер', async () => {
+    // Материализация даёт новый объект; ссылка из dependencies — старый. По
+    // идентичности это два инстанса с одним id, а не ромб.
+    const b = donor()
+    const a = makeProvider('a', { dependencies: [b] })
+    const app = await prepareTestApp({ providers: [a, b], themes: { names: ['light'] } }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
+    expect(app.resolution.providers.map(p => p.id)).toEqual(['b', 'a'])
+    expect(lightTokens(app)).toContain('b-bg')
+  })
+
+  it('донор только в dependencies тоже материализуется: его токены доходят до темы', async () => {
+    const a = makeProvider('a', { dependencies: [donor()] })
+    const app = await prepareTestApp({ providers: [a], themes: { names: ['light'] } }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
+    expect(app.resolution.providers.map(p => p.id)).toEqual(['b', 'a'])
+    expect(lightTokens(app)).toContain('b-bg')
+  })
+
+  it('донор с dist сканируется в манифест, зависящий без dist — нет: конфликта нет', async () => {
+    const { root, dist } = distFixture()
+    const base = defineGranumProvider({ id: '@x/base', contractVersion: 1, baseUrl: `${pathToFileURL(dist).href}/`, components: [{ name: 'Table' }] })
+    const a = makeProvider('a', { dependencies: [base] })
+    const app = await prepareTestApp({ providers: [a] }, root)
+    expect(app.resolution.providers.map(p => `${p.form}:${p.id}`)).toEqual(['manifest:@x/base', 'object:a'])
+  })
+
+  it('два разных инстанса с одним id — по-прежнему конфликт', async () => {
+    const a = makeProvider('a', { dependencies: [donor()] })
+    await expect(prepareTestApp({ providers: [a, donor()] }, mkdtempSync(join(tmpdir(), 'granum-donor-')))).rejects.toMatchObject({ name: 'DuplicateProviderIdError' })
+  })
+})

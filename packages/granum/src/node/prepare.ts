@@ -5,7 +5,7 @@
  * Node-only. Всё ниже (CSS, JS, токены, отчёт) читает только `PreparedApp`.
  */
 import type { GranumConfig } from '../config'
-import type { GranumProviderInput } from '../contract'
+import type { GranumProvider, GranumProviderInput } from '../contract'
 import type { GranumResolution, GranumThemesInput } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
 import type { GranumAppThemeDefinition } from '../core/resolveThemes'
@@ -16,7 +16,7 @@ import { resolve as resolvePath } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
-import { TokenRefError } from '../core/errors'
+import { DuplicateProviderIdError, TokenRefError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
@@ -50,15 +50,50 @@ export type PreparedWarning
     | { readonly kind: 'provider-scanned', readonly providerId: string }
     | { readonly kind: 'imports-without-app-sources' }
 
-/** Провайдер по имени пакета — манифест через `exports` (A-2); объект — как есть. */
+/**
+ * Провайдер по имени пакета — манифест через `exports` (A-2); объект —
+ * материализованный (R-6).
+ *
+ * Объектные доноры из `dependencies` подключаются наравне с перечисленными:
+ * каждый инстанс материализуется один раз, а ссылки на него в `dependencies`
+ * сводятся к `id`. Иначе материализация (и скан по `dist`) давала бы донору
+ * новый объект, `dependencies` соседа держали бы старый, и проверка
+ * идентичности в графе видела бы два инстанса с одним `id` там, где он один.
+ * Строковая зависимость задаёт порядок так же, как объектная (INV-SEL-2), —
+ * так же, как в синтетическом манифесте медленного пути.
+ */
 export function loadProviderInputs(config: Pick<GranumConfig, 'providers'>, root: string): GranumProviderInput[] {
-  return config.providers.map((entry) => {
+  const out: GranumProviderInput[] = []
+  const seen = new Map<string, GranumProvider>()
+
+  const addObject = (provider: GranumProvider, path: readonly string[]): void => {
+    const known = seen.get(provider.id)
+    if (known !== undefined) {
+      if (known !== provider)
+        throw new DuplicateProviderIdError(provider.id, [...path, provider.id])
+      return
+    }
+    seen.set(provider.id, provider)
+    const materialized = materializeProviderRefs(provider)
+    const dependencies = provider.dependencies ?? []
+    out.push(dependencies.some(dep => typeof dep !== 'string')
+      ? { ...materialized, dependencies: dependencies.map(dep => (typeof dep === 'string' ? dep : dep.id)) }
+      : materialized)
+    for (const dep of dependencies) {
+      if (typeof dep !== 'string')
+        addObject(dep, [...path, provider.id])
+    }
+  }
+
+  for (const entry of config.providers) {
     if (typeof entry === 'string')
-      return loadPackageManifest(entry, root)
-    if (isLoadedManifest(entry))
-      return entry
-    return materializeProviderRefs(entry)
-  })
+      out.push(loadPackageManifest(entry, root))
+    else if (isLoadedManifest(entry))
+      out.push(entry)
+    else
+      addObject(entry, [])
+  }
+  return out
 }
 
 /**
