@@ -30,19 +30,20 @@ yarn compare:js       # JS bench-one побайтно равен сборке б
 
 ```
 РОЛИ (gzip)              bench-zero    bench-one        Δ
-  css                             0        2 441   +2 441
+  css                             0        2 532   +2 532
   entry                         617          756     +139
   pkg                             0        2 093   +2 093
   vue                        23 180       23 618     +438
-  всего                      23 797       28 908   +5 111
-  без vue                       617        5 290   +4 673
+  всего                      23 797       28 999   +5 202
+  без vue                       617        5 381   +4 764
 
 СЛОИ GRANUM (из бандла после минификации, granum-report.json)      raw     gzip
   tokens                                                      1 258      566
-  base                                                          588      322
+  base                                                        1 627      617
   themes                                                      3 743      956
   components                                                    773      347
-  utilities                                                   2 192      626
+  utilities                                                   1 561      424
+  total                                                       8 962    2 529
 
 ТОКЕНЫ В ДИСТРИБУТИВЕ: объявлено 117, достижимо 49, мёртвый груз 68
 ```
@@ -94,5 +95,9 @@ yarn workspace @granum-apps/dist-audit audit:dist
 `@feugene/unocss-preset-granular` 0.16.1. `compare-css.mjs` нормализует оба
 вывода в множество `{ контекст, селектор, объявления }` (обёртки `@layer`
 снимаются, порядок не важен) и сравнивает; допустимые расхождения
-перечисляются в `expected-compare.mjs`. Сейчас список пуст: 58 правил в
-обоих.
+перечисляются в `expected-compare.mjs`. Их два, и оба ожидаемые: у v1 есть
+`@keyframes granularity-spin`, которого granum без `animate-spin` не
+эмитирует, а preflight (`*`, `:before`, `:after`, `::backdrop`) у granum
+объявляет больше переменных — словарь wind3 шире. Правил 58 у v1 и 57 у
+granum. Значение `--xh-fg-boost` в снапшоте приведено к фикстуре: пресет
+переносит CSS фундамента как есть.

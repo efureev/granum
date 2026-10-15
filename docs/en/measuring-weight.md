@@ -30,19 +30,20 @@ yarn compare:js       # bench-one JS is byte-equal to a build without the plugin
 
 ```
 РОЛИ (gzip)              bench-zero    bench-one        Δ
-  css                             0        2 441   +2 441
+  css                             0        2 532   +2 532
   entry                         617          756     +139
   pkg                             0        2 093   +2 093
   vue                        23 180       23 618     +438
-  всего                      23 797       28 908   +5 111
-  без vue                       617        5 290   +4 673
+  всего                      23 797       28 999   +5 202
+  без vue                       617        5 381   +4 764
 
 СЛОИ GRANUM (из бандла после минификации, granum-report.json)      raw     gzip
   tokens                                                      1 258      566
-  base                                                          588      322
+  base                                                        1 627      617
   themes                                                      3 743      956
   components                                                    773      347
-  utilities                                                   2 192      626
+  utilities                                                   1 561      424
+  total                                                       8 962    2 529
 
 ТОКЕНЫ В ДИСТРИБУТИВЕ: объявлено 117, достижимо 49, мёртвый груз 68
 ```
@@ -97,5 +98,9 @@ of the latter — that is what the stand fails on.
 `@feugene/unocss-preset-granular` 0.16.1. `compare-css.mjs` normalises both
 outputs into a set of `{ context, selector, declarations }` (`@layer`
 wrappers removed, order ignored) and compares them; allowed discrepancies are
-listed in `expected-compare.mjs`. The list is empty today: 58 rules on both
-sides.
+listed in `expected-compare.mjs`. There are two, both expected: v1 has
+`@keyframes granularity-spin`, which granum does not emit without
+`animate-spin`, and the granum preflight (`*`, `:before`, `:after`,
+`::backdrop`) declares more variables — the wind3 vocabulary is wider. 58 rules
+in v1, 57 in granum. The `--xh-fg-boost` value in the snapshot follows the
+fixture: the preset copies the foundation CSS as is.
