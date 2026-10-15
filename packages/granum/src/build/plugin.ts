@@ -1,5 +1,5 @@
 /**
- * Плагин сборки провайдера `granumProvider()` (ТЗ §6). Один плагин вместо трёх
+ * Плагин сборки провайдера `granumProvider()`. Один плагин вместо трёх
  * хелперов v1 и ручного списка entry: строит entry по реестру компонентов,
  * раскладывает чанки и CSS по контракту, извлекает классы и токены по графу
  * бандла, копирует объявленный CSS, раскрывает `@apply`, проверяет границу
@@ -40,19 +40,19 @@ export interface GranumProviderPluginOptions {
   readonly indexEntry?: string | false
   /** Дополнительные entry: имя → путь относительно корня пакета. */
   readonly entries?: Readonly<Record<string, string>>
-  /** Неучтённое ребро графа компонентов: ошибка (по умолчанию) или предупреждение (B-8). */
+  /** Неучтённое ребро графа компонентов: ошибка (по умолчанию) или предупреждение. */
   readonly dependencyCheck?: 'error' | 'warn'
-  /** Нарушение границы browser/node в бандле (B-16). По умолчанию `error`. */
+  /** Нарушение границы browser/node в бандле. По умолчанию `error`. */
   readonly boundaryCheck?: 'error' | 'warn'
-  /** Проверка `package.json#exports` (B-13). По умолчанию `error`. */
+  /** Проверка `package.json#exports`. По умолчанию `error`. */
   readonly exportsCheck?: 'error' | 'warn' | 'off'
   /**
-   * Движок утилит — инстанс (C-E4). Им фильтруются классы манифеста, и его
+   * Движок утилит — инстанс. Им фильтруются классы манифеста, и его
    * диалект с отпечатком уезжают в блок `engine`: список классов — факт о
    * конкретной реализации, а не о пакете.
    */
   readonly engine: GranumEngine
-  /** Модуль с правилами движка провайдера — путь относительно `dist` для манифеста (M-E4). */
+  /** Модуль с правилами движка провайдера — путь относительно `dist` для манифеста. */
   readonly engineModule?: string | null
   readonly manifestFile?: string
   /** Дополнительный внешний список для rolldown (`vue` и т.п. провайдер задаёт сам). */
@@ -107,7 +107,7 @@ function withGranumExternal(user: Rolldown.InputOptions['external']): NonNullabl
 }
 
 /**
- * Блок `engine` манифеста (M-E5). `null/null` пишется ровно тогда, когда
+ * Блок `engine` манифеста. `null/null` пишется ровно тогда, когда
  * артефакт ни от какого словаря не зависит и ни одного не расширяет: ни класса,
  * ни записи safelist, ни модуля правил. Иначе — диалект и отпечаток движка
  * сборки: именно он отфильтровал список классов, и это факт, а не догадка.
@@ -140,15 +140,15 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     )
   }
   // Утверждение провайдера о словаре сверяется до первой генерации: записать в
-  // манифест чужой диалект нельзя (C-E2, INV-ENG-10).
+  // манифест чужой диалект нельзя.
   const declaredDialect = provider.engine?.dialect
   if (declaredDialect !== undefined && declaredDialect !== engine.dialect)
     throw new EngineDialectMismatchError(provider.id, declaredDialect, engine.dialect, engine.name)
   /*
    * Пути темы и модуля правил уезжают в манифест, а читатель принимает только
-   * относительный путь внутри пакета без `./` и `..` (C-16, INV-MAN-2). Автор
+   * относительный путь внутри пакета без `./` и `..`. Автор
    * пишет `./theme/tokens.css` — путь нормализуется здесь, один раз. Путь вне
-   * пакета — ошибка сейчас, а не у каждого приложения-потребителя (INV-ERR-1).
+   * пакета — ошибка сейчас, а не у каждого приложения-потребителя.
    */
   const packagePath = (path: string, at: string): string => {
     const normalized = normalizePackagePath(path)
@@ -169,7 +169,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   let outDir = resolve(root, 'dist')
   let hasIndex = false
   let analysis: BundleAnalysis | undefined
-  /** Нарушения границы, замеченные на графе модулей (B-16): Vite подменяет `node:*` в браузерной сборке заглушкой, и в выводе их уже нет. */
+  /** Нарушения границы, замеченные на графе модулей: Vite подменяет `node:*` в браузерной сборке заглушкой, и в выводе их уже нет. */
   let graphViolations: BoundaryViolation[] = []
   /** Точки входа granum, оставшиеся внешними в `dist`. */
   let granumImports: string[] = []
@@ -266,7 +266,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
      * Состояние сбрасывается здесь, а не в `configResolved`: в `vite build
      * --watch` тот вызывается один раз на сессию, а `transform` при пересборке
      * идёт только по изменённым модулям. Нарушения границы от прошлой сборки
-     * иначе копились бы и продолжали ронять сборку после починки кода (B-15).
+     * иначе копились бы и продолжали ронять сборку после починки кода.
      */
     buildStart(): void {
       graphViolations = []
@@ -292,8 +292,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       const typed = bundle as unknown as BundleLike
 
       // `@apply` в эмитированных стилях SFC раскрывается до записи на диск и ДО
-      // анализа (B-11): потребление токенов считается по тому CSS, который
-      // уедет в `dist`, иначе round-trip по манифесту разошёлся бы (INV-MAN-6).
+      // анализа: потребление токенов считается по тому CSS, который
+      // уедет в `dist`, иначе round-trip по манифесту разошёлся бы.
       for (const [fileName, item] of Object.entries(typed)) {
         if (item.type === 'asset' && fileName.endsWith('.css') && typeof item.source === 'string')
           (item as { source: string }).source = await expandApply(item.source, engine, fileName)
@@ -339,12 +339,12 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       let safelistRedundantTotal = 0
 
       /*
-       * Правила движка в манифест не встраиваются — он ссылается на модуль
-       * (M-E4), и путь задаёт автор опцией `engineModule`. Провайдер, который
+       * Правила движка в манифест не встраиваются — он ссылается на модуль,
+       * и путь задаёт автор опцией `engineModule`. Провайдер, который
        * объявил `engine`, но опцию не передал, отгрузил бы манифест с
        * `module: null`: свои классы он извлечёт (правила известны сборке), а
        * приложению правила не достанутся, и его CSS молча разойдётся с
-       * пакетным. Молчать здесь нельзя (INV-DIAG-3).
+       * пакетным. Молчать здесь нельзя.
        */
       const engineContribution = provider.engine
       const hasEngineRules = Boolean(
@@ -383,7 +383,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
            * руководства, и бандлер уже записал стили SFC ровно по этому пути
            * (`granumAssetFileNames`). Перезапись теряла бы их молча, поэтому
            * файл склеивается в порядке списка `css` манифеста: сначала
-           * объявленный, затем эмитированный (B-3).
+           * объявленный, затем эмитированный.
            */
           const emitted = emittedCss.includes(path) ? readOut(outDir, path, new Map()) : ''
           const content = emitted ? `${expanded}\n${emitted}` : expanded
@@ -414,7 +414,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       for (const [name, path] of Object.entries(themePaths.themes))
         copyTheme(path, 'theme', name)
 
-      // 3. Ссылки на токены материализуются здесь, один раз (C-13).
+      // 3. Ссылки на токены материализуются здесь, один раз.
       const materialized = materializeProviderRefs(
         provider.baseUrl !== undefined ? provider : { ...provider, baseUrl: `${pathToFileURL(sourceDir).href}/` },
       )
@@ -517,7 +517,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         }
       }
 
-      // 5. exports пакета (B-13).
+      // 5. exports пакета.
       const pkgPath = join(root, 'package.json')
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown>, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
       if ((options.exportsCheck ?? 'error') !== 'off') {
@@ -617,7 +617,7 @@ function writeOut(outDir: string, path: string, content: string): void {
  * идёт после нашего независимо от порядка в массиве плагинов. В `chunk.code`
  * на тот момент импорта ещё нет, и увидеть его оттуда нельзя никаким сравнением
  * строк. Ровно так `css-double-delivery` молчал на двух опубликованных
- * пакетах экосистемы (INV-CSS-5 не охранялся ничем).
+ * пакетах экосистемы — двойную доставку не охраняло ничто.
  *
  * `closeBundle` вызывается после всех `generateBundle`, файлы уже на диске —
  * значит видно то, что реально уедет потребителю.

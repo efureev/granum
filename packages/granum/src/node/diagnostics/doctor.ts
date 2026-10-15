@@ -1,8 +1,8 @@
 /**
- * `granum doctor` (D-2): полный отчёт о конфигурации приложения по манифестам,
+ * `granum doctor`: полный отчёт о конфигурации приложения по манифестам,
  * без сборки. Уровни: `error` — обязано сломать сборку (файла нет, директива
  * не раскрыта, граница нарушена); `warn` — законно, но подозрительно; падает
- * только под `--strict` (INV-ERR-3).
+ * только под `--strict`.
  */
 import type { ResolvedThemeWarning, ThemeNamesSource } from '../../core/resolveThemes'
 import type { ProviderClassSource } from '../dialects'
@@ -22,7 +22,7 @@ export interface DoctorProviderInfo {
   readonly components: number
   readonly hasTheme: boolean
   readonly hasEngine: boolean
-  /** Словарь артефакта; `null` — пакет ни от какого словаря не зависит (D-E2). */
+  /** Словарь артефакта; `null` — пакет ни от какого словаря не зависит. */
   readonly dialect: string | null
   /** Отпечаток словаря артефакта: по нему принято решение о доверии списку классов. */
   readonly vocabulary: string | null
@@ -81,13 +81,13 @@ export interface DoctorDiagnostic {
   /**
    * Перечисление, которое относится к находке: классы safelist, потерянные
    * имена, файлы. Отдельным полем, а не внутри `message`, потому что текстовый
-   * вывод сворачивает его в счётчик и разворачивает по `--code=` (D-8).
+   * вывод сворачивает его в счётчик и разворачивает по `--code=`.
    */
   readonly items?: readonly string[]
 }
 
 export interface DoctorReport {
-  /** Движок приложения: реализация, словарь и его отпечаток (D-E1). */
+  /** Движок приложения: реализация, словарь и его отпечаток. */
   readonly engine: {
     readonly name: string
     readonly version?: string
@@ -103,7 +103,7 @@ export interface DoctorReport {
     readonly warnings: readonly ResolvedThemeWarning[]
   }
   readonly tokenConflicts: readonly DoctorTokenConflict[]
-  /** Потребляется выбранным компонентом, но не объявлен ни одним слоем (T-5). */
+  /** Потребляется выбранным компонентом, но не объявлен ни одним слоем. */
   readonly undefinedTokens: readonly { readonly token: string, readonly component: string }[]
   readonly files: { readonly checked: number, readonly missing: readonly string[] }
   readonly diagnostics: readonly DoctorDiagnostic[]
@@ -168,7 +168,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   })
 
   /*
-   * Расхождение словарей (D-E2). Совпавший диалект при разошедшихся отпечатках
+   * Расхождение словарей. Совпавший диалект при разошедшихся отпечатках
    * сам по себе не предупреждение: так выглядит любое приложение с собственным
    * правилом в фабрике движка. Предупреждает только РАЗНИЦА наборов — класс,
    * которого приложение не знает (`dropped`), и класс, потерянный сборкой
@@ -228,7 +228,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       blocks.push({ theme, selector: block.selector, tokens: Object.keys(block.tokens).length })
   }
 
-  // Конфликты — по тем же слоям, из которых эмитится CSS (INV-DIAG-1).
+  // Конфликты — по тем же слоям, из которых эмитится CSS.
   const tokenConflicts: DoctorTokenConflict[] = []
   for (const layerBlocks of resolution.tokenLayers.values()) {
     for (const block of layerBlocks) {
@@ -263,7 +263,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       if (/@apply\s/.test(stripCssComments(css)))
         error('apply-not-expanded', key, `${path} still contains @apply — rebuild the provider with granumProvider()`)
       if (/!\s*important/i.test(css))
-        warn('important-in-provider-css', key, `${path} uses !important — inside cascade layers it inverts the layer order (ADR-4)`)
+        warn('important-in-provider-css', key, `${path} uses !important — inside cascade layers it inverts the layer order`)
     }
     if (provider.form === 'manifest' && isLoadedManifest(provider.source)) {
       const files = provider.source.manifest.components[component.name]?.files ?? []
@@ -274,13 +274,13 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
         for (const spec of collectImportSpecifiers(code)) {
           const kind = boundaryKindOf(spec)
           if (kind)
-            error('boundary', key, `${file} imports '${spec}' (${kind}) — browser code of a provider must not reach node (INV-BND-1)`)
+            error('boundary', key, `${file} imports '${spec}' (${kind}) — browser code of a provider must not reach node`)
         }
       }
     }
   }
 
-  // Манифестные предупреждения провайдеров — доносятся до приложения (M-1),
+  // Манифестные предупреждения провайдеров — доносятся до приложения,
   // но только про компоненты, которые действительно в сборке.
   const selectedKeys = new Set(resolution.selection.order)
   for (const provider of resolution.providers) {
@@ -293,16 +293,16 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       if (w.code === 'safelist-redundant')
         warn('safelist-redundant', subject, 'safelist duplicates statically extracted classes', (w.classes as string[] | undefined) ?? [])
       else if (w.code === 'css-double-delivery')
-        warn('css-double-delivery', subject, 'component CSS is both inlined by granum and imported by its chunk — it arrives twice (INV-CSS-5)', (w.files as string[] | undefined) ?? [])
+        warn('css-double-delivery', subject, 'component CSS is both inlined by granum and imported by its chunk — it arrives twice', (w.files as string[] | undefined) ?? [])
       else if (w.code === 'peer-missing' && w.provider === '@feugene/granum')
         warn('peer-missing', provider.id, `imports '@feugene/granum' at runtime but does not list it in peerDependencies: only './contract' is embedded by the provider build`)
       else if (w.code === 'peer-missing')
-        warn('peer-missing', provider.id, `depends on provider '${String(w.provider)}' but does not list it in peerDependencies (C-5)`)
+        warn('peer-missing', provider.id, `depends on provider '${String(w.provider)}' but does not list it in peerDependencies`)
     }
   }
 
   /*
-   * Токены: нужен компоненту извне, не даёт никто (T-5).
+   * Токены: нужен компоненту извне, не даёт никто.
    *
    * «Нужен извне» — не то же, что «потребляется». Из потребления вычитаются три
    * вещи, и каждая — объявление компонента о себе, а не недосмотр:
@@ -314,17 +314,17 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
    *     даёт он сам, и слою granum его задавать незачем. Тоже вычтено на сборке;
    *   - `dynamicTokens`: имя собирается из переменной (`var(--gr-z-${'{'}name${'}'})`),
    *     и статический анализ видит только префикс. Обрезка это объявление
-   *     уважает (C-14), доктор обязан уважать так же.
+   *     уважает, доктор обязан уважать так же.
    *
    * До этого проверялся весь `consumes`, и на дизайн-системе из 84 компонентов
    * находок было 279 при одной настоящей: `--strict` от такого шума непригоден.
    */
-  // Вердикт — той же функцией, что у отчёта сборки (INV-DIAG-4).
+  // Вердикт — той же функцией, что у отчёта сборки.
   const undefinedTokens = findUndefinedTokens(resolution)
   for (const { token, component: key } of undefinedTokens)
     warn('token-undefined', `${key}:${token}`, `token '${token}' is consumed by ${key} but no granum layer defines it for any active theme — it may still come from the application CSS or an engine rule`)
 
-  // Safelist без правила у движка — мёртвая запись (INV-DIAG-2).
+  // Safelist без правила у движка — мёртвая запись.
   const safelistAll = sortedUnique(resolution.selection.entries.flatMap(e => e.component.safelist))
   if (safelistAll.length > 0) {
     const out = await engine.generate({ classes: new Set(safelistAll), ...app.engineContribution })
@@ -393,7 +393,7 @@ const NAMES_SOURCE_TEXT: Record<ThemeNamesSource, string> = {
   'fallback': 'core fallback',
 }
 
-/** Опции текстового вывода доктора (D-8). JSON они не касаются. */
+/** Опции текстового вывода доктора. JSON они не касаются. */
 export interface DoctorFormatOptions {
   /** Показать все находки этого кода целиком, с перечислениями. */
   readonly code?: string
@@ -487,7 +487,7 @@ export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOp
   push('=============')
   push()
   // Движок называется первым: от него зависит и список классов каждого пакета,
-  // и то, какие правила вообще будут исполнены (D-E1, D-E2).
+  // и то, какие правила вообще будут исполнены.
   push(`Engine: ${report.engine.name}${report.engine.version ? ` ${report.engine.version}` : ''} — dialect ${report.engine.dialect}, vocabulary ${report.engine.vocabulary}`)
   push()
 

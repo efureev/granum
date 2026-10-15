@@ -1,9 +1,9 @@
 /**
- * Сборщик CSS приложения (A-9…A-15, INV-CSS-1…7): пять слоёв в фиксированном
+ * Сборщик CSS приложения: пять слоёв в фиксированном
  * порядке — tokens, base, themes, components, utilities. Содержимое каждого
  * слоя считается один раз и отдаётся и целиком (`virtual:granum.css`), и по
  * слоям (`virtual:granum/layers/<name>.css`); конкатенация срезов побайтно
- * равна целому (INV-CSS-4).
+ * равна целому.
  */
 import type { EffectiveThemeBlock } from '../core/tokenLayers'
 import type { EngineOutput } from '../engine/types'
@@ -29,7 +29,7 @@ export interface EmittedCss {
   readonly prune: TokenPrunePlan | undefined
   /** Классы, поданные движку: манифесты + safelist + приложение. */
   readonly engineInput: readonly string[]
-  /** Записи safelist, покрытые статикой манифестов (INV-MAN-4 на стороне приложения). */
+  /** Записи safelist, покрытые статикой манифестов: та же находка, что у сборки провайдера. */
   readonly safelistRedundant: readonly string[]
 }
 
@@ -54,7 +54,7 @@ export interface LayerWrapOptions {
   readonly layerPrefix?: string
 }
 
-/** Объявление порядка слоёв — первая строка вывода (INV-CSS-1). */
+/** Объявление порядка слоёв — первая строка вывода. */
 export function layerOrderDeclaration(options: LayerWrapOptions): string {
   if (options.layers === false)
     return ''
@@ -87,12 +87,12 @@ export function wrapLayers(layers: Readonly<Record<LayerName, string>>, options:
 }
 
 /**
- * Один слой как самостоятельный файл (A-12).
+ * Один слой как самостоятельный файл.
  *
  * Обёртка `@layer` здесь обязательна: без неё срез отдавал бы нелейерный CSS, то
  * есть ровно наоборот тому, что обещает слой. Объявление порядка несёт файл
  * первого непустого слоя — тогда конкатенация всех срезов в порядке слоёв
- * побайтно равна `virtual:granum.css` (INV-CSS-4), а не повторяет объявление
+ * побайтно равна `virtual:granum.css`, а не повторяет объявление
  * пять раз.
  *
  * Пустой слой даёт пустую строку: ассета и запроса за ним быть не должно.
@@ -138,15 +138,14 @@ function themesLayer(
 }
 
 /**
- * Утилиты движка: классы манифестов ∪ safelist ∪ приложение (INV-CSS-3).
+ * Утилиты движка: классы манифестов ∪ safelist ∪ приложение.
  *
  * `reextractLost` — классы выбранных компонентов, которые были в манифесте и не
  * нашлись при пересчёте. Они обязаны остаться видны в `unmatched`: пересчёт не
- * имеет права делать потерю тише, чем она была (A-E7, INV-DIAG-2).
+ * имеет права делать потерю тише, чем она была.
  *
  * Отдельной функцией, потому что тот же вывод нужен `granum prune`: утилиты —
- * корень обрезки, и план диагностики обязан совпадать с планом сборки
- * (INV-DIAG-1).
+ * корень обрезки, и план диагностики обязан совпадать с планом сборки.
  */
 export async function generateEngineCss(app: PreparedApp): Promise<{ engineInput: string[], generated: EngineOutput }> {
   const { resolution } = app
@@ -173,8 +172,8 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     }
   }))
 
-  // 2. Структурные блоки токенов тем — из общей раскладки слоёв (R-5).
-  // Блок `:root` — слой tokens, остальные — themes (A-10): `:root` и `.dark`
+  // 2. Структурные блоки токенов тем — из общей раскладки слоёв.
+  // Блок `:root` — слой tokens, остальные — themes: `:root` и `.dark`
   // равны по специфичности, и в одном слое тему решал бы порядок `names`.
   const rootBlocks: string[] = []
   const themeBlocks = new Map<string, string[]>()
@@ -190,7 +189,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     }
   }
 
-  // 3. CSS компонентов в порядке селекции (INV-CSS-2), побайтно (INV-CSS-5).
+  // 3. CSS компонентов в порядке селекции, побайтно.
   const componentCss = await Promise.all(resolution.componentCss.map(async (ref) => {
     const provider = byId.get(ref.providerId)
     const path = resolveProviderPath(ref.path, provider?.baseUrl)
@@ -206,7 +205,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const { engineInput, generated } = await generateEngineCss(app)
   const safelistRedundant = resolution.safelist.filter(c => resolution.classes.includes(c))
 
-  // 5. Обрезка: `off` не читает лишнего и не меняет ни байта (INV-TOK-1).
+  // 5. Обрезка: `off` не читает лишнего и не меняет ни байта.
   const mode = config.pruneTokens?.mode ?? 'off'
   let prune: TokenPrunePlan | undefined
   let tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => s.css)
@@ -231,7 +230,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
 
   // Preflight движка — базового уровня, поэтому уезжает в `base` и **первым**:
   // инициализация `--un-*` и reset обязаны действовать до стилей компонентов, а
-  // не после них. Слой выбирает сборщик, движок про слои не знает (E-13, E-15).
+  // не после них. Слой выбирает сборщик, движок про слои не знает.
   const enginePreflight = generated.preflight?.trim()
   const baseSections = sections.filter(s => s.source.kind === 'base').map(s => s.css)
 

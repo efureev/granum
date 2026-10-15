@@ -1,11 +1,11 @@
 /**
- * AC-11: у каждого инварианта `INV-*` из docs/invariants.md заполнена колонка
- * «Проверка», и его идентификатор упомянут хотя бы в одном тесте, скрипте
- * проверки или файле ожиданий фикстур/приложений — то есть проверка
- * существует, а не только обещана.
+ * Реестр инвариантов docs/invariants.md: у каждого заполнена колонка
+ * «Проверка», и она называет тест, скрипт проверки или файл ожиданий
+ * фикстуры/стенда, который существует, — то есть проверка есть, а не только
+ * обещана. Номер инварианта живёт в реестре, код ссылается на причину словами.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const REPO = join(import.meta.dirname, '../../../..')
@@ -24,7 +24,7 @@ function walk(dir: string, filter: (name: string) => boolean): string[] {
   return out
 }
 
-describe('реестр инвариантов (AC-11)', () => {
+describe('реестр инвариантов', () => {
   const registry = readFileSync(join(REPO, 'docs/invariants.md'), 'utf8')
   const rows = registry.split('\n').filter(line => /^\| INV-[A-Z]+-\d+ \|/.test(line))
   const ids = rows.map(line => line.split('|')[1]!.trim())
@@ -39,15 +39,24 @@ describe('реестр инвариантов (AC-11)', () => {
     expect(empty).toEqual([])
   })
 
-  it('каждый идентификатор упомянут в тесте, скрипте проверки или ожиданиях', () => {
+  it('колонка «Проверка» называет существующий тест, скрипт проверки или файл ожиданий', () => {
     const files = [
       ...walk(join(REPO, 'packages'), name => /\.test\.ts$/.test(name)),
       ...walk(join(REPO, 'scripts'), name => /\.mjs$/.test(name)),
       ...walk(join(REPO, 'fixtures'), name => /^expected.*\.mjs$/.test(name)),
       ...walk(join(REPO, 'apps'), name => /^expected.*\.mjs$/.test(name)),
     ]
-    const corpus = files.map(f => readFileSync(f, 'utf8')).join('\n')
-    const unmentioned = ids.filter(id => !new RegExp(`${id}(?!\\d)`).test(corpus))
-    expect(unmentioned).toEqual([])
+    // Тест называют по имени файла, скрипт и ожидания — путём от корня.
+    const known = new Set(files.flatMap(f => [relative(REPO, f), basename(f)]))
+    const problems: string[] = []
+    for (const line of rows) {
+      const id = line.split('|')[1]!.trim()
+      const named = [...(line.split('|')[5] ?? '').matchAll(/`([\w./-]+\.(?:test\.ts|mjs))`/g)].map(m => m[1]!)
+      if (named.length === 0)
+        problems.push(`${id}: no test, script or expectations file named`)
+      for (const name of named.filter(n => !known.has(n)))
+        problems.push(`${id}: ${name} not found`)
+    }
+    expect(problems).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 /**
- * Точка входа `./contract` (ТЗ §5): типы контракта и `define*`-хелперы.
- * Единственное, что импортирует браузерный код провайдера. Без `node:`
- * (INV-BND-1), без внешних зависимостей (INV-DEP-1), хелперы чисты (C-20).
+ * Точка входа `./contract`: типы контракта и `define*`-хелперы.
+ * Единственное, что импортирует браузерный код провайдера. Без `node:`,
+ * без внешних зависимостей, хелперы чисты.
  */
 import type { GranumComponentDependency, GranumComponentDescriptor, GranumProvider, GranumTokenRef, GranumTokenSet } from './types'
 import { assertComponentDescriptor, validateProvider } from './validate'
@@ -13,7 +13,7 @@ export { GRANUM_CONTRACT_VERSION } from './types'
 export { COMPONENT_NAME_PATTERN, isValidComponentName, validateProvider } from './validate'
 
 /**
- * Регистрирует провайдер: проверяет контракт сразу (C-19, INV-ERR-1) и
+ * Регистрирует провайдер: проверяет контракт сразу и
  * возвращает тот же объект — identity сохраняется, на ней держится
  * дедупликация инстансов в графе.
  */
@@ -36,7 +36,7 @@ export interface DefineGranumComponentOptions<Name extends string = string> {
 }
 
 /**
- * Создаёт дескриптор компонента (C-18): `cssFiles` нормализуются к путям
+ * Создаёт дескриптор компонента: `cssFiles` нормализуются к путям
  * относительно корня раскладки (`components/<Name>/<file>`), ссылки на токены
  * получают абсолютный `url`, исходное расположение сохраняется в `sourceUrl`.
  *
@@ -107,7 +107,7 @@ export function resolveTokenRefs(
 }
 
 /**
- * База раскладки для объектной формы провайдера (C-6): директория на
+ * База раскладки для объектной формы провайдера: директория на
  * `levelsUp` уровней выше модуля. Литерал `new URL('..', import.meta.url)`
  * в коде провайдера бандлер заменяет на `data:`-URL; здесь база приходит
  * аргументом, подставлять нечего.

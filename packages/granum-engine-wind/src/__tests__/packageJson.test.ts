@@ -36,7 +36,7 @@ describe('package.json пакета движка', () => {
     expect(Object.keys(pkg.exports).sort()).toEqual(['.', './package.json'])
   })
 
-  it('в пакет уезжают dist, лицензия и уведомление об авторстве апстрима (ADR-2)', () => {
+  it('в пакет уезжают dist, лицензия и уведомление об авторстве апстрима', () => {
     for (const entry of ['dist', 'LICENSE', 'THIRD_PARTY_NOTICES.md'])
       expect(pkg.files).toContain(entry)
   })

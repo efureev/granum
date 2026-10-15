@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Детерминизм сборки (INV-DET-1, INV-DET-2, AC-6): манифест после повторной
+ * Детерминизм сборки: манифест после повторной
  * сборки каждой фикстуры побайтно равен предыдущему; CSS и отчёт приложения
  * `bench-one` после повторной сборки — тоже. Запускать после `yarn build:all`.
  */
@@ -39,7 +39,7 @@ for (const entry of readdirSync(base, { withFileTypes: true }).filter(e => e.isD
     console.log(`check-determinism: ${name} — манифест стабилен`)
 }
 
-// Приложение: CSS-ассеты и отчёт побайтно стабильны (INV-DET-2).
+// Приложение: CSS-ассеты и отчёт побайтно стабильны.
 {
   const dir = join(root, 'apps', 'bench-one')
   const snapshot = () => {

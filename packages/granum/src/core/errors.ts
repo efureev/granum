@@ -1,5 +1,5 @@
 /**
- * Типизированные ошибки ядра (ТЗ §14, INV-ERR-2). Каждая наследует
+ * Типизированные ошибки ядра. Каждая наследует
  * {@link GranumError} и несёт машинно-читаемый `code` плюс структурные поля;
  * сообщение — на английском, для человека.
  */
@@ -44,8 +44,8 @@ export class ComponentNotFoundError extends GranumError {
 
 /**
  * Строковый элемент селекции не разбирается как `providerId:Name`: разделитель —
- * ПОСЛЕДНЕЕ двоеточие, обе стороны непустые (INV-SEL-1); короткая форма `'Name'`
- * допустима только в `dependencies` компонента (INV-SEL-4).
+ * ПОСЛЕДНЕЕ двоеточие, обе стороны непустые; короткая форма `'Name'`
+ * допустима только в `dependencies` компонента.
  */
 export class InvalidComponentKeyError extends GranumError {
   readonly code = 'invalid-component-key' as const
@@ -110,7 +110,7 @@ export class DuplicateComponentNameError extends GranumError {
   }
 }
 
-/** Имя компонента — одновременно сегмент пути `components/<Name>/` (INV-CON-2). */
+/** Имя компонента — одновременно сегмент пути `components/<Name>/`. */
 export class InvalidComponentNameError extends GranumError {
   readonly code = 'invalid-component-name' as const
 
@@ -125,7 +125,7 @@ export class InvalidComponentNameError extends GranumError {
   }
 }
 
-/** Ключ токена с `--`: генератор добавляет префикс сам, а `----x` молча ломает тему (INV-CON-7). */
+/** Ключ токена с `--`: генератор добавляет префикс сам, а `----x` молча ломает тему. */
 export class InvalidTokenKeyError extends GranumError {
   readonly code = 'invalid-token-key' as const
 
@@ -180,7 +180,7 @@ export type InvalidProviderReason
     | 'rules-without-dialect'
 
 /**
- * Провайдер объявлен некорректно. Бросается при регистрации (INV-ERR-1), а не
+ * Провайдер объявлен некорректно. Бросается при регистрации, а не
  * тогда, когда некорректное значение впервые понадобится сборке.
  */
 export class InvalidProviderError extends GranumError {
@@ -198,8 +198,8 @@ export class InvalidProviderError extends GranumError {
 }
 
 /**
- * Провайдер объявил один словарь, а собирают его движком другого (C-E2,
- * INV-ENG-10). Записать в манифест чужой диалект нельзя: приложение поверит,
+ * Провайдер объявил один словарь, а собирают его движком другого.
+ * Записать в манифест чужой диалект нельзя: приложение поверит,
  * что список классов отфильтрован реализацией объявленного словаря, а он
  * отфильтрован другой.
  */
@@ -220,7 +220,7 @@ export class EngineDialectMismatchError extends GranumError {
   }
 }
 
-/** Версия формата манифеста, которую этот пакет не понимает (INV-MAN-3). */
+/** Версия формата манифеста, которую этот пакет не понимает. */
 export class UnsupportedManifestVersionError extends GranumError {
   readonly code = 'unsupported-manifest-version' as const
 
@@ -247,7 +247,7 @@ export type InvalidManifestReason
     | 'dialect-vocabulary-mismatch'
     | 'dialect-without-classes'
 
-/** Манифест не проходит проверку читателя (`docs/manifest.md` §4). */
+/** Манифест не проходит проверку читателя (`docs/manifest.md`). */
 export class InvalidManifestError extends GranumError {
   readonly code = 'invalid-manifest' as const
 
@@ -264,7 +264,7 @@ export class InvalidManifestError extends GranumError {
   }
 }
 
-/** `<pkg>/granum.manifest.json` не разрешается через `exports` пакета (A-2, INV-LAY-2). */
+/** `<pkg>/granum.manifest.json` не разрешается через `exports` пакета. */
 export class ManifestNotFoundError extends GranumError {
   readonly code = 'manifest-not-found' as const
 
@@ -345,7 +345,7 @@ export class TokenRefError extends GranumError {
   }
 }
 
-/** Фактический импорт между компонентами не покрыт объявленным графом `dependencies` (INV-CON-5). */
+/** Фактический импорт между компонентами не покрыт объявленным графом `dependencies`. */
 export class UndeclaredDependencyError extends GranumError {
   readonly code = 'undeclared-dependency' as const
 
@@ -362,7 +362,7 @@ export class UndeclaredDependencyError extends GranumError {
   }
 }
 
-/** `package.json#exports` провайдера не публикует манифест или subpath компонента (B-13, INV-LAY-2). */
+/** `package.json#exports` провайдера не публикует манифест или subpath компонента. */
 export class PackageExportsError extends GranumError {
   readonly code = 'package-exports' as const
 
@@ -377,7 +377,7 @@ export class PackageExportsError extends GranumError {
   }
 }
 
-/** Браузерный чанк провайдера тянет node-код (INV-BND-1) или `data:`-URL вместо пути (INV-LAY-3). */
+/** Браузерный чанк провайдера тянет node-код или `data:`-URL вместо пути. */
 export class BoundaryViolationError extends GranumError {
   readonly code = 'boundary-violation' as const
 
@@ -392,7 +392,7 @@ export class BoundaryViolationError extends GranumError {
   }
 }
 
-/** `@apply` в CSS компонента нельзя раскрыть плоско (ADR-3). */
+/** `@apply` в CSS компонента нельзя раскрыть плоско. */
 export class ApplyExpansionError extends GranumError {
   readonly code = 'apply-expansion' as const
 
@@ -452,7 +452,7 @@ export class PluginInstanceReusedError extends GranumError {
   }
 }
 
-/** Приложение импортирует компонент провайдера, не вошедший в селекцию (A-6, INV-JS-2). */
+/** Приложение импортирует компонент провайдера, не вошедший в селекцию. */
 /**
  * Компонент импортирован из корня пакета-провайдера. Селекция и guard видят
  * компонент по его подпути, а корневой barrel тянет весь пакет: в dev и в SSR

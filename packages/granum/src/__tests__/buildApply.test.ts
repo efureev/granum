@@ -5,7 +5,7 @@ import { testEngine } from './testEngine'
 
 const engine = testEngine()
 
-describe('expandApply (B-11, ADR-3)', () => {
+describe('expandApply', () => {
   it('раскрывает @apply в плоском правиле декларациями движка', async () => {
     const css = '.x-sp-test {\n  display: flex;\n  @apply text-lg font-bold;\n}\n'
     const out = await expandApply(css, engine, 'styles.css')
@@ -49,7 +49,7 @@ const atRules = testEngine({
   },
 })
 
-describe('expandApply: вариант через at-rule и класс из нескольких правил — ошибка (B-11)', () => {
+describe('expandApply: вариант через at-rule и класс из нескольких правил — ошибка', () => {
   it('комментарий слоя перед плоским правилом ему не мешает', async () => {
     expect(await expandApply('.x{@apply w-bold;}', atRules, 'a.css')).toBe('.x{font-weight:700;}')
   })

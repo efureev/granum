@@ -1,5 +1,5 @@
 /**
- * Активный набор тем и слитый реестр токенов (ТЗ §5.3, INV-THM-1..4).
+ * Активный набор тем и слитый реестр токенов.
  * Перенос из v1 на нормализованные узлы; семантика не менялась.
  */
 import type { GranumTokenRef, GranumTokenSet } from '../contract'
@@ -16,7 +16,7 @@ export function defaultAppThemeSelector(name: string): string {
 
 /**
  * Определение темы на стороне приложения. Не заменяет вклад провайдеров в
- * одноимённую тему, а ложится поверх (INV-THM-2). `extends`/`selector`
+ * одноимённую тему, а ложится поверх. `extends`/`selector`
  * схлопывают тему в один блок под целевым селектором.
  */
 export interface GranumAppThemeDefinition {
@@ -135,8 +135,8 @@ function mergeIntoRegistry(
 
 /**
  * Провайдеры в порядке графа → компоненты в порядке селекции → `define`
- * приложения (INV-THM-2). Структурное определение темы у провайдера
- * побеждает его же файл (INV-THM-4).
+ * приложения. Структурное определение темы у провайдера
+ * побеждает его же файл.
  */
 export function resolveThemes(
   providers: readonly ProviderNode[],
@@ -335,7 +335,7 @@ function planAppThemes(
   return { needed: [...needed], order, warnings }
 }
 
-/** Темы, значения которых понадобятся резолву: активные плюс транзитивные базы `extends` (INV-THM-5). */
+/** Темы, значения которых понадобятся резолву: активные плюс транзитивные базы `extends`. */
 export function resolveNeededThemeNames(providers: readonly ProviderNode[], input: ResolveThemesInput = {}): Set<string> {
   const { names } = resolveThemeNames(providers, input)
   return new Set(planAppThemes(names, input.define ?? {}).needed)

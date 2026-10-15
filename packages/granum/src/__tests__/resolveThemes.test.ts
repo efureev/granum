@@ -36,7 +36,7 @@ describe('resolveThemes', () => {
       .toEqual([{ providerId: 'a', themeName: 'light', cssRef: 'theme/light.css' }])
   })
 
-  it('tokenDefinitions побеждает themes у одного провайдера (INV-THM-4)', () => {
+  it('tokenDefinitions побеждает themes у одного провайдера', () => {
     const mixed = makeProvider('m', { theme: { themes: { light: 'l.css' }, tokenDefinitions: { light: { tokens: { a: '1' } } } } })
     const r = resolveThemes(nodes(mixed), { names: ['light'] })
     expect(r.items[0]!.tokenDefinition).toBeDefined()
@@ -112,7 +112,7 @@ describe('resolveThemes', () => {
   })
 })
 
-describe('defaultThemes провайдеров (INV-THM-1)', () => {
+describe('defaultThemes провайдеров', () => {
   const mk = (id: string, defaults: string[] | undefined, themes: Record<string, string>): GranumProvider =>
     makeProvider(id, { theme: { themes, ...(defaults ? { defaultThemes: defaults } : {}) } })
 

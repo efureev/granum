@@ -1,5 +1,5 @@
 /**
- * Загрузка `granum.config.*` для CLI (D-4). TS-конфиг: через `vite`
+ * Загрузка `granum.config.*` для CLI. TS-конфиг: через `vite`
  * (`loadConfigFromFile`), если он резолвится из корня приложения, иначе
  * нативный `import()` (Node ≥ 22.18 снимает типы сам). Экспорт — `default`,
  * `granum` или `config`.

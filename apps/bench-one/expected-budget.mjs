@@ -7,11 +7,11 @@ export default {
   purpose: 'бюджет CSS/JS одного компонента поверх полного фундамента',
   assets: { roles: ['vue', 'pkg', 'css', 'entry'] },
   granum: {
-    // Намеренная фикстура heavy: у `shadow-legacy` правила нет (INV-DIAG-2).
+    // Намеренная фикстура heavy: у `shadow-legacy` правила нет.
     unmatched: ['shadow-legacy'],
     undefinedTokens: [],
     pruneMode: 'off',
-    // Движок утилит — build-time; в клиентский бандл он не попадает (N-5).
+    // Движок утилит — build-time; в клиентский бандл он не попадает.
     noEngineInBundle: true,
   },
   /*

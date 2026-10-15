@@ -3,7 +3,7 @@
  * (`splitCodeWithArbitraryVariants`) — он понимает произвольные значения со
  * скобками, чего простой сплиттер ядра не умеет. Срезание комментариев берётся
  * у ядра (`stripComments`): UnoCSS сканирует ТЕКСТ файла, и `<!-- p-4 -->` в
- * шаблоне SFC давал бы утилиту (INV-ENG-5).
+ * шаблоне SFC давал бы утилиту.
  */
 import { stripComments } from '@feugene/granum/engine'
 import { splitCodeWithArbitraryVariants } from './vendor/extractor-arbitrary-variants/index.js'

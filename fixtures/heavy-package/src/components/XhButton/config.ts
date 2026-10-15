@@ -3,9 +3,9 @@ import { splitClassTokens } from '../../utils/classTokens.ts'
 import { BASE_CLASS, PAD_STEP, TONE } from './btnStyles.ts'
 
 /**
- * Классы собираются в рантайме (`p-${n}` и строки тонов) — только safelist (C-8).
+ * Классы собираются в рантайме (`p-${n}` и строки тонов) — только safelist.
  * `shadow-legacy` — намеренный дефект фикстуры: правила у него нет, и отчёт
- * сборки приложения обязан назвать его классом без правила (INV-DIAG-2).
+ * сборки приложения обязан назвать его классом без правила.
  */
 export const xhButtonConfig = defineGranumComponent(import.meta.url, {
   name: 'XhButton',

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Форма `package.json` — часть контракта пакета (ТЗ N-1, N-2, §4.2).
+ * Форма `package.json` — часть контракта пакета.
  * Проверка на `dist` живёт в `scripts/check-dist-boundary.mjs`; здесь — то,
  * что видно без сборки.
  */
@@ -24,13 +24,13 @@ const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.ur
 const ENTRIES = ['.', './contract', './engine', './build', './vite', './node', './runtime', './codegen'] as const
 
 describe('package.json', () => {
-  it('has no runtime dependencies and only vite as peer (N-1, INV-DEP-1)', () => {
+  it('has no runtime dependencies and only vite as peer', () => {
     expect(Object.keys(pkg.dependencies ?? {})).toEqual([])
     expect(Object.keys(pkg.peerDependencies ?? {})).toEqual(['vite'])
     expect(pkg.peerDependenciesMeta?.vite?.optional).toBe(true)
   })
 
-  it('publishes exactly the eight entry points of the spec plus ./client and package.json (§4.2)', () => {
+  it('publishes exactly the eight entry points of the spec plus ./client and package.json', () => {
     expect(Object.keys(pkg.exports)).toEqual([...ENTRIES, './client', './package.json'])
     for (const key of ENTRIES) {
       const target = pkg.exports[key] as Record<string, string>
@@ -46,7 +46,7 @@ describe('package.json', () => {
     expect(pkg.files).toContain('client.d.ts')
   })
 
-  it('is ESM-only, side-effect free, Node >= 22, with the granum bin (N-2)', () => {
+  it('is ESM-only, side-effect free, Node >= 22, with the granum bin', () => {
     expect(pkg.type).toBe('module')
     expect(pkg.sideEffects).toBe(false)
     expect(pkg.engines.node).toBe('>=22')

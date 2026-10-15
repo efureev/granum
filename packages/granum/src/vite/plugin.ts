@@ -1,6 +1,6 @@
 /**
- * Плагин приложения `granum()` — оркестратор конвейера (ТЗ §10). Одна
- * резолюция на билд (INV-RES-1) кормит три канала: CSS (`virtual:granum.css`
+ * Плагин приложения `granum()` — оркестратор конвейера. Одна
+ * резолюция на билд кормит три канала: CSS (`virtual:granum.css`
  * и срезы по слоям), JS (`virtual:granum/components` и guard импортов),
  * токены и темы (`virtual:granum/themes`). В dev правка исходников
  * приложения пересобирает только то, что от них зависит.
@@ -48,7 +48,7 @@ function scriptBlocksOf(markup: string): string {
   return (frontmatter === undefined ? blocks : [frontmatter, ...blocks]).join('\n')
 }
 
-/** Слой при `css.split`: отдельная CSS-точка входа без объявления порядка (A-21). */
+/** Слой при `css.split`: отдельная CSS-точка входа без объявления порядка. */
 const VIRTUAL_SPLIT_PREFIX = 'virtual:granum/split/'
 const RESOLVED_SPLIT_PREFIX = `\0${VIRTUAL_SPLIT_PREFIX}`
 
@@ -88,11 +88,11 @@ interface SkippedExport {
  * которого он приезжает. Одно место на модуль и на его объявления типов — иначе
  * они разъедутся, и типы будут описывать не то, что импортируется.
  *
- * Реэкспорт по имени возможен не всегда. Контракт допускает имена с дефисом
- * (INV-CON-2), а одно имя может прийти от двух провайдеров. Такая строка ломала
+ * Реэкспорт по имени возможен не всегда. Контракт допускает имена с дефисом,
+ * а одно имя может прийти от двух провайдеров. Такая строка ломала
  * бы модуль целиком, и вместе с ним сборку всего, что из него импортирует. Эти
  * имена пропускаются и называются — как у резолвера авто-импорта, который
- * неоднозначное имя тоже не резолвит (A-5).
+ * неоднозначное имя тоже не резолвит.
  */
 function componentExports(app: PreparedApp): { exports: ComponentExport[], skipped: SkippedExport[] } {
   const owners = new Map<string, string[]>()
@@ -143,7 +143,7 @@ function componentTypes(exports: readonly ComponentExport[]): string {
 
 /**
  * Файлы провайдеров, которые читают подготовка и эмиссия: манифест, инлайнимый
- * CSS, CSS компонентов. В dev за ними следят явно (A-16): пакет-воркспейс лежит
+ * CSS, CSS компонентов. В dev за ними следят явно: пакет-воркспейс лежит
  * вне корня приложения, а симлинк в `node_modules` watcher Vite игнорирует.
  */
 function providerFilesOf(app: PreparedApp): string[] {
@@ -178,7 +178,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   let server: ViteDevServer | undefined
   let prepared: Promise<PreparedApp> | undefined
   let emitted: Promise<EmittedCss> | undefined
-  /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте (A-19). */
+  /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте. */
   let bundleCss: string | undefined
   /**
    * Отчёт уже написан в этой сборке.
@@ -197,7 +197,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
    * инстанса: окружения одного builder Vite разрешаются до первой из них.
    */
   let buildStarted = false
-  /** Слои, уехавшие отдельными ассетами при `css.split`, в порядке слоёв (A-21). */
+  /** Слои, уехавшие отдельными ассетами при `css.split`, в порядке слоёв. */
   let splitLayers: LayerName[] = []
   /** Проставлены ли `<link>` на них: без HTML-точки входа этого не произойдёт. */
   let splitLinked = false
@@ -210,7 +210,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   /*
    * Время фаз granum, миллисекунды. Печатается в итоговой строке сборки и НЕ
    * попадает в отчёт: `granum-report.json` обязан быть побайтно стабильным
-   * между сборками (INV-DET-2), а время стабильным не бывает.
+   * между сборками, а время стабильным не бывает.
    *
    * Фазы: `prepare` — манифесты, пересчёт классов, скан исходников и резолюция;
    * `emit` — генератор утилит и сборка слоёв; `report` — размеры слоёв со
@@ -218,7 +218,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
    */
   const timings = { prepare: 0, emit: 0, report: 0 }
 
-  /** Файлы провайдеров под наблюдением dev-сервера — реальные пути (A-16). */
+  /** Файлы провайдеров под наблюдением dev-сервера — реальные пути. */
   const providerFiles = new Set<string>()
   const watchProviderFiles = (app: PreparedApp): void => {
     if (!server)
@@ -310,7 +310,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     if (id === RESOLVED_CSS) {
       /*
        * При `split` содержимое уезжает отдельными ассетами, и здесь остаётся
-       * ровно объявление порядка слоёв. Оно обязано быть первым (INV-CSS-1), и
+       * ровно объявление порядка слоёв. Оно обязано быть первым, и
        * ссылку на этот ассет Vite ставит раньше наших — значит место верное.
        * Дублировать его в ассете первого слоя не надо: объявление одно.
        */
@@ -342,7 +342,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   /** Последний отданный dev-серверу код каждого виртуального модуля. */
   const served = new Map<string, string>()
   /*
-   * Перезагружается только модуль, чей код изменился (A-16). Модули тем и
+   * Перезагружается только модуль, чей код изменился. Модули тем и
    * компонентов — JS без границы HMR: их перезагрузка поднимается до входа
    * приложения, и Vite перезагружает страницу. Правка разметки их код не
    * меняет, а безусловная перезагрузка превращала любую правку в перезагрузку
@@ -407,7 +407,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   return {
     name: 'granum:app',
     // `pre`: иначе `vite:resolve` разрешит `<pkg>/components/<Name>` раньше нас,
-    // и guard импортов (A-6) не увидит ни одного спецификатора.
+    // и guard импортов не увидит ни одного спецификатора.
     enforce: 'pre',
 
     configResolved(resolved: ResolvedConfig): void {
@@ -476,7 +476,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       writeComponentTypes(app)
 
       /*
-       * Ассеты слоёв (A-21) — CSS-точки входа, а не готовые строки: так каждый
+       * Ассеты слоёв — CSS-точки входа, а не готовые строки: так каждый
        * слой проходит CSS-конвейер Vite, как любой CSS сборки, — PostCSS,
        * минификацию и `build.cssTarget`. JS-заглушку «чисто CSS» Vite убирает
        * сам. Имя чанка — с `.css`: из него Vite строит имя ассета, и

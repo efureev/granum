@@ -9,9 +9,9 @@ import * as runtime from '../runtime'
 import { GRANUM_VERSION } from '../version'
 import * as vite from '../vite'
 
-/** Каждая точка входа отдаёт свой публичный API (ТЗ §4.2). */
+/** Каждая точка входа отдаёт свой публичный API. */
 describe('entry points', () => {
-  it('contract exposes contract version 1 (C-2)', () => {
+  it('contract exposes contract version 1', () => {
     expect(GRANUM_CONTRACT_VERSION).toBe(1)
     expect(root.GRANUM_CONTRACT_VERSION).toBe(1)
   })
@@ -26,7 +26,7 @@ describe('entry points', () => {
   })
 
   it('engine, build, vite, node, runtime and codegen expose their APIs', () => {
-    // Ядро отдаёт контракт и хелперы, но не реализацию движка (INV-ENG-9, AC-E2).
+    // Ядро отдаёт контракт и хелперы, но не реализацию движка.
     expect(typeof engine.extractClasses).toBe('function')
     expect(typeof engine.vocabularyFingerprint).toBe('function')
     expect(typeof engine.parseDialect).toBe('function')

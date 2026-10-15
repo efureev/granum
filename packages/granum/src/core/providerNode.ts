@@ -1,6 +1,6 @@
 /**
  * Нормализованный провайдер: одна форма для объекта контракта и для
- * прочитанного манифеста (R-6). Всё ядро ниже работает только с узлами.
+ * прочитанного манифеста. Всё ядро ниже работает только с узлами.
  */
 import type {
   GranumComponentDependency,
@@ -33,7 +33,7 @@ export interface ComponentNode {
   readonly name: string
   readonly dependencies: readonly GranumComponentDependency[]
   readonly safelist: readonly string[]
-  /** Статические классы из манифеста; у объектной формы пусто (R-6). */
+  /** Статические классы из манифеста; у объектной формы пусто. */
   readonly classes: readonly string[]
   /** CSS компонента: пути относительно базы провайдера, в порядке эмиссии. */
   readonly css: readonly string[]
@@ -41,8 +41,8 @@ export interface ComponentNode {
   readonly tokenDefinitionsRef: Readonly<Record<string, GranumTokenRef>>
   readonly consumesTokens: readonly string[]
   /**
-   * Подмножество `consumesTokens`, значение которого обязан дать кто-то извне
-   * (T-5). У объектной формы и у манифеста формата 2 без поля `requires` равно
+   * Подмножество `consumesTokens`, значение которого обязан дать кто-то извне.
+   * У объектной формы и у манифеста формата 2 без поля `requires` равно
    * `consumesTokens`: разделить нечем, и диагностика ведёт себя как прежде.
    */
   readonly requiresTokens: readonly string[]
@@ -60,7 +60,7 @@ export interface ProviderNode {
   /** Вклад в движок, объявленный объектом контракта; у манифестной формы `undefined`. */
   readonly engine: GranumEngineContribution | undefined
   /**
-   * Движок, которым порождён артефакт (M-E2). Только у манифестной формы: у
+   * Движок, которым порождён артефакт. Только у манифестной формы: у
    * объектной артефакта нет — её классы считает движок приложения здесь и сейчас.
    */
   readonly engineArtifact: GranumManifestEngine | undefined

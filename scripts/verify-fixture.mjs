@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Сверка собранного фикстурного провайдера с ожиданиями (AC-1, INV-MAN-5,
- * INV-MAN-6): читает `dist/granum.manifest.json` через читатель granum (то есть
- * проходит все проверки manifest.md §4) и прогоняет `expected-manifest.mjs`
+ * Сверка собранного фикстурного провайдера с ожиданиями: читает
+ * `dist/granum.manifest.json` через читатель granum (то есть проходит все
+ * проверки `docs/manifest.md`) и прогоняет `expected-manifest.mjs`
  * фикстуры. Запускается из каталога фикстуры: `yarn workspace <name> verify`.
  */
 import assert from 'node:assert/strict'
@@ -30,7 +30,7 @@ const check = (condition, message) => {
 }
 
 /*
- * Round-trip (INV-MAN-5, INV-MAN-6): извлечение по файлам из dist даёт ровно
+ * Round-trip: извлечение по файлам из dist даёт ровно
  * то, что записано в манифесте — классы с правилом у движка и потребляемые
  * токены.
  *
@@ -60,7 +60,7 @@ for (const [name, component] of Object.entries(loaded.manifest.components)) {
   check(matched.join(' ') === component.classes.join(' '), `${name}: classes round-trip — manifest [${component.classes}] vs dist [${matched}]`)
   const expectedConsumes = [...consumes].sort()
   check(expectedConsumes.join(' ') === component.tokens.consumes.join(' '), `${name}: consumes round-trip — manifest [${component.tokens.consumes}] vs dist [${expectedConsumes}]`)
-  // INV-LAY-3: в браузерных чанках нет data:-URL на месте путей пакета.
+  // В браузерных чанках нет data:-URL на месте путей пакета.
   for (const file of component.files)
     check(!readFileSync(join(dir, 'dist', file), 'utf8').includes('data:text/css'), `${name}: ${file} contains a data:text/css URL`)
 }

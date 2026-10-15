@@ -274,7 +274,7 @@ describe('парсер: вложенность и at-rules', () => {
   })
 })
 
-describe('парсер: значение целиком и повторные блоки (C-13)', () => {
+describe('парсер: значение целиком и повторные блоки', () => {
   it('`;` и фигурные скобки в url(data:…) и в строке значение не обрывают', () => {
     expect(parseCssTokenBlocks(`:root { --icon: url('data:image/svg+xml;utf8,<svg/>'); --sep: "a;b{}"; --next: 1px }`)).toEqual([
       { selector: ':root', tokens: { icon: `url('data:image/svg+xml;utf8,<svg/>')`, sep: '"a;b{}"', next: '1px' } },

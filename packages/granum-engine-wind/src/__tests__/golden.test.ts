@@ -5,7 +5,7 @@ import { windEngine } from '../wind'
 import { GOLDEN_CLASSES } from './fixtures/classes'
 
 /**
- * Golden-тест (E-5, INV-ENG-4): вендоренный форк обязан давать тот же CSS, что
+ * Golden-тест: вендоренный форк обязан давать тот же CSS, что
  * живой `unocss@66.7.5` + `presetWind3`. Эталон берётся из devDependencies и
  * одновременно фиксируется файловым снапшотом — тот обновляется только руками.
  *
@@ -13,8 +13,8 @@ import { GOLDEN_CLASSES } from './fixtures/classes'
  * строки, иначе тест сравнивал бы наш код с нашим же. Доп-правило проверяется
  * отдельно — `rules/extra/__tests__/colorOpacity.test.ts` и `engine.test.ts`.
  *
- * Preflight и утилиты сверяются по отдельности: движок отдаёт их разными полями
- * (E-15), и склейка скрыла бы ошибку в делении.
+ * Preflight и утилиты сверяются по отдельности: движок отдаёт их разными полями,
+ * и склейка скрыла бы ошибку в делении.
  */
 const BASE_LAYERS = ['preflights', 'properties']
 

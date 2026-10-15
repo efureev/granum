@@ -1,6 +1,7 @@
 /**
  * Точечные проверки инвариантов, у которых нет своего модуля-владельца в
- * тестах: INV-CON-8, INV-CSS-7, INV-MAN-8.
+ * тестах: зависимости провайдера и селекция, peer донора, дедуп правил,
+ * резолюция без JS провайдера.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +14,7 @@ import { emitCss } from '../node/emit'
 import { component, makeManifest, makeProvider, prepareTestApp } from './helpers'
 import { testEngine } from './testEngine'
 
-describe('инвариант INV-CON-8: зависимость провайдера не выбирает компоненты донора', () => {
+describe('зависимость провайдера не выбирает компоненты донора', () => {
   it('в селекции только явно выбранный компонент', () => {
     const donor = makeProvider('@x/base', { components: [component('XBox'), component('XIcon')] })
     const consumer = makeProvider('@x/ui', { components: [component('Card')], dependencies: [donor] })
@@ -23,7 +24,7 @@ describe('инвариант INV-CON-8: зависимость провайде�
   })
 })
 
-describe('инвариант INV-CON-9: кросс-провайдерный донор перечислен в peerDependencies', () => {
+describe('кросс-провайдерный донор перечислен в peerDependencies', () => {
   it('доноры собираются из зависимостей провайдера и компонентов; peer-missing — по package.json', () => {
     const donor = makeProvider('@x/base')
     const provider = makeProvider('@x/ui', {
@@ -36,7 +37,7 @@ describe('инвариант INV-CON-9: кросс-провайдерный до
   })
 })
 
-describe('инвариант INV-CSS-7: одно правило эмитируется один раз', () => {
+describe('одно правило эмитируется один раз', () => {
   it('класс из нескольких источников даёт один селектор', async () => {
     const engine = testEngine()
     const out = await engine.generate({ classes: new Set(['p-4', 'p-4', 'flex']) })
@@ -45,7 +46,7 @@ describe('инвариант INV-CSS-7: одно правило эмитируе
   })
 })
 
-describe('инвариант INV-MAN-8: приложение не читает JS провайдера ради резолюции', () => {
+describe('приложение не читает JS провайдера ради резолюции', () => {
   it('cSS одинаков при настоящих и пустых JS-файлах провайдера', async () => {
     const root = mkdtempSync(join(tmpdir(), 'granum-man8-'))
     const dist = join(root, 'node_modules/@x/kit/dist')

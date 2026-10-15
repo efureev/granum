@@ -37,7 +37,7 @@ function plan(input: Partial<Parameters<typeof planTokenPrune>[0]> & { component
   })
 }
 
-describe('planTokenPrune: корни (INV-TOK-2)', () => {
+describe('planTokenPrune: корни', () => {
   it('потребление из манифеста и safelist — корень; никем не потребляемый — removable', () => {
     const p = plan()
     expect(p.kept.get('seed')?.kind).toBe('usage')
@@ -109,7 +109,7 @@ describe('planTokenPrune: keep и мёртвые шаблоны', () => {
   })
 })
 
-describe('planTokenPrune: замыкание (INV-TOK-3)', () => {
+describe('planTokenPrune: замыкание', () => {
   it('взаимная ссылка не зацикливает, referenced-by фиксируется', () => {
     const p = plan({ options: { keep: ['chain-a'] } })
     expect(p.kept.get('chain-b')?.kind).toBe('referenced-by')

@@ -12,7 +12,7 @@ export default {
     ],
     absent: [
       { what: 'safelist XTestStyled — компонент донора, который никто не выбирал', css: '--card-fg' },
-      { what: 'класс из HTML-комментария XgQuick (INV-ENG-5)', css: 'padding:1.25rem' },
+      { what: 'класс из HTML-комментария XgQuick', css: 'padding:1.25rem' },
     ],
   },
   report: (report, check) => {

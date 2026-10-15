@@ -10,7 +10,7 @@ import { makeProvider } from './helpers'
 
 const dataUrl = (css: string): string => `data:text/css,${encodeURIComponent(css)}`
 
-describe('materializeProviderRefs (C-13, INV-THM-5, INV-THM-6)', () => {
+describe('materializeProviderRefs', () => {
   it('ссылки компонента читаются, литералы важнее, поле ref исчезает', () => {
     const descriptor = defineGranumComponent('file:///pkg/src/components/X/config.ts', {
       name: 'X',
@@ -37,7 +37,7 @@ describe('materializeProviderRefs (C-13, INV-THM-5, INV-THM-6)', () => {
     expect(materializeComponentRefs(provider.components[0]!, 'p')).toBe(provider.components[0])
   })
 
-  it('читаются только нужные темы; ссылка неактивной темы не открывается (INV-THM-5)', () => {
+  it('читаются только нужные темы; ссылка неактивной темы не открывается', () => {
     const descriptor = defineGranumComponent('file:///pkg/src/components/X/config.ts', {
       name: 'X',
       tokenDefinitionsRef: { light: dataUrl(':root{--a:1}'), broken: 'file:///nowhere/never.css' },

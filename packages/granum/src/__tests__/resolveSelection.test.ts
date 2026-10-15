@@ -59,7 +59,7 @@ describe('resolveSelection', () => {
     }
   })
 
-  it('транзитивные cross-provider deps подтягиваются; post-order (INV-SEL-2)', () => {
+  it('транзитивные cross-provider deps подтягиваются; post-order', () => {
     const r = resolveSelection(reg(P_DS, P_XG), ['xg:XgQuickForm'])
     expect(r.order).toEqual(['ds:DsButton', 'xg:XgFormActions', 'ds:DsInput', 'ds:DsFormField', 'xg:XgQuickForm'])
     expect(r.providers.map(p => p.id)).toEqual(['ds', 'xg'])
@@ -72,12 +72,12 @@ describe('resolveSelection', () => {
       .toEqual(['ds:DsButton', 'ds:DsFormField', 'ds:DsInput'])
   })
 
-  it('разделитель — ПОСЛЕДНЕЕ двоеточие (INV-SEL-1)', () => {
+  it('разделитель — ПОСЛЕДНЕЕ двоеточие', () => {
     const scoped = makeProvider('@scope/pkg:sub', { components: [{ name: 'Btn' }] })
     expect(resolveSelection(reg(scoped), ['@scope/pkg:sub:Btn']).order).toEqual(['@scope/pkg:sub:Btn'])
   })
 
-  it('короткая форма и пустые стороны ключа в селекции — InvalidComponentKeyError (INV-SEL-4)', () => {
+  it('короткая форма и пустые стороны ключа в селекции — InvalidComponentKeyError', () => {
     for (const bad of ['DsButton', ':X', 'X:']) {
       try {
         resolveSelection(reg(P_DS), [bad])
@@ -103,7 +103,7 @@ describe('resolveSelection', () => {
     }
   })
 
-  it('детектит циклы с цепочкой (INV-SEL-3)', () => {
+  it('детектит циклы с цепочкой', () => {
     const cyclic = makeProvider('c', { components: [{ name: 'A', dependencies: ['B'] }, { name: 'B', dependencies: ['A'] }] })
     try {
       resolveSelection(reg(cyclic), ['c:A'])
@@ -115,7 +115,7 @@ describe('resolveSelection', () => {
     }
   })
 
-  it('safelist и классы — отсортированные объединения (INV-DET-3)', () => {
+  it('safelist и классы — отсортированные объединения', () => {
     const r = resolveSelection(reg(P_DS, P_XG), ['xg:XgQuickForm'])
     expect(collectSafelist(r.entries)).toEqual(['ds-button', 'ds-form-field', 'ds-input', 'xg-form-actions', 'xg-quick-form'])
     expect(collectClasses(r.entries)).toEqual([])

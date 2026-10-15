@@ -27,7 +27,7 @@ const descriptors = [
   defineGranumComponent(`${root}/data/XhTable/config.ts`, { name: 'XhTable', group: 'data' }),
 ]
 
-describe('analyzeBundle (B-6…B-9)', async () => {
+describe('analyzeBundle', async () => {
   const analysis = await analyzeBundle(bundle, descriptors, engine, { indexEntry: 'index.js' })
 
   it('файлы компонента — до чужих entry; общий чанк и общий sfc группы входят', () => {
@@ -35,7 +35,7 @@ describe('analyzeBundle (B-6…B-9)', async () => {
     expect(analysis.components.get('XhTable')!.files).toEqual(['components/XhTable/index.js', 'groups/data/shared/Header-b.js'])
   })
 
-  it('классы — только токены с правилом; токены — из кода, литералов и css-ассетов (INV-MAN-5)', () => {
+  it('классы — только токены с правилом; токены — из кода, литералов и css-ассетов', () => {
     const panel = analysis.components.get('XhPanel')!
     expect(panel.classes).toEqual(['flex', 'gap-[var(--xh-space-2)]'])
     expect(panel.consumes).toEqual(['--xh-panel-bg', '--xh-space-2', '--xh-space-4', '--xh-z-dropdown'])
@@ -48,7 +48,7 @@ describe('analyzeBundle (B-6…B-9)', async () => {
     expect(analysis.components.get('XhCard')!.edges).toEqual(['@feugene/simple-package:XTest1'])
   })
 
-  it('граница: node-импорты, node-entry granum, data-url — только в браузерных файлах (B-16)', async () => {
+  it('граница: node-импорты, node-entry granum, data-url — только в браузерных файлах', async () => {
     expect(analysis.violations).toEqual([
       { file: 'index.js', specifier: 'node:fs', kind: 'node-import' },
       { file: 'index.js', specifier: '@feugene/granum/node', kind: 'granum-node-entry' },
@@ -58,7 +58,7 @@ describe('analyzeBundle (B-6…B-9)', async () => {
   })
 })
 
-describe('двойная доставка CSS (B-3, INV-CSS-5)', () => {
+describe('двойная доставка CSS', () => {
   /*
    * CSS компонента доставляет манифест — приложение инлайнит его в слой
    * `components`. Если чанк компонента ещё и сам импортирует свой CSS-ассет,
@@ -94,7 +94,7 @@ describe('двойная доставка CSS (B-3, INV-CSS-5)', () => {
   })
 })
 
-describe('findUndeclaredEdges (INV-CON-5, INV-CON-6)', () => {
+describe('findUndeclaredEdges', () => {
   it('объявленное и транзитивно покрытое ребро — норма; неучтённое — нарушение', async () => {
     const analysis = await analyzeBundle(bundle, descriptors, engine)
     expect(findUndeclaredEdges('@x/heavy', descriptors, analysis)).toEqual([['XhCard', '@feugene/simple-package:XTest1']])
@@ -112,7 +112,7 @@ describe('findUndeclaredEdges (INV-CON-5, INV-CON-6)', () => {
   })
 })
 
-describe('модуль компонента в общем чанке группы (B-7)', () => {
+describe('модуль компонента в общем чанке группы', () => {
   /*
    * Бандлер кладёт в один чанк модули с одинаковым набором зависящих entry:
    * `shared/Header.vue` группы и часть `XhGrid`, которую он импортирует. Чанк

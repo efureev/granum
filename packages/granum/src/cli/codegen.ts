@@ -1,6 +1,6 @@
 import type { RegistryCodegenResult } from '../codegen/runRegistryCodegen'
 /**
- * `granum codegen [<package-dir>]` (B-14, ТЗ §15.3): стандартные цели
+ * `granum codegen [<package-dir>]`: стандартные цели
  * генерации реестров провайдера из командной строки — без собственного
  * скрипта у пакета. Нестандартные цели (`markedBlock`) остаются программному
  * API `./codegen`.

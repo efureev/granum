@@ -71,7 +71,7 @@ function parsed(text: string): GranumManifest {
   return JSON.parse(text) as GranumManifest
 }
 
-describe('каноническая сериализация (INV-DET-1, manifest.md §5)', () => {
+describe('каноническая сериализация', () => {
   it('корень в фиксированном порядке, вложенные ключи и массивы строк отсортированы, семантичные массивы — нет', () => {
     const text = serializeManifest(draft())
     const m = parsed(text)
@@ -114,7 +114,7 @@ describe('каноническая сериализация (INV-DET-1, manifest
   })
 })
 
-describe('parseManifest — порядок проверок (manifest.md §4; INV-MAN-3)', () => {
+describe('parseManifest — порядок проверок', () => {
   const ok = serializeManifest(draft())
 
   it('валидный манифест даёт GranumLoadedManifest с базой', () => {
@@ -160,7 +160,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     }
   })
 
-  it('блок engine обязателен и согласован (INV-MAN-9, M-E2, M-E3)', () => {
+  it('блок engine обязателен и согласован', () => {
     // Без блока `engine` приложение не знает, чем отфильтрован список классов, и
     // догадываться не имеет права — чтение падает.
     const noBlock = ok.replace(/ {2}"engine": \{[^}]*\},\n/, '')
@@ -176,7 +176,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
       expect((e as InvalidManifestError).reason).toBe('dialect-vocabulary-mismatch')
     }
 
-    // Диалект `null` при непустых классах — потерянная запись о движке (E-3).
+    // Диалект `null` при непустых классах — потерянная запись о движке.
     const bothNull = halfNull.replace('"vocabulary": "fnv64-0123456789abcdef"', '"vocabulary": null')
     try {
       parseManifest(bothNull, BASE)
@@ -192,7 +192,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     expect(() => parseManifest(text, BASE)).toThrow(UnsupportedContractVersionError)
   })
 
-  it('4: пути — относительные, POSIX, без .. (INV-MAN-2)', () => {
+  it('4: пути — относительные, POSIX, без ..', () => {
     for (const bad of ['../x.css', '/abs.css', 'a\\b.css', 'a/../b.css', 'file:///x.css', '', 'a//b.css']) {
       const text = serializeManifest(draft({ theme: { ...draft().theme, baseCss: bad } }))
       try {
@@ -212,9 +212,9 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
    * Пути манифеста разрешаются через `new URL(path, baseUrl)`, а парсер URL
    * считает `%2e` точкой: `%2e%2e/x.css` уходит на уровень выше так же, как
    * `../x.css`. Посегментная проверка на `..` такой путь пропускала, и пакет
-   * мог подсунуть CSS или модуль правил из-за своих пределов (INV-MAN-2).
+   * мог подсунуть CSS или модуль правил из-за своих пределов.
    */
-  it('4а: закодированные точки — те же сегменты . и .. (INV-MAN-2)', () => {
+  it('4а: закодированные точки — те же сегменты . и ..', () => {
     for (const bad of ['%2e%2e/x.css', '%2E%2e/x.css', '.%2e/x.css', '%2e./x.css', 'a/%2e%2e/b.css', '%2e/x.css']) {
       const text = serializeManifest(draft({ theme: { ...draft().theme, baseCss: bad } }))
       expect(() => parseManifest(text, BASE), bad).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
@@ -226,7 +226,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     expect(normalizePackagePath('%2e/x.css')).toBe('x.css')
   })
 
-  it('5: ручная правка ловится по hash (INV-MAN-1)', () => {
+  it('5: ручная правка ловится по hash', () => {
     const edited = ok.replace('"gap-2"', '"gap-3"')
     try {
       parseManifest(edited, BASE, 'f.json')
@@ -238,7 +238,7 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     }
   })
 
-  it('6–7: раскладка entry и ключи токенов (INV-MAN-7, INV-CON-7)', () => {
+  it('6–7: раскладка entry и ключи токенов', () => {
     const badEntry = serializeManifest(draft({
       components: { ...draft().components, XhCard: { ...draft().components.XhCard!, entry: 'components/Other/index.js' } },
     }))
@@ -267,14 +267,14 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     const loaded = parseManifest(ok, BASE)
     const simple = parseManifest(serializeManifest(draft({ id: '@x/simple', dependencies: [], components: { XTest1: { ...draft().components.XhCard!, entry: 'components/XTest1/index.js', group: null } } })), 'file:///simple/dist/')
     const r = resolveGranum({ providers: [loaded, simple], components: ['@x/heavy:XhPanel'] })
-    // Зависимости в манифесте отсортированы, поэтому post-order детерминирован (INV-DET-3).
+    // Зависимости в манифесте отсортированы, поэтому post-order детерминирован.
     expect(r.selection.order).toEqual(['@x/simple:XTest1', '@x/heavy:XhCard', '@x/heavy:XhPanel'])
     expect(r.classes).toEqual(['flex', 'gap-2', 'p-4'])
     expect(r.themes.names).toEqual(['light', 'dark'])
   })
 })
 
-describe('файлы и поиск через exports (A-2, INV-LAY-2)', () => {
+describe('файлы и поиск через exports', () => {
   it('writeManifestSync → readManifestSync: побайтно тот же текст, база — директория файла', () => {
     const dir = mkdtempSync(join(tmpdir(), 'granum-manifest-'))
     const file = join(dir, 'dist', 'granum.manifest.json')

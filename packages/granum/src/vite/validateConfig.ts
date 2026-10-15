@@ -1,5 +1,5 @@
 /**
- * Рантайм-проверка формы `granum.config` (A-1): типы ловят большинство, но
+ * Рантайм-проверка формы `granum.config`: типы ловят большинство, но
  * конфиг часто пишут в JS. Ошибка называет путь до поля.
  */
 import type { GranumAppSources, GranumConfig, GranumCssOptions, GranumJsOptions, GranumPruneTokensOptions, GranumReportOptions } from '../config'
@@ -116,7 +116,7 @@ function rejectPrefixedTokens(tokens: Record<string, unknown>, path: string): vo
 }
 
 /**
- * Движок — обязательный инстанс (A-E1, A-E2). Проверяется форма, а не
+ * Движок — обязательный инстанс. Проверяется форма, а не
  * реализация: имя словаря и его отпечаток нужны для решений, `extract` и
  * `generate` — для работы. Без отпечатка granum не смог бы решить, верить ли
  * списку классов манифеста, и молча поверил бы — ровно то, чего нельзя.

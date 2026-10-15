@@ -24,7 +24,7 @@ export default {
       // Ключевая улика замера: токен компонента, которого в сборке НЕТ, всё
       // равно объявлен — потому что файл темы инлайнится целиком.
       { what: 'токен невыбранного XhTable — объявлен фундаментом, хотя компонента в сборке нет', css: '--xh-table-head-bg' },
-      // Все пять слоёв непусты, поэтому минификатор убирает вводное объявление порядка: блоки идут в порядке INV-CSS-1.
+      // Все пять слоёв непусты, поэтому минификатор убирает вводное объявление порядка: блоки идут в порядке слоёв.
       { what: 'первый слой — tokens', css: '@layer granum.tokens{' },
       { what: 'последний слой — utilities', css: '@layer granum.utilities{' },
     ],
@@ -40,9 +40,9 @@ export default {
   },
   report: (report, check) => {
     check(report.selection.map(s => s.key).join(',') === ['XhAlert', 'XhButton', 'XhCard', 'XhOverlay', 'XhPanel'].map(n => `@granum-fixtures/heavy:${n}`).join(','), `selection: ${report.selection.map(s => s.key)}`)
-    // Намеренная фикстура: `shadow-legacy` из safelist XhButton правила не имеет (INV-DIAG-2).
+    // Намеренная фикстура: `shadow-legacy` из safelist XhButton правила не имеет.
     check(report.classes.unmatched.map(u => u.className).join(',') === 'shadow-legacy', `unmatched: ${JSON.stringify(report.classes.unmatched)}`)
     check(report.tokens.undefined.length === 0, `undefined tokens: ${report.tokens.undefined}`)
-    check(report.prune === null, 'prune off → no plan in the report (INV-TOK-1)')
+    check(report.prune === null, 'prune off → no plan in the report')
   },
 }

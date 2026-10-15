@@ -1,5 +1,5 @@
 /**
- * R-6: объектный провайдер с раскладкой `dist` на диске сканируется
+ * Объектный провайдер с раскладкой `dist` на диске сканируется
  * приложением — классы, потребление токенов, объявления темы, общие чанки.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -28,7 +28,7 @@ function distFixture(): { root: string, dist: string } {
   return { root, dist }
 }
 
-describe('scanObjectProvider (R-6)', () => {
+describe('scanObjectProvider', () => {
   it('файлы компонента и общие чанки; классы только с правилом; токены из JS и CSS; тема по файлам', async () => {
     const { dist } = distFixture()
     const provider = defineGranumProvider({
@@ -49,7 +49,7 @@ describe('scanObjectProvider (R-6)', () => {
     expect(loaded.manifest.components.Table?.classes).toEqual(['m-2'])
     expect(loaded.manifest.theme.declares).toEqual(['--accent', '--card-fg', '--space'])
     // `p-4` извлечение нашло статически, поэтому из safelist он вычищен: записи
-    // без собственного CSS в манифест не едут (C-8). `sr-only` остался — его
+    // без собственного CSS в манифест не едут. `sr-only` остался — его
     // движок тестов не знает, и в `classes` его нет.
     expect(card.safelist).toEqual(['sr-only'])
     expect(loaded.manifest.warnings.map(w => w.code)).toEqual(['scanned-provider'])
@@ -88,7 +88,7 @@ describe('scanObjectProvider (R-6)', () => {
   })
 })
 
-describe('объектные доноры в dependencies (R-6, INV-CON-1)', () => {
+describe('объектные доноры в dependencies', () => {
   const css = `data:text/css,${encodeURIComponent(':root { --b-bg: red; }')}`
   const donor = (): ReturnType<typeof makeProvider> => makeProvider('b', { theme: { defaultThemes: ['light'], tokenDefinitionsRef: { light: css } } })
   const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] =>

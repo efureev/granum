@@ -7,7 +7,7 @@ import config from './granum.config.ts'
  * Обвязка совпадает с `bench-zero` во всём, кроме плагина granum и
  * чанк-группы провайдера. CSS granum приезжает одним ассетом `index-*.css`;
  * раскладка по слоям берётся из `granum-report.json` — он считается из той
- * же эмиссии (INV-DIAG-1), поэтому дробить CSS на файлы ради замера незачем.
+ * же эмиссии, поэтому дробить CSS на файлы ради замера незачем.
  */
 export const heavyChunkGroup = {
   name: 'hpkg',

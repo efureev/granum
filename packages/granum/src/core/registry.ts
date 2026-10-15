@@ -19,7 +19,7 @@ export function toComponentKey(providerId: string, name: string): ComponentKey {
   return `${providerId}:${name}`
 }
 
-/** Разбивает ключ по ПОСЛЕДНЕМУ двоеточию: `a:b:C` — провайдер `a:b` (INV-SEL-1). */
+/** Разбивает ключ по ПОСЛЕДНЕМУ двоеточию: `a:b:C` — провайдер `a:b`. */
 export function splitComponentKey(key: string): [providerId: string, name: string] {
   const idx = key.lastIndexOf(':')
   return [key.slice(0, idx), key.slice(idx + 1)]

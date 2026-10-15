@@ -530,7 +530,7 @@ describe('групповая раскладка', () => {
     expect(await read('src/granum-provider/index.ts'))
       .toContain(`from '../components/transaction-details/GrExpenseModal/config.ts'`)
 
-    // Раскладка `dist` плоская для любых исходников (B-1): `import` — по имени, `types` зеркалят путь.
+    // Раскладка `dist` плоская для любых исходников: `import` — по имени, `types` зеркалят путь.
     const pkg = JSON.parse(await read('package.json'))
     expect(pkg.exports['./components/GrExpenseModal'].import).toBe('./dist/components/GrExpenseModal/index.js')
     expect(pkg.exports['./components/GrExpenseModal'].types).toBe('./dist/types/src/components/transaction-details/GrExpenseModal/index.d.ts')
@@ -640,7 +640,7 @@ describe('replaceMarkedBlock', () => {
   })
 })
 
-describe('manifestExport (INV-LAY-2)', () => {
+describe('manifestExport', () => {
   it('добавляет экспорт манифеста сразу после `.`, существующий не трогает', async () => {
     await component('GrAlert')
     await runRegistryCodegen({ packageDir: pkgDir, targets: [codegenTargets.manifestExport(), codegenTargets.packageExports()] })

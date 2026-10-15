@@ -1,7 +1,7 @@
 import type { PreparedApp } from '../prepare'
 /**
  * `granum prune`: что обрезка удалит и что сохранит — без изменения эмиссии.
- * План считается тем же `planTokenPrune`, что и сборка (INV-DIAG-1).
+ * План считается тем же `planTokenPrune`, что и сборка.
  */
 import type { TokenKeepReason } from '../tokenPrune'
 import { Buffer } from 'node:buffer'

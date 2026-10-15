@@ -34,7 +34,7 @@ export default defineConfig({
     reportCompressedSize: true,
     minify: false,
     lib: {
-      // Девять entry: восемь публичных точек входа (ТЗ §4.2) и `bin`.
+      // Девять entry: восемь публичных точек входа и `bin`.
       entry: {
         index: entry('./src/index.ts'),
         contract: entry('./src/contract/index.ts'),
@@ -51,7 +51,7 @@ export default defineConfig({
     },
     rolldownOptions: {
       // `node:*` и `vite` — единственное, что остаётся снаружи. Всё остальное
-      // обязано быть внутри пакета: внешних зависимостей у него нет (N-1).
+      // обязано быть внутри пакета: внешних зависимостей у него нет.
       external: [/^node:/, 'vite'],
     },
   },

@@ -1,9 +1,8 @@
 /**
- * Движок `@feugene/granum-engine-wind` (E-8): вендоренное ядро UnoCSS +
+ * Движок `@feugene/granum-engine-wind`: вендоренное ядро UnoCSS +
  * preset-wind3 + одно доп-правило. Генератор создаётся на набор (правила,
  * варианты, preflights, тема) и переиспользуется, пока эти ссылки не меняются;
- * классы на входе сортируются, поэтому вывод не зависит от порядка
- * (INV-ENG-1, INV-DET-2).
+ * классы на входе сортируются, поэтому вывод не зависит от порядка.
  *
  * Почему wind3, а не preset-mini. preset-mini — подмножество Tailwind, и в нём
  * нет `border-collapse`, `list-none`, `touch-none`, `scroll-p*`: класс в разметке
@@ -12,16 +11,16 @@
  * декларации совпадают: на реальном наборе классов дизайн-системы из 1399 имён
  * расходятся одиннадцать, и все одиннадцать разобраны в CHANGELOG.
  *
- * Диалект и отпечаток словаря — два разных обещания (E-1, E-4). Диалект
+ * Диалект и отпечаток словаря — два разных обещания. Диалект
  * называет словарь: доп-правило добавляет к wind3 альфу на произвольном цвете,
  * поэтому с ним и без него это разные словари. Отпечаток считается по
  * фактическому набору правил, включая переданные приложением: приложение с
  * собственным правилом знает больше имён, чем знала сборка пакета, и списку
  * классов её манифеста верить уже нельзя.
  *
- * Preflight отдаётся отдельным полем (E-15): инициализация `--un-*` на `*` — это
+ * Preflight отдаётся отдельным полем: инициализация `--un-*` на `*` — это
  * CSS базового уровня, и в слое утилит ему не место. Куда он уедет, движок не
- * знает и знать не должен (E-13).
+ * знает и знать не должен.
  */
 import type { EngineInput, EngineMatch, EngineOutput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from '@feugene/granum/engine'
 import type { Preflight, Rule, UnoGenerator, Variant } from './vendor/core/index.js'
@@ -35,7 +34,7 @@ import { presetWind3 } from './vendor/preset-wind3/index.js'
 export const WIND_DIALECT_EXTRA = 'unocss/preset-wind3+granum@66'
 /** Словарь чистого preset-wind3, без доп-правил. */
 export const WIND_DIALECT_BASE = 'unocss/preset-wind3@66'
-/** Версия вендоренного апстрима; в решениях не участвует (E-5). */
+/** Версия вендоренного апстрима; в решениях не участвует. */
 export const WIND_UPSTREAM_VERSION = '66.7.5'
 
 export interface WindEngineOptions {
@@ -43,9 +42,9 @@ export interface WindEngineOptions {
   readonly preflight?: boolean
   /** Префикс кастомных свойств встроенных правил (`--un-` по умолчанию). */
   readonly variablePrefix?: string
-  /** Подключать ли дополнительные правила поверх preset-wind3 (E-2). По умолчанию `true`. */
+  /** Подключать ли дополнительные правила поверх preset-wind3. По умолчанию `true`. */
   readonly extraRules?: boolean
-  /** Правила приложения: тот же диалект, другой отпечаток (E-10, E-4). */
+  /** Правила приложения: тот же диалект, другой отпечаток. */
   readonly rules?: readonly GranumRule[]
   readonly variants?: readonly GranumVariant[]
   readonly preflights?: readonly GranumPreflight[]
@@ -68,7 +67,7 @@ type CacheKey = readonly [
 const OUTPUT_CACHE_SIZE = 8
 
 /**
- * Слои вывода ядра, которые для granum — CSS базового уровня (E-15).
+ * Слои вывода ядра, которые для granum — CSS базового уровня.
  *
  * `preflights` — инициализация `--un-*` на `*` и `::backdrop`; без неё утилиты,
  * читающие эти переменные (`filter`, `transform`, `ring`), дают невалидные
@@ -100,7 +99,7 @@ export function windEngine(options: WindEngineOptions = {}): GranumEngine {
     async generate(input: EngineInput): Promise<EngineOutput> {
       const { uno, sourceOf } = await prepare(input)
       const classes = [...new Set(input.classes)].sort()
-      // Кэш результата по генератору и множеству классов (A-17): в dev каждая
+      // Кэш результата по генератору и множеству классов: в dev каждая
       // правка исходников приложения заново собирает тот же вход из манифестов.
       const key = classes.join(' ')
       const cached = outputs.get(uno)?.get(key)
@@ -157,7 +156,7 @@ async function buildGenerator(options: WindEngineOptions, input: EngineInput): P
   // в правило, и общий инстанс между двумя генераторами получил бы чужой индекс.
   // При этом `meta`, разделяемая несколькими правилами (так объявлено семейство
   // `*-nums`), остаётся разделяемой ВНУТРИ генератора: от этого зависит порядок
-  // эмиссии, и он обязан совпадать с эталоном (INV-ENG-4).
+  // эмиссии, и он обязан совпадать с эталоном.
   const metaClones = new Map<object, object>()
   const tag = (rule: Rule<any>, source: string): void => {
     const copy = cloneRule(rule, metaClones)
@@ -171,7 +170,7 @@ async function buildGenerator(options: WindEngineOptions, input: EngineInput): P
   for (const rule of input.rules ?? [])
     tag(rule as unknown as Rule<any>, input.sources?.get(rule) ?? 'app')
   // Правила из фабрики — последние: приложение перекрывает и встроенное, и
-  // правила провайдеров (INV-ENG-3).
+  // правила провайдеров.
   for (const rule of options.rules ?? [])
     tag(rule as unknown as Rule<any>, 'app')
 
@@ -227,7 +226,7 @@ function toPreflight(preflight: GranumPreflight): Preflight<any> {
 }
 
 /**
- * Отпечаток словаря движка (E-4): правила и варианты пресета, доп-правило и
+ * Отпечаток словаря движка: правила и варианты пресета, доп-правило и
  * правила из фабрики. Опции `preflight` и `variablePrefix` в него не входят —
  * они меняют вывод, а не множество имён.
  *

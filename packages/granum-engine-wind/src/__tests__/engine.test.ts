@@ -7,7 +7,7 @@ import { GOLDEN_CLASSES } from './fixtures/classes'
 
 const engine = windEngine()
 
-describe('windEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', () => {
+describe('windEngine: контракт вывода', () => {
   it('каждый класс входа либо в matched, либо в unmatched; объединение равно входу', async () => {
     const out = await engine.generate({ classes: new Set(GOLDEN_CLASSES) })
     const all = new Set([...out.matched.keys(), ...out.unmatched])
@@ -38,7 +38,7 @@ describe('windEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', () 
     expect(out.css).toContain('.uppercase{text-transform:uppercase;}')
   })
 
-  it('preflight отдаётся отдельным полем, не смешиваясь с утилитами (E-15)', async () => {
+  it('preflight отдаётся отдельным полем, не смешиваясь с утилитами', async () => {
     const out = await engine.generate({ classes: new Set(['animate-spin', 'tabular-nums']) })
     // Инициализация `--un-*` на `*` — базового уровня: она в `preflight`.
     expect(out.preflight).toContain('--un-rotate:0')
@@ -56,7 +56,7 @@ describe('windEngine: контракт вывода (INV-ENG-1, INV-ENG-2)', () 
   })
 })
 
-describe('windEngine: правила провайдеров и приложения (E-3, INV-ENG-3)', () => {
+describe('windEngine: правила провайдеров и приложения', () => {
   it('правило с тем же именем, добавленное позже, перекрывает встроенное и помечается источником', async () => {
     const override: GranumRule = ['uppercase', { 'text-transform': 'uppercase', 'letter-spacing': '0.1em' }]
     const own: GranumRule = [/^tone-(\w+)$/, ([, tone]) => ({ '--tone': tone })]
@@ -75,7 +75,7 @@ describe('windEngine: правила провайдеров и приложен�
       preflights: [{ css: ':root{--app:1}' }, { css: ({ theme }) => `:root{--huge:${(theme.spacing as Record<string, string>).huge}}` }],
     })
     expect(out.css).toContain('.p-huge{padding:99rem;}')
-    // Preflight провайдера или приложения — тоже CSS базового уровня (E-15), и в
+    // Preflight провайдера или приложения — тоже CSS базового уровня, и в
     // слое утилит ему не место: он обязан действовать до стилей компонентов.
     expect(out.preflight).toContain(':root{--app:1}')
     expect(out.preflight).toContain(':root{--huge:99rem}')
@@ -121,7 +121,7 @@ describe('windEngine: правила провайдеров и приложен�
   })
 })
 
-describe('extract (E-6, INV-ENG-5)', () => {
+describe('extract', () => {
   it('извлекает классы из разметки, строк и шаблонных литералов', () => {
     const code = `<template><div class="p-4 hover:bg-red bg-[var(--x)]" :class="ok ? 'border-red' : 'border-green'"></div></template>
 <script setup>const cls = \`rounded-[var(--r,4px)] \${x}\`; const s = 'space-x-4 object-[50%_20%]'</script>`
@@ -163,7 +163,7 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
     expect(stripComments(`const u = 'https://a/b' // c`, 'x.ts')).toContain('https://a/b')
   })
 
-  it('`/*` в атрибуте шаблона не съедает классы до комментария в <script> (INV-ENG-5)', () => {
+  it('`/*` в атрибуте шаблона не съедает классы до комментария в <script>', () => {
     const sfc = '<template>\n  <input type="file" accept="image/*" class="sr-only">\n  <div class="p-4 grid-cols-[repeat(2,1fr)]">x</div>\n</template>\n<script setup lang="ts">\n/** mt-9 */\nconst a = 1\n</script>\n'
     const set = extractWindClasses(sfc, 'App.vue')
     expect(set).toContain('sr-only')
@@ -173,7 +173,7 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
   })
 })
 
-describe('windEngine: кэш вывода и словарь (A-17, E-1, E-4, INV-ENG-7, INV-ENG-12)', () => {
+describe('windEngine: кэш вывода и словарь', () => {
   it('вывод для того же множества классов отдаётся из кэша, для другого — нет', async () => {
     const cached = windEngine({ preflight: false, extraRules: false })
     const a = await cached.generate({ classes: new Set(['p-4', 'flex']) })
@@ -195,14 +195,14 @@ describe('windEngine: кэш вывода и словарь (A-17, E-1, E-4, INV
     expect(prefixed.vocabulary).toBe(extra.vocabulary)
   })
 
-  it('правило приложения не меняет диалект, но меняет отпечаток (E-4, E-10)', async () => {
+  it('правило приложения не меняет диалект, но меняет отпечаток', async () => {
     const withRule = windEngine({ rules: [['zz-extra', { color: 'red' }]] })
     expect(withRule.dialect).toBe(windEngine().dialect)
     expect(withRule.vocabulary).not.toBe(windEngine().vocabulary)
     const out = await withRule.generate({ classes: new Set(['zz-extra']) })
     expect(out.css).toContain('.zz-extra{color:red;}')
     expect(out.unmatched).toEqual([])
-    // Тот же набор правил — тот же отпечаток: два инстанса сравнимы (INV-ENG-12).
+    // Тот же набор правил — тот же отпечаток: два инстанса сравнимы.
     expect(windEngine({ rules: [['zz-extra', { color: 'red' }]] }).vocabulary).toBe(withRule.vocabulary)
   })
 
@@ -214,7 +214,7 @@ describe('windEngine: кэш вывода и словарь (A-17, E-1, E-4, INV
   })
 })
 
-describe('windEngine: альфа на цвете в скобках (E-4, INV-ENG-3)', () => {
+describe('windEngine: альфа на цвете в скобках', () => {
   const engine = windEngine({ preflight: false })
   const body = async (cls: string): Promise<string | undefined> => {
     const out = await engine.generate({ classes: new Set([cls]) })

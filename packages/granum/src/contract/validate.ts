@@ -1,5 +1,5 @@
 /**
- * Проверки контракта при регистрации (C-19, INV-ERR-1). Их вызывают и
+ * Проверки контракта при регистрации. Их вызывают и
  * `defineGranumProvider`, и `expandProviders` — рукописный объект без хелпера
  * проходит те же проверки.
  */
@@ -14,7 +14,7 @@ import {
 import { isDialect } from '../engine/dialect'
 import { GRANUM_CONTRACT_VERSION } from './types'
 
-/** Имя компонента — сегмент пути `components/<Name>/` (INV-CON-2). */
+/** Имя компонента — сегмент пути `components/<Name>/`. */
 export const COMPONENT_NAME_PATTERN = /^[A-Z][\w-]*$/i
 
 export function isValidComponentName(name: unknown): name is string {
@@ -86,8 +86,8 @@ export function validateProvider(provider: GranumProvider): void {
 }
 
 /**
- * Вклад в движок (C-E1): правила без объявленного словаря непригодны к проверке,
- * а диалект, не проходящий E-1, нельзя сравнить равенством с чужим.
+ * Вклад в движок: правила без объявленного словаря непригодны к проверке,
+ * а диалект не своего формата нельзя сравнить равенством с чужим.
  */
 function validateEngineContribution(provider: GranumProvider): void {
   const engine = provider.engine

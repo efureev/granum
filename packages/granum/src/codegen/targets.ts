@@ -67,7 +67,7 @@ export function barrel(file = 'src/index.ts'): GranumCodegenTarget {
 /**
  * Провайдер: импорты конфигов и записи в реестр. Две метки в одном файле,
  * поэтому две цели — рендеры складываются по порядку. Реестр — массив
- * дескрипторов (`components: [ … ]`, ТЗ §5.1), запись — `xConfig,`.
+ * дескрипторов (`components: [ … ]`), запись — `xConfig,`.
  */
 export function providerRegistry(file = 'src/granum-provider/index.ts'): GranumCodegenTarget[] {
   return [
@@ -129,7 +129,7 @@ export function packageExports(options: {
   keyPrefix?: string
   /**
    * Значение экспорта. По умолчанию — пара `types` + `import`: `import` ведёт в
-   * плоскую раскладку `dist/components/<Name>/index.js` (B-1, одинаковую для
+   * плоскую раскладку `dist/components/<Name>/index.js` (одинаковую для
    * плоских и сгруппированных исходников), `types` — в зеркало исходников
    * `dist/types/src/components/<path>/index.d.ts`, которое пишет `tsc`.
    *
@@ -173,8 +173,8 @@ export function packageExports(options: {
 }
 
 /**
- * Экспорт манифеста: `"./granum.manifest.json": "./dist/granum.manifest.json"`
- * (INV-LAY-2). Ставится сразу после `.`; существующее значение не трогается.
+ * Экспорт манифеста: `"./granum.manifest.json": "./dist/granum.manifest.json"`.
+ * Ставится сразу после `.`; существующее значение не трогается.
  */
 export function manifestExport(options: { file?: string, target?: string } = {}): GranumCodegenTarget {
   const file = options.file ?? 'package.json'

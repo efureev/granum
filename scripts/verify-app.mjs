@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Сверка собранного приложения с `expected.mjs` (AC-5): подстроки в CSS и JS
+ * Сверка собранного приложения с `expected.mjs`: подстроки в CSS и JS
  * из `dist/assets`, плюс проверки отчёта `granum-report.json`. Запускается
  * из каталога приложения: `yarn workspace <name> verify`.
  */
@@ -51,7 +51,7 @@ if (expected.report) {
 const bin = createRequire(join(dir, 'package.json')).resolve('@feugene/granum/package.json').replace(/package\.json$/, 'dist/bin.js')
 
 // CLI на настоящем `granum.config.ts`: `doctor` обязан пройти без ошибок и
-// отдать JSON с той же селекцией, что в отчёте сборки (D-4, INV-DIAG-1).
+// отдать JSON с той же селекцией, что в отчёте сборки.
 // Стенд без granum (`noGranum`) конфига не имеет — пропуск.
 if (expected.noGranum) {
   if (existsSync(join(dir, 'dist', 'granum-report.json')))

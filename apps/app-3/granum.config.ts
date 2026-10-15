@@ -3,7 +3,7 @@ import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * `XgQuick` тянет `XTest1` из донора: оба провайдера подключены по имени
- * пакета, зависимость компонента объявлена в манифесте (C-9).
+ * пакета, зависимость компонента объявлена в манифесте.
  */
 export default defineGranumConfig({
   engine: windEngine(),

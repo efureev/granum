@@ -6,7 +6,7 @@
   </div>
 </template>
 <style>
-/* `@apply` раскрывается на сборке провайдера (B-11): в dist директивы нет. */
+/* `@apply` раскрывается на сборке провайдера: в dist директивы нет. */
 .x-sp-test {
   display: flex;
   flex-direction: column;

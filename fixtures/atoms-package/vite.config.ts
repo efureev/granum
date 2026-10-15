@@ -10,10 +10,10 @@ export default defineConfig({
     vue(),
     granumProvider({
       // Пакет собирается движком своего словаря: его диалект и отпечаток
-      // уезжают в манифест как факт о списке классов (C-E4, M-E5).
+      // уезжают в манифест как факт о списке классов.
       provider: atomsProvider,
       engine: atomsEngine({ rules: atomsRules }),
-      // Правила пакета едут отдельным модулем: в JSON функции не кладут (M-E4).
+      // Правила пакета едут отдельным модулем: в JSON функции не кладут.
       engineModule: 'granum-provider/engine.js',
       entries: { 'granum-provider/engine': 'src/granum-provider/engine.ts' },
     }),

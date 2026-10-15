@@ -1,5 +1,5 @@
 /**
- * Чтение, проверка и запись `granum.manifest.json` (ТЗ §7, `docs/manifest.md`).
+ * Чтение, проверка и запись `granum.manifest.json` (`docs/manifest.md`).
  * Node-only: `node:crypto` для хеша, `node:fs` для файлов, `node:module` для
  * поиска манифеста через `exports` пакета.
  */
@@ -15,7 +15,7 @@ import { isDialect } from '../engine/dialect'
 
 export const MANIFEST_FILE_NAME = 'granum.manifest.json'
 
-/** Порядок ключей корня — фиксированный, ради читаемых диффов (manifest.md §5). */
+/** Порядок ключей корня — фиксированный, ради читаемых диффов. */
 const ROOT_KEY_ORDER = [
   'granum',
   'contractVersion',
@@ -59,7 +59,7 @@ function canonicalize(value: unknown, key: string): unknown {
   return value
 }
 
-/** `sha256-<hex>` от канонической сериализации с пустым полем `hash` (INV-MAN-1). */
+/** `sha256-<hex>` от канонической сериализации с пустым полем `hash`. */
 export function computeManifestHash(manifest: GranumManifest): string {
   const text = canonicalizeManifest({ ...manifest, hash: '' })
   return `sha256-${createHash('sha256').update(text).digest('hex')}`
@@ -77,7 +77,7 @@ export function writeManifestSync(file: string, manifest: Omit<GranumManifest, '
 }
 
 /**
- * Разбор и проверка текста манифеста в порядке manifest.md §4; останавливается
+ * Разбор и проверка текста манифеста в порядке `docs/manifest.md`; останавливается
  * на первой ошибке. Существование файлов, на которые ссылается манифест, не
  * проверяется (это делает `doctor` и чтение CSS при эмиссии).
  */
@@ -141,7 +141,7 @@ export function readManifestSync(file: string): GranumLoadedManifest {
 }
 
 /**
- * Находит манифест пакета через его `exports` (A-2): `require.resolve` от
+ * Находит манифест пакета через его `exports`: `require.resolve` от
  * каталога приложения, без исполнения кода пакета.
  */
 export function locateManifest(packageName: string, fromDir: string): string {
@@ -155,7 +155,7 @@ export function locateManifest(packageName: string, fromDir: string): string {
 }
 
 /**
- * Кэш прочитанных манифестов на процесс (A-17): ключ — путь, версия —
+ * Кэш прочитанных манифестов на процесс: ключ — путь, версия —
  * размер и mtime файла. Повторная подготовка приложения в dev (правка
  * исходников, HMR) не перечитывает и не перехеширует манифесты; изменённый
  * манифест (`vite build --watch` у провайдера) читается заново.
@@ -302,7 +302,7 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
 }
 
 /**
- * Блок `engine` (M-E2, M-E3). Диалект и отпечаток обязаны быть `null`
+ * Блок `engine`. Диалект и отпечаток обязаны быть `null`
  * одновременно: отпечаток без словаря нечему ключевать, а словарь без отпечатка
  * не даёт решить, верить ли списку классов.
  */
@@ -333,7 +333,7 @@ function validateEngineBlock(value: unknown, file?: string): GranumManifestEngin
 }
 
 /**
- * E-3: диалект `null` означает «артефакт ни от какого словаря не зависит и ни
+ * Диалект `null` означает «артефакт ни от какого словаря не зависит и ни
  * одного не расширяет». Классы, safelist или модуль правил это опровергают, и
  * тогда `null` — не факт, а потерянная запись о движке.
  */
@@ -396,7 +396,7 @@ export function normalizePackagePath(path: string): string | undefined {
   return segments.length > 0 ? segments.join('/') : undefined
 }
 
-/** Путь относителен к манифесту, POSIX, без `..` и без выхода за пакет (INV-MAN-2). */
+/** Путь относителен к манифесту, POSIX, без `..` и без выхода за пакет. */
 export function isPackageRelativePath(path: string): boolean {
   if (path.length === 0 || path.startsWith('/') || path.includes('\\') || /^[a-z]+:/i.test(path))
     return false

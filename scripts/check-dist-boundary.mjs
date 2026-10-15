@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 /**
- * Проверка границ пакета на СОБРАННОМ `dist` (ТЗ N-1, INV-DEP-1, INV-BND-1,
- * INV-BND-2):
+ * Проверка границ пакета на СОБРАННОМ `dist`:
  *
  *   1. `dependencies` пусты, `peerDependencies` — ровно `vite`;
- *   2. браузерные entry (`index`, `contract`, `engine`, `runtime`; INV-CON-10, INV-BND-1) и всё, что
+ *   2. браузерные entry (`index`, `contract`, `engine`, `runtime`) и всё, что
  *      они импортируют относительными путями, не содержат `node:`-импортов,
  *      голых имён встроенных модулей Node и запрещённых пакетов;
  *   3. ни один файл `dist` не импортирует `unocss`, `@unocss/*`, `magic-string`,
  *      `css-tree` — рантайма UnoCSS в пакете быть не должно;
- *   4. в `dist` нет реализации движка: ни вендоренного кода апстрима, ни правил
- *      (INV-ENG-9). Движок живёт в `@feugene/granum-engine-wind`, и ядро не
+ *   4. в `dist` нет реализации движка: ни вендоренного кода апстрима, ни правил.
+ *      Движок живёт в `@feugene/granum-engine-wind`, и ядро не
  *      имеет права протащить его обратно ни копией, ни импортом.
  *
  * Использование: node scripts/check-dist-boundary.mjs   # 0 — чисто, 1 — нарушения
@@ -87,9 +86,9 @@ function walkBrowserEntry(entryFile) {
         continue
       }
       if (isNodeOnly(spec))
-        fail(`${relative(root, file)}: браузерный entry импортирует '${spec}' (INV-BND-1)`)
+        fail(`${relative(root, file)}: браузерный entry импортирует '${spec}'`)
       if (FORBIDDEN_EVERYWHERE.some(re => re.test(spec)))
-        fail(`${relative(root, file)}: запрещённый импорт '${spec}' (INV-BND-2)`)
+        fail(`${relative(root, file)}: импорт '${spec}' — у ядра нет зависимостей, и прежние зависимости движка в dist не возвращаются`)
     }
   }
   return seen
@@ -106,11 +105,11 @@ for (const file of listJs(dist)) {
     continue
   for (const spec of collectImportSpecifiers(readFileSync(file, 'utf8'))) {
     if (!isRelative(spec) && FORBIDDEN_EVERYWHERE.some(re => re.test(spec)))
-      fail(`${relative(root, file)}: запрещённый импорт '${spec}' (INV-DEP-1)`)
+      fail(`${relative(root, file)}: импорт '${spec}' — у ядра нет зависимостей, и прежние зависимости движка в dist не возвращаются`)
   }
 }
 
-// 4. в ядре нет реализации движка (INV-ENG-9, AC-E2) ----------------------
+// 4. в ядре нет реализации движка ----------------------
 
 /*
  * Опознаётся по следам вендоренного апстрима в тексте: имена `createGenerator`,
@@ -123,13 +122,13 @@ for (const file of listJs(dist)) {
   const text = readFileSync(file, 'utf8')
   for (const marker of ENGINE_MARKERS) {
     if (marker.test(text))
-      fail(`${relative(root, file)}: след реализации движка (${marker.source}) — ядро не содержит движка (INV-ENG-9)`)
+      fail(`${relative(root, file)}: след реализации движка (${marker.source}) — ядро не содержит движка`)
   }
 }
 for (const spec of ['granum-engine-wind']) {
   for (const file of listJs(dist)) {
     if (collectImportSpecifiers(readFileSync(file, 'utf8')).some(s => s.includes(spec)))
-      fail(`${relative(root, file)}: импорт '${spec}' — ядро не зависит от реализации движка (INV-ENG-9)`)
+      fail(`${relative(root, file)}: импорт '${spec}' — ядро не зависит от реализации движка`)
   }
 }
 

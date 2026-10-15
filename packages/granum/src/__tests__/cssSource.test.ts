@@ -25,7 +25,7 @@ describe('resolveCssFilePath', () => {
     }
     catch (error) {
       expect(error).toMatchObject({ code: 'css-source', reason: 'unsupported-protocol', source: 'https://cdn.example/x.css' })
-      // Сообщение — на английском и с перечислением того, что поддержано (N-7).
+      // Сообщение — на английском и с перечислением того, что поддержано.
       expect((error as Error).message).toContain('Only local paths')
     }
   })
@@ -93,7 +93,7 @@ describe('readCss / readCssSync', () => {
 
 /**
  * Путь, которым ошибка доходит до пользователя: тему из CSS приложение читает
- * `tokenSetFromCss` (C-13), и туда же попадает ссылка, объявленная провайдером.
+ * `tokenSetFromCss`, и туда же попадает ссылка, объявленная провайдером.
  * Без этого теста проверена была бы только чистая функция, а не то, что ошибка
  * не теряется по дороге и не превращается в пустой набор токенов.
  */

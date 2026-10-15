@@ -4,7 +4,7 @@ import { defineGranumConfig } from '../config'
 import { InvalidConfigError, validateGranumConfig } from '../vite/validateConfig'
 import { testEngine } from './testEngine'
 
-/** Валидный движок для форм, где проверяется не он (A-E1). */
+/** Валидный движок для форм, где проверяется не он. */
 const engine = testEngine()
 
 /** Конфиг со всеми полями всех уровней: список допустимых ключей не должен отставать от типа. */
@@ -41,7 +41,7 @@ function failureOf(config: unknown): InvalidConfigError | undefined {
   }
 }
 
-describe('validateGranumConfig (A-1)', () => {
+describe('validateGranumConfig', () => {
   it('валидные формы проходят', () => {
     expect(() => validateGranumConfig({ providers: ['@x/a'], engine })).not.toThrow()
     expect(() => validateGranumConfig(FULL)).not.toThrow()
@@ -57,7 +57,7 @@ describe('validateGranumConfig (A-1)', () => {
     [{}, 'providers'],
     [{ providers: [] }, 'providers'],
     [{ providers: [''] }, 'providers.0'],
-    // Движок обязателен и только инстансом (A-E2): ни строки, ни объекта опций.
+    // Движок обязателен и только инстансом: ни строки, ни объекта опций.
     [{ providers: ['a'] }, 'engine'],
     [{ providers: ['a'], engine: 'builtin' }, 'engine'],
     [{ providers: ['a'], engine: { extraRules: false } }, 'engine.extract'],

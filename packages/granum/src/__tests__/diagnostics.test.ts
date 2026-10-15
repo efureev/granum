@@ -47,8 +47,8 @@ async function app(f: Fixture, config: Partial<GranumConfig> = {}) {
   return prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, ...config }, f.root)
 }
 
-describe('granum doctor (D-2)', () => {
-  it('динамический токен компонента находкой не считается (C-14, T-5)', async () => {
+describe('granum doctor', () => {
+  it('динамический токен компонента находкой не считается', async () => {
     // Имя такого токена собирается в рантайме, и статический анализ видит
     // только префикс. Объявление `dynamicTokens` уважает обрезка; доктор обязан
     // уважать его так же, иначе правильно оформленный компонент получает вечную
@@ -80,9 +80,9 @@ describe('granum doctor (D-2)', () => {
   /**
    * Вердикт выносится по `tokens.requires`, а не по `consumes`: потребление с
    * фолбэком и токен, который компонент присваивает сам, требованием не
-   * являются (T-5). Считается это на сборке пакета — доктор читает готовое.
+   * являются. Считается это на сборке пакета — доктор читает готовое.
    */
-  it('находка только по requires; потребление сверх него молчит (INV-DIAG-4)', async () => {
+  it('находка только по requires; потребление сверх него молчит', async () => {
     const f = fixture()
     const withRequires = {
       ...f.manifest,
@@ -121,7 +121,7 @@ describe('granum doctor (D-2)', () => {
     const report = await granumDoctor(await app(fixture()))
     expect(report.ok).toBe(true)
     // Диалект и отпечаток пакета совпали с движком приложения — быстрый путь,
-    // классы из манифеста, правил пакет не привозил (A-E3).
+    // классы из манифеста, правил пакет не привозил.
     expect(report.providers).toEqual([{
       id: '@x/kit',
       form: 'manifest',
@@ -140,7 +140,7 @@ describe('granum doctor (D-2)', () => {
     expect(report.themes.names).toEqual(['light', 'dark'])
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
-    // `--nowhere` никем не объявлен (INV-TOK-4); `shadow-legacy` — без правила движка.
+    // `--nowhere` никем не объявлен; `shadow-legacy` — без правила движка.
     expect(codes).toContain('token-undefined')
     expect(codes).toContain('safelist-dead')
     expect(report.undefinedTokens).toEqual([{ token: '--nowhere', component: '@x/kit:Card' }])
@@ -168,7 +168,7 @@ describe('granum doctor (D-2)', () => {
       expect.stringContaining('\'node:fs\' (node-import)'),
     ])
     expect(byCode['safelist-redundant']?.[0]?.subject).toBe('@x/kit:Panel')
-    // INV-CSS-5: двойная доставка CSS видна в doctor.
+    // Двойная доставка CSS видна в doctor.
     expect(byCode['css-double-delivery']?.[0]?.subject).toBe('@x/kit:Card')
     // Ошибки идут первыми.
     const levels = report.diagnostics.map(d => d.level)
@@ -217,7 +217,7 @@ describe('granum doctor (D-2)', () => {
     expect(missing.diagnostics[0]).toMatchObject({ level: 'error', code: 'missing-file', subject: '@x/kit:Card' })
   })
 
-  it('конфликт токенов и override-skipped читаются из тех же слоёв, что эмиссия (INV-DIAG-1)', async () => {
+  it('конфликт токенов и override-skipped читаются из тех же слоёв, что эмиссия', async () => {
     const f = fixture()
     const report = await granumDoctor(await app(f, { themes: { tokenOverrides: { light: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
     expect(report.tokenConflicts).toEqual([expect.objectContaining({ theme: 'light', token: 'accent', finalValue: 'blue' })])
@@ -251,7 +251,7 @@ describe('granum explain', () => {
   })
 })
 
-describe('granum why-css (D-3)', () => {
+describe('granum why-css', () => {
   it('каналы: классы манифеста, safelist, CSS компонента, исходники приложения; правило движка', async () => {
     const a = await app(fixture())
     const p4 = await granumWhyCss(a, 'p-4')
@@ -298,7 +298,7 @@ describe('granum tokens', () => {
   })
 })
 
-describe('token-undefined: доктор и отчёт сборки (T-5, INV-DIAG-4)', () => {
+describe('token-undefined: доктор и отчёт сборки', () => {
   it('одно множество: только то, что требуют компоненты, без dynamicTokens и без разметки приложения', async () => {
     const f = fixture()
     // `--dyn-x` объявлен компонентом как собираемый в рантайме; `--app-only`
@@ -315,7 +315,7 @@ describe('token-undefined: доктор и отчёт сборки (T-5, INV-DIA
 })
 
 describe('granum prune', () => {
-  it('токен из вывода движка сохраняется по той же причине, что в сборке (INV-DIAG-1, INV-TOK-2)', async () => {
+  it('токен из вывода движка сохраняется по той же причине, что в сборке', async () => {
     const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
     const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine })
     const report = await granumTokenPrune(a)
@@ -346,7 +346,7 @@ describe('granum prune', () => {
   })
 })
 
-describe('formatDoctorReport: сводка и детали по требованию (D-8, INV-DIAG-5)', () => {
+describe('formatDoctorReport: сводка и детали по требованию', () => {
   /** Отчёт с заданным числом предупреждений одного кода: проверяем свёртку. */
   function reportWith(warnCount: number, extra: DoctorDiagnostic[] = []): DoctorReport {
     const noisy: DoctorDiagnostic[] = Array.from({ length: warnCount }, (_, i) => ({

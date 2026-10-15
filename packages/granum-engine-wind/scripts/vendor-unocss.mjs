@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Вендоринг ядра UnoCSS в `packages/granum-engine-wind/src/vendor/` (ADR-2, E-8).
+ * Вендоринг ядра UnoCSS в `packages/granum-engine-wind/src/vendor/`.
  *
  * Источник — собранные `dist` пяти пакетов из `node_modules`, версия
  * зафиксирована в `VENDOR_VERSION` и обязана совпадать с devDependencies.
@@ -42,7 +42,7 @@ const PATCHES = [
   {
     pkg: 'rule-utils',
     file: 'index.js',
-    why: 'убрать зависимость от magic-string (INV-DEP-1): один overwrite по диапазонам',
+    why: 'убрать зависимость от magic-string: один overwrite по диапазонам',
     from: 'import MagicString from "magic-string";\n',
     to: `// granum: вместо magic-string — минимальная замена по диапазонам.
 class MagicString {

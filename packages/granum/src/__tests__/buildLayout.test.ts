@@ -28,7 +28,7 @@ describe('collectComponentSources / classifyModule', () => {
   })
 })
 
-describe('granumChunkFileNames (INV-LAY-1, INV-LAY-4)', () => {
+describe('granumChunkFileNames', () => {
   const chunk = granumChunkFileNames(sources)
 
   it('sfc компонента → его директория; общий sfc группы → groups/; прочее → chunks/', () => {
@@ -39,7 +39,7 @@ describe('granumChunkFileNames (INV-LAY-1, INV-LAY-4)', () => {
   })
 })
 
-describe('granumAssetFileNames (B-3)', () => {
+describe('granumAssetFileNames', () => {
   const assets = granumAssetFileNames(sources)
 
   it('css компонента по исходному файлу или имени → components/<Name>/styles.css', () => {

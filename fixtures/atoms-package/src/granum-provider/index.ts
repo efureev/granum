@@ -10,7 +10,7 @@ export const PROVIDER_ID = '@granum-fixtures/atoms'
 /**
  * Пакет на своём словаре утилит. `engine.dialect` — утверждение о нём: сборка
  * сверит его с диалектом движка, которым её запустили, и не позволит записать в
- * манифест чужой (C-E2, INV-ENG-10).
+ * манифест чужой.
  */
 export const atomsProvider = defineGranumProvider({
   id: PROVIDER_ID,

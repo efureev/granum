@@ -5,9 +5,9 @@ import { collectImportSpecifiers, findPackageRootImports } from '../node/imports
 import { scanTokenConsumption } from '../node/tokenScan'
 
 /**
- * Срез комментариев (E-12, INV-ENG-5) обязан знать про строки: `/*` внутри
+ * Срез комментариев обязан знать про строки: `/*` внутри
  * литерала — не начало комментария. Регэксп по всему тексту съедал код до
- * ближайшего `*\/`, и классы с токенами пропадали молча (INV-DIAG-2).
+ * ближайшего `*\/`, и классы с токенами пропадали молча.
  */
 function classes(code: string, id: string): Set<string> {
   return extractClasses(code, id)
@@ -140,7 +140,7 @@ describe('stripCssComments', () => {
   })
 })
 
-describe('collectImportSpecifiers: комментарии срезаются с учётом строк (INV-BND-1)', () => {
+describe('collectImportSpecifiers: комментарии срезаются с учётом строк', () => {
   it('импорт после glob со звёздочкой не теряется', () => {
     const code = `const icons = import.meta.glob('./icons/*.svg')\nimport { readFileSync } from 'node:fs'\n/** doc */\n`
     expect(collectImportSpecifiers(code)).toContain('node:fs')

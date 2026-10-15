@@ -39,7 +39,7 @@ async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<R
   return { css: await emitCss(app), app }
 }
 
-describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities позже components — INV-CSS-6)', () => {
+describe('emitCss: слои и порядок; utilities позже components', () => {
   it('пять слоёв в фиксированном порядке, объявление порядка первой строкой', async () => {
     const { css } = await run({ components: ['@x/kit:Panel'] })
     expect(css.css.startsWith('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;\n')).toBe(true)
@@ -47,7 +47,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(order.every((pos, i) => pos > 0 && (i === 0 || pos > order[i - 1]!))).toBe(true)
     expect(css.layers.tokens).toContain('--space: 8px')
     expect(css.layers.base).toContain('body { margin')
-    // Структурный `:root` — в слое tokens после файлов токенов (A-10), блоки остальных тем — в themes.
+    // Структурный `:root` — в слое tokens после файлов токенов, блоки остальных тем — в themes.
     expect(css.layers.tokens).toContain(':root {\n  --accent: red;\n}')
     expect(css.layers.tokens.indexOf('--space: 8px')).toBeLessThan(css.layers.tokens.indexOf('--accent: red'))
     expect(css.layers.themes).not.toContain(':root')
@@ -58,7 +58,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(css.layers.utilities).toContain('.gap-2{gap:0.5rem;}')
   })
 
-  it('тема `:root` не перекрывает тему с селектором при любом порядке names (A-10, INV-CSS-2)', async () => {
+  it('тема `:root` не перекрывает тему с селектором при любом порядке names', async () => {
     // `:root` и `.dark` равны по специфичности: в одном слое победил бы стоящий
     // позже, и при `names: ['dark', 'light']` тёмная тема не включалась бы никогда.
     const loaded = makeManifest('@x/kit', { Card: {} }, {
@@ -84,7 +84,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(css.layers.tokens).not.toContain('--bg: red')
   })
 
-  it('конкатенация срезов по слоям равна целому (INV-CSS-4); плоский режим без @layer', async () => {
+  it('конкатенация срезов по слоям равна целому; плоский режим без @layer', async () => {
     const { css } = await run()
     expect(wrapLayers(css.layers, {})).toBe(css.css)
     // Срез слоя — самостоятельный файл: своя обёртка `@layer`, а объявление
@@ -96,7 +96,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     const onlyTokens = { ...css.layers, base: '', themes: '', components: '', utilities: '' }
     expect(wrapLayer(onlyTokens, 'base', {})).toBe('')
     expect(wrapLayer(onlyTokens, 'tokens', {})).toContain('@layer granum.tokens, granum.base')
-    // `declareOrder: false` — объявление живёт отдельным ассетом (A-21).
+    // `declareOrder: false` — объявление живёт отдельным ассетом.
     expect(wrapLayer(onlyTokens, 'tokens', {}, { declareOrder: false })).not.toContain('granum.base,')
     const flat = wrapLayers(css.layers, { layers: false })
     expect(flat).not.toContain('@layer')
@@ -105,7 +105,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(prefixed).toContain('@layer ds.tokens {')
   })
 
-  it('вход движка = классы манифестов ∪ safelist ∪ приложение; класс без правила — в unmatched (INV-CSS-3, INV-DIAG-2)', async () => {
+  it('вход движка = классы манифестов ∪ safelist ∪ приложение; класс без правила — в unmatched', async () => {
     const { css } = await run({ components: ['@x/kit:Panel'] })
     expect(css.engineInput).toEqual(['flex', 'gap-2', 'p-4', 'shadow-legacy'])
     expect(css.engine.unmatched).toEqual(['shadow-legacy'])
@@ -127,7 +127,7 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
   })
 })
 
-describe('emitCss: preflight движка (E-15, INV-CSS-8)', () => {
+describe('emitCss: preflight движка', () => {
   const PREFLIGHT = '*,::before,::after{--un-rotate:0;}'
 
   it('preflight уезжает в base и стоит перед base.css провайдера', async () => {
@@ -169,7 +169,7 @@ describe('emitCss: preflight движка (E-15, INV-CSS-8)', () => {
   })
 })
 
-describe('emitCss: обрезка токенов (INV-TOK-1, INV-TOK-2)', () => {
+describe('emitCss: обрезка токенов', () => {
   it('off и report не меняют ни байта; on удаляет неиспользуемые, сохраняя замыкание и base', async () => {
     const off = await run({ components: ['@x/kit:Card'] })
     const report = await run({ components: ['@x/kit:Card'], pruneTokens: { mode: 'report' } })
@@ -211,7 +211,7 @@ describe('emitCss: обрезка токенов (INV-TOK-1, INV-TOK-2)', () => 
   })
 })
 
-describe('buildReport (A-19, A-20)', () => {
+describe('buildReport', () => {
   it('отчёт считается из той же эмиссии', async () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src'), { recursive: true })
@@ -225,7 +225,7 @@ describe('buildReport (A-19, A-20)', () => {
     expect(report.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@x/kit:Panel'] }])
     expect(report.classes.safelistRedundant).toEqual(['p-4'])
     // `--ghost` потребляет разметка приложения, а не компонент: вердикт — тот же,
-    // что у доктора (T-5, INV-DIAG-4), и токены приложения в него не входят.
+    // что у доктора, и токены приложения в него не входят.
     expect(report.tokens.undefined).toEqual([])
     expect(report.prune?.removable).toEqual(['dark-unused', 'unused'])
     expect(report.sizes.total.raw).toBe(Buffer.byteLength(css.css))
@@ -234,7 +234,7 @@ describe('buildReport (A-19, A-20)', () => {
 
   /**
    * `classes.app` — не весь словарь разметки, а его пересечение с классами
-   * компонентов. Ровно оно нужно аудиту (D-9), а полный список на витрине
+   * компонентов. Ровно оно нужно аудиту, а полный список на витрине
    * дизайн-системы — это 33 тысячи имён и 750 kB JSON на каждую сборку.
    *
    * Считаются классы ВСЕХ компонентов графа, а не только выбранных: без
@@ -255,7 +255,7 @@ describe('buildReport (A-19, A-20)', () => {
   /**
    * brotli качества 11 стоит 151 мс на 222 kB против 2 мс у gzip и считается на
    * каждый слой дважды — эмиссия и бандл. Платить это на каждой сборке за
-   * число, которое смотрят редко, незачем, поэтому по умолчанию его нет (N-4).
+   * число, которое смотрят редко, незачем, поэтому по умолчанию его нет.
    */
   it('brotli считается только по просьбе конфига', async () => {
     const { root, manifest } = fixture()
@@ -315,7 +315,7 @@ describe('prepareApp: tokensRef тем приложения', () => {
   })
 })
 
-describe('prepareApp: провайдеры и селекция (A-2, A-3, R-6)', () => {
+describe('prepareApp: провайдеры и селекция', () => {
   it('объектная форма — предупреждение; imports — селекция из исходников', async () => {
     const { root, manifest } = fixture()
     const object = makeProvider('obj', { components: [{ name: 'Z' }] })

@@ -38,7 +38,7 @@ describe('resolveThemeActivation', () => {
   })
 })
 
-describe('getThemeManifest — из той же резолюции, что и CSS (T-4, RT-2)', () => {
+describe('getThemeManifest — из той же резолюции, что и CSS', () => {
   const provider = makeProvider('ds', {
     theme: {
       defaultThemes: ['light', 'dark'],

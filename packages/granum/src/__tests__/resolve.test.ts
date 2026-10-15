@@ -18,15 +18,15 @@ const heavy = makeManifest('@x/heavy', {
   XhPanel: { classes: ['flex', 'gap-2'], dependencies: ['ds:DsCard'], css: ['components/XhPanel/styles.css'], safelist: ['p-2'] },
 }, { dependencies: ['ds'] })
 
-describe('resolveGranum (R-1…R-6)', () => {
-  it('одна Resolution на объект входа: мемоизация по идентичности (INV-RES-1)', () => {
+describe('resolveGranum', () => {
+  it('одна Resolution на объект входа: мемоизация по идентичности', () => {
     const input: GranumResolveInput = { providers: [ds, heavy], components: ['@x/heavy:XhPanel'] }
     const a = resolveGranum(input)
     expect(resolveGranum(input)).toBe(a)
     expect(resolveGranum({ ...input })).not.toBe(a)
   })
 
-  it('смешанный вход: манифест + объект; все каналы из одной резолюции (R-2)', () => {
+  it('смешанный вход: манифест + объект; все каналы из одной резолюции', () => {
     const r = resolveGranum({ providers: [ds, heavy], components: ['@x/heavy:XhPanel'] })
     expect(r.providers.map(p => `${p.form}:${p.id}`)).toEqual(['object:ds', 'manifest:@x/heavy'])
     expect(r.selection.order).toEqual(['ds:DsButton', 'ds:DsCard', '@x/heavy:XhPanel'])
@@ -44,13 +44,13 @@ describe('resolveGranum (R-1…R-6)', () => {
     expect(resolveTokenValue(r, 'dark', 'bg')).toBeUndefined()
   })
 
-  it('объектная форма помечается предупреждением provider-without-manifest (R-6)', () => {
+  it('объектная форма помечается предупреждением provider-without-manifest', () => {
     const r = resolveGranum({ providers: [ds, heavy] })
     expect(r.warnings).toContainEqual({ kind: 'provider-without-manifest', providerId: 'ds' })
     expect(r.warnings.filter(w => w.kind === 'provider-without-manifest')).toHaveLength(1)
   })
 
-  it('strictTokens: отброшенный override — предупреждение, а не console.warn (INV-THM-3, INV-DIAG-3)', () => {
+  it('strictTokens: отброшенный override — предупреждение, а не console.warn', () => {
     const r = resolveGranum({
       providers: [ds],
       themes: { strictTokens: true, tokenOverrides: { light: { bg: '#000', ghost: '#123' } } },
@@ -67,7 +67,7 @@ describe('resolveGranum (R-1…R-6)', () => {
     expect(r.warnings).toContainEqual({ kind: 'default-theme-without-source', providerId: 'p', theme: 'dark' })
   })
 
-  it('чистота: вход не мутируется, повторный вызов с равным входом даёт глубоко равный результат (INV-RES-2)', () => {
+  it('чистота: вход не мутируется, повторный вызов с равным входом даёт глубоко равный результат', () => {
     const make = (): GranumResolveInput => ({
       providers: [makeProvider('ds', { components: ds.components, theme: ds.theme! }), makeManifest('@x/heavy', { XhPanel: heavy.manifest.components.XhPanel! }, { dependencies: ['ds'] })],
       components: ['@x/heavy:XhPanel'],
@@ -84,19 +84,19 @@ describe('resolveGranum (R-1…R-6)', () => {
     expect([...b.tokenLayers.keys()]).toEqual([...a.tokenLayers.keys()])
   })
 
-  it('порядок providers во входе не меняет ни классы, ни safelist, ни CSS при одинаковом графе (INV-DET-3)', () => {
+  it('порядок providers во входе не меняет ни классы, ни safelist, ни CSS при одинаковом графе', () => {
     const forward = resolveGranum({ providers: [ds, heavy], components: 'all' })
     const backward = resolveGranum({ providers: [heavy, ds], components: 'all' })
     expect(backward.classes).toEqual(forward.classes)
     expect(backward.safelist).toEqual(forward.safelist)
     expect([...backward.selection.order].sort()).toEqual([...forward.selection.order].sort())
     // Порядок эмиссии CSS следует графу и селекции — он детерминирован, но
-    // зависит от порядка корней; это нормативно (INV-CSS-2), не случайность.
+    // зависит от порядка корней; это нормативно, не случайность.
     expect(backward.componentCss.map(c => c.path).sort()).toEqual(forward.componentCss.map(c => c.path).sort())
   })
 })
 
-describe('resolveGranum: порядок провайдеров (INV-SEL-2, INV-CSS-2)', () => {
+describe('resolveGranum: порядок провайдеров', () => {
   it('донор по строковой зависимости раньше зависящего, хотя в конфиге стоит позже', () => {
     const ui = makeManifest('@x/ui', { Card: {} }, { dependencies: ['@x/base'] })
     const base = makeManifest('@x/base', { Box: {} })

@@ -1,5 +1,5 @@
 /**
- * Скан исходников приложения (A-3, A-11, T-2): классы для движка, потребление
+ * Скан исходников приложения: классы для движка, потребление
  * токенов, импорты компонентов провайдеров. Директории, не globs: обход
  * рекурсивный, расширения — параметр.
  */
@@ -20,15 +20,15 @@ export interface AppSourcesScan {
   readonly consumes: readonly string[]
   /** Импорты вида `<pkg>/components/<Name>`: ключи `pkg:Name`. */
   readonly componentImports: readonly string[]
-  /** PascalCase-теги разметки (`<XhPanel>`): кандидаты в селекцию при auto-import (A-8). */
+  /** PascalCase-теги разметки (`<XhPanel>`): кандидаты в селекцию при auto-import. */
   readonly componentTags: readonly string[]
   /** Классы из атрибутов разметки → файлы, где они стоят: их отчёт судит, в отличие от прочих слов. */
   readonly classAttributes: Readonly<Record<string, readonly string[]>>
 }
 
 /**
- * Кандидат в импорт компонента: `'<pkg>/components/<Name>'`. Имя — по C-3, со
- * строчной буквы тоже. Под шаблон попадают и чужие пути (`~/components/…`,
+ * Кандидат в импорт компонента: `'<pkg>/components/<Name>'`. Имя — по правилу имён
+ * компонентов, со строчной буквы тоже. Под шаблон попадают и чужие пути (`~/components/…`,
  * `vuetify/components/…`) — их отсекает сверка с графом в `importSelection`.
  */
 const COMPONENT_IMPORT_RE = /["'](@[^/"']+\/[^/"']+|[^./@"'][^/"']*)\/components\/([A-Za-z][\w-]*)["']/g

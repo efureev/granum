@@ -20,7 +20,7 @@ describe('expandProviders', () => {
     expect(() => expandProviders([bad])).toThrow(UnsupportedContractVersionError)
   })
 
-  it('проверяет рукописный объект так же, как defineGranumProvider (INV-ERR-1)', () => {
+  it('проверяет рукописный объект так же, как defineGranumProvider', () => {
     const bad = { id: ' ', contractVersion: 1, components: [] } as GranumProvider
     expect(() => expandProviders([bad])).toThrow(InvalidProviderError)
   })
@@ -66,7 +66,7 @@ describe('expandProviders', () => {
   it('манифесты: зависимости — id, обязаны присутствовать; один и тот же манифест дважды — не конфликт', () => {
     const heavy = makeManifest('@x/heavy', {}, { dependencies: ['@x/simple'] })
     const simple = makeManifest('@x/simple')
-    // Строковая зависимость задаёт порядок так же, как объектная: донор раньше (INV-SEL-2).
+    // Строковая зависимость задаёт порядок так же, как объектная: донор раньше.
     expect(expandProviders([heavy, simple]).map(p => `${p.form}:${p.id}`)).toEqual(['manifest:@x/simple', 'manifest:@x/heavy'])
     expect(() => expandProviders([heavy])).toThrow(UnresolvedProviderDependencyError)
 
@@ -79,7 +79,7 @@ describe('expandProviders', () => {
   })
 })
 
-describe('expandProviders: порядок графа по строковым зависимостям (INV-SEL-2, INV-SEL-3)', () => {
+describe('expandProviders: порядок графа по строковым зависимостям', () => {
   it('донор раньше зависящего, как бы ни стояли в конфиге', () => {
     expect(expandProviders([mk('ui', ['base']), mk('base')]).map(p => p.id)).toEqual(['base', 'ui'])
     expect(expandProviders([mk('app', ['ui']), mk('ui', ['base']), mk('base')]).map(p => p.id)).toEqual(['base', 'ui', 'app'])

@@ -9,7 +9,7 @@ import config from './granum.config.ts'
  * Обвязка совпадает с `bench-zero` во всём, кроме плагина granum и
  * чанк-группы провайдера. CSS granum приезжает одним ассетом `index-*.css`;
  * раскладка по слоям берётся из `granum-report.json` — он считается из той
- * же эмиссии (INV-DIAG-1), поэтому дробить CSS на файлы ради замера незачем.
+ * же эмиссии, поэтому дробить CSS на файлы ради замера незачем.
  */
 export const heavyChunkGroup = {
   name: 'hpkg',
@@ -23,9 +23,9 @@ export const vueChunkGroup = {
 }
 
 /**
- * Сборка без granum (AC-3, `scripts/compare-js.mjs`): плагин заменяется
+ * Сборка без granum (`scripts/compare-js.mjs`): плагин заменяется
  * заглушкой, отдающей пустой `virtual:granum.css`. JS-бандл обязан совпасть
- * побайтно — плагин не трогает JS (A-7).
+ * побайтно — плагин не трогает JS.
  */
 function granumStub(): Plugin {
   return {

@@ -1,6 +1,6 @@
 /**
- * Сверка движка приложения с движком пакета — таблица решений §8 ТЗ движка
- * (A-E3…A-E8, INV-ENG-8, INV-ENG-11, INV-ENG-12).
+ * Сверка движка приложения с движком пакета: диалект решает, грузить ли
+ * правила пакета, отпечаток — верить ли списку классов манифеста.
  *
  * Стенд один: пакет на диске, чьи файлы содержат три класса, и манифест, в
  * котором записаны только два — как если бы сборку пакета вёл движок, третьего
@@ -60,7 +60,7 @@ function fixture(options: {
   return { root, manifest: { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` } }
 }
 
-describe('сверка диалектов и отпечатков (A-E3, таблица §8)', () => {
+describe('сверка диалектов и отпечатков', () => {
   beforeEach(() => {
     clearReextractCache()
   })
@@ -75,7 +75,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(app.resolution.classes).toEqual(['flex', 'p-4'])
   })
 
-  it('диалект тот же, отпечаток другой, движок знает больше — класс возвращается (AC-E6, INV-ENG-11)', async () => {
+  it('диалект тот же, отпечаток другой, движок знает больше — класс возвращается', async () => {
     const f = fixture()
     const engine = testEngine({ extra: { [GAINED]: 'color:red;' } })
     expect(engine.dialect).toBe(TEST_ENGINE.dialect)
@@ -89,7 +89,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(css.layers.utilities).toContain(`.${GAINED}{color:red;}`)
   })
 
-  it('класс манифеста, которого движок приложения не знает, остаётся виден в unmatched (A-E7)', async () => {
+  it('класс манифеста, которого движок приложения не знает, остаётся виден в unmatched', async () => {
     const f = fixture({ classes: ['flex', 'p-4', LOST], vocabulary: 'fnv64-otherpackager0' })
     const app = await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Card'] }, f.root)
     const [decision] = app.engineDecisions
@@ -110,7 +110,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
    * невыбранного во входе не было и до пересчёта, а в `unmatched` они вменили бы
    * приложению имена, которых оно не выбирало.
    */
-  it('во вход движка идут потерянные классы только выбранных компонентов (A-E7)', async () => {
+  it('во вход движка идут потерянные классы только выбранных компонентов', async () => {
     const f = fixture({ classes: ['flex', 'p-4', LOST], vocabulary: 'fnv64-otherpackager0' })
     const dist = fileURLToPath(f.manifest.baseUrl)
     mkdirSync(join(dist, 'components/Badge'), { recursive: true })
@@ -131,7 +131,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(report.classes.unmatched.map(e => e.className)).toEqual([LOST])
   })
 
-  it('чужой диалект — правила пакета не грузятся, и это видно (INV-ENG-8, AC-E5)', async () => {
+  it('чужой диалект — правила пакета не грузятся, и это видно', async () => {
     const f = fixture({ dialect: 'other/atoms@1', module: 'rules.mjs' })
     const app = await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Card'] }, f.root)
     const [decision] = app.engineDecisions
@@ -141,7 +141,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(app.resolution.classes).toEqual(['flex', 'p-4'])
   })
 
-  it('свой диалект с модулем правил — правила грузятся и участвуют в пересчёте (A-E4, A-E6)', async () => {
+  it('свой диалект с модулем правил — правила грузятся и участвуют в пересчёте', async () => {
     const f = fixture({ module: 'rules.mjs', vocabulary: 'fnv64-otherpackager0' })
     const app = await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Card'] }, f.root)
     const [decision] = app.engineDecisions
@@ -157,7 +157,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(app.engineDecisions[0]).toMatchObject({ classes: 'manifest', reason: 'none', dialect: null, vocabulary: null })
   })
 
-  it('другая версия реализации при том же отпечатке пересчёта не вызывает (INV-ENG-12, AC-E7)', async () => {
+  it('другая версия реализации при том же отпечатке пересчёта не вызывает', async () => {
     const f = fixture()
     const newer = testEngine({ version: '99.0.0' })
     expect(newer.vocabulary).toBe(TEST_ENGINE.vocabulary)
@@ -165,7 +165,7 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(app.engineDecisions[0]).toMatchObject({ classes: 'manifest', reason: 'none' })
   })
 
-  it('отчёт и доктор называют движок, словарь и отпечаток (D-E1, D-E2)', async () => {
+  it('отчёт и доктор называют движок, словарь и отпечаток', async () => {
     const f = fixture({ classes: ['flex', 'p-4', LOST], vocabulary: 'fnv64-otherpackager0' })
     const app = await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Card'] }, f.root)
     const report = buildReport(app, await emitCss(app))

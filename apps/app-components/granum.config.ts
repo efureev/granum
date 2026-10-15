@@ -2,7 +2,7 @@ import { defineGranumConfig } from '@feugene/granum/vite'
 import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
- * Стенд JS-канала: `virtual:granum/components` на настоящей сборке (A-5, INV-JS-1).
+ * Стенд JS-канала: `virtual:granum/components` на настоящей сборке.
  *
  * В селекции ОБА компонента пакета, а приложение импортирует из виртуального
  * модуля один. Так стенд показывает то, чего не видно нигде больше: JS идёт по

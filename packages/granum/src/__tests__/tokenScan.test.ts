@@ -37,7 +37,7 @@ describe('scanTokenConsumption', () => {
   })
 })
 
-describe('extractRequiredTokenUses (T-5, INV-DIAG-4)', () => {
+describe('extractRequiredTokenUses', () => {
   it('в набор попадает только потребление без fallback', () => {
     const required = extractRequiredTokenUses('color:var(--fg); background:var(--bg, white); border-color:var(--brd,var(--fg))')
     expect([...required].sort()).toEqual(['fg'])
@@ -68,7 +68,7 @@ describe('extractRequiredTokenUses (T-5, INV-DIAG-4)', () => {
   })
 })
 
-describe('extractTokenAssignments (T-5)', () => {
+describe('extractTokenAssignments', () => {
   it('находит присваивание в CSS, ключом объекта и утилитой с произвольным значением', () => {
     const found = extractTokenAssignments(`.a{--own:1px;color:var(--other)} const s = { '--key': v, "--key2": v }; class="[--util:2px]"`)
     expect([...found].sort()).toEqual(['key', 'key2', 'own', 'util'])
@@ -82,7 +82,7 @@ describe('extractTokenAssignments (T-5)', () => {
 describe('scanTokenConsumption: комментарии', () => {
   /**
    * Документация про токен — не потребление токена. Экстрактор классов
-   * комментарии срезал всегда (INV-ENG-5), сканер токенов до этого читал их, и
+   * комментарии срезал всегда, сканер токенов до этого читал их, и
    * JSDoc вида ``var(--gr-z-*)`` давал фантомный токен.
    */
   it('jSDoc и строчный комментарий не дают токенов', () => {
@@ -102,7 +102,7 @@ describe('scanTokenConsumption: комментарии', () => {
   })
 })
 
-describe('scanTokenConsumption: переменные v-bind() из <style> SFC (T-5, INV-DIAG-4)', () => {
+describe('scanTokenConsumption: переменные v-bind() из <style> SFC', () => {
   /*
    * `color: v-bind(color)` Vue компилирует в `var(--ef6ea078)`, а значение
    * выставляет в JS через `useCssVars` ключом без `--`. После минификации ключ

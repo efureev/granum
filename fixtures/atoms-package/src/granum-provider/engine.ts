@@ -1,8 +1,7 @@
 /**
- * Правила пакета поверх словаря `granum-fixtures/atoms@1` (C-E1). Уезжают в
+ * Правила пакета поверх словаря `granum-fixtures/atoms@1`. Уезжают в
  * `dist/granum-provider/engine.js` и объявлены в манифесте как `engine.module`:
- * приложение загрузит их только если его движок говорит на том же диалекте
- * (A-E6, INV-ENG-8).
+ * приложение загрузит их только если его движок говорит на том же диалекте.
  */
 import type { GranumRule } from '@feugene/granum/engine'
 

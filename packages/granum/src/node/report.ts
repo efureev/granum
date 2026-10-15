@@ -1,6 +1,6 @@
 import type { ProviderClassSource, ReextractReason } from './dialects'
 /**
- * Отчёт сборки приложения (A-19, A-20, INV-DIAG-1, INV-DIAG-2): считается
+ * Отчёт сборки приложения: считается
  * теми же функциями, что и эмиссия, поэтому не может назвать значение,
  * которого в сборке нет.
  */
@@ -25,14 +25,14 @@ export interface LayerSize {
 
 export interface GranumBuildReport {
   readonly generatedBy: string
-  /** Движок приложения: реализация, словарь и его отпечаток (D-E1). */
+  /** Движок приложения: реализация, словарь и его отпечаток. */
   readonly engine: {
     readonly name: string
     readonly version?: string
     readonly dialect: string
     readonly vocabulary: string
   }
-  /** По провайдеру: чем собран, откуда взяты классы и что дал пересчёт (D-E1). */
+  /** По провайдеру: чем собран, откуда взяты классы и что дал пересчёт. */
   readonly providers: readonly {
     readonly id: string
     readonly dialect: string | null
@@ -57,14 +57,14 @@ export interface GranumBuildReport {
      *
      * Нужны аудиту дистрибутива: без них класс из разметки приложения,
      * совпавший с классом невыбранного компонента, выглядел бы утечкой
-     * компонента (D-9). Всё, чего у пакетов нет, аудиту не пригодилось бы, а
+     * компонента. Всё, чего у пакетов нет, аудиту не пригодилось бы, а
      * отчёт раздувало: на витрине дизайн-системы полный список — 33 тысячи
      * имён и 750 kB JSON на каждую сборку.
      */
     readonly app: readonly string[]
   }
   readonly tokens: {
-    /** Потребляется селекцией или приложением, но не объявлен ни одним слоем (T-5). */
+    /** Потребляется селекцией или приложением, но не объявлен ни одним слоем. */
     readonly undefined: readonly string[]
   }
   readonly prune: { readonly mode: string, readonly removable: readonly string[], readonly deadPatterns: readonly string[], readonly kept: number } | null
@@ -101,7 +101,7 @@ export function bundleLayerSizes(bundleCss: string, prefix: string, brotli = fal
  * Размер текста. `brotli` считается только по просьбе: качество 11 стоит 151 мс
  * на 222 kB против 2 мс у gzip, а слоёв шесть и меряются они дважды — эмиссия и
  * бандл. На сборке дизайн-системы это полсекунды за число, которое смотрят
- * редко (N-4).
+ * редко.
  */
 function sizeOf(text: string, brotli: boolean): LayerSize {
   return {
@@ -167,7 +167,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
       addSource(className, `${provider.id}:${component.name}`)
   }
   // Класс, потерянный пересчётом, в списках компонентов уже не лежит — но
-  // источник у него есть, и без него он выпал бы из `unmatched` (A-E7).
+  // источник у него есть, и без него он выпал бы из `unmatched`.
   for (const decision of app.engineDecisions) {
     for (const className of decision.lost)
       addSource(className, decision.providerId)
@@ -196,11 +196,11 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
     return out
   }
 
-  // Тот же вердикт, что у доктора, той же функцией (T-5, INV-DIAG-4): только то,
+  // Тот же вердикт, что у доктора, той же функцией: только то,
   // что требуют выбранные компоненты; разметка приложения — его собственное дело.
   const tokenUndefined = sortedUnique(findUndefinedTokens(resolution).map(u => u.token))
 
-  // Считать ли brotli — решает конфиг приложения: по умолчанию нет (N-4).
+  // Считать ли brotli — решает конфиг приложения: по умолчанию нет.
   const brotli = app.config.report?.brotli === true
   const emissionSizes = Object.fromEntries([
     ...LAYER_NAMES.map(name => [name, sizeOf(css.layers[name], brotli)]),

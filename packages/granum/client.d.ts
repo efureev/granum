@@ -26,7 +26,7 @@ declare module 'virtual:granum/layers/utilities.css' {}
 declare module 'virtual:granum/themes' {
   import type { GranumThemeManifest } from '@feugene/granum/runtime'
 
-  /** Манифест тем селекции: порядок блоков в CSS и тема по умолчанию (T-4). */
+  /** Манифест тем селекции: порядок блоков в CSS и тема по умолчанию. */
   const manifest: GranumThemeManifest
   export default manifest
 }

@@ -1,5 +1,5 @@
 /**
- * Ветка «другой диалект» (таблица §8 ТЗ движка, AC-E1).
+ * Ветка «другой диалект».
  *
  * Пакет собран движком словаря `granum-fixtures/atoms@1` и привозит правила для
  * него модулем. Приложение говорит на `unocss/preset-wind3+granum@66`. Из этого
@@ -8,7 +8,7 @@
  *   1. правила пакета не загружаются (`engine-rules-skipped`);
  *   2. списку классов манифеста не верят — он пересчитывается;
  *   3. имена, которых словарь приложения не знает, названы поимённо в `lost`,
- *      поданы движку и видны в `unmatched` (A-E7, INV-DIAG-2, INV-ENG-11).
+ *      поданы движку и видны в `unmatched`.
  *
  * Обратная сторона — `app-atoms`: там движок и пакет говорят на одном словаре.
  */
@@ -27,7 +27,7 @@ export default {
       // Фундамент от словаря не зависит: это CSS-файлы пакета, а не утилиты.
       { what: 'токены пакета доехали, несмотря на расхождение словарей', css: '--at-bg:#fff' },
       { what: 'тема пакета доехала', css: '--at-radius:6px' },
-      { what: 'preflight движка приложения — в слое base (E-15, INV-CSS-8)', css: '@layer granum.base{*,:before,:after,::backdrop{--un-rotate:0' },
+      { what: 'preflight движка приложения — в слое base', css: '@layer granum.base{*,:before,:after,::backdrop{--un-rotate:0' },
       { what: 'утилита приложения из App.vue — на своём словаре она работает', css: 'padding:1.5rem' },
     ],
     absent: [
@@ -53,7 +53,7 @@ export default {
     )
     // Движку подаются потерянные классы только выбранного `AtBox`: классов
     // `AtChip` во входе не было и до пересчёта, и в `unmatched` они вменили бы
-    // приложению имена, которых оно не выбирало (A-E7).
+    // приложению имена, которых оно не выбирало.
     for (const className of ['atom-bg-[var(--at-bg)]', 'atom-frame', 'atom-gap-2', 'atom-stack']) {
       const entry = report.classes.unmatched.find(e => e.className === className)
       check(entry?.sources.join(',') === '@granum-fixtures/atoms', `unmatched ${className}: ${JSON.stringify(entry)}`)

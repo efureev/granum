@@ -2,7 +2,7 @@ import { defineGranumConfig } from '@feugene/granum/vite'
 import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
- * Стенд разделения CSS по слоям (`css.split`, A-21).
+ * Стенд разделения CSS по слоям (`css.split`).
  *
  * Набор намеренно совпадает с `bench-one`: тот же компонент, те же две темы, тот
  * же фундамент. Отличие ровно одно — `css.split: true`, — и поэтому разницу в

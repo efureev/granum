@@ -1,5 +1,5 @@
 /**
- * Конфиг приложения `granum.config.ts` (ТЗ §10.1). Типы и `defineGranumConfig`
+ * Конфиг приложения `granum.config.ts`. Типы и `defineGranumConfig`
  * — browser-safe; загрузка и валидация формы — в `./vite` и `./node`.
  */
 import type { GranumProviderInput } from './contract'
@@ -27,7 +27,7 @@ export interface GranumPruneTokensOptions {
 }
 
 export interface GranumCssOptions {
-  /** Каскадные слои `@layer` (по умолчанию `true`); `false` — плоская конкатенация в том же порядке (A-14). */
+  /** Каскадные слои `@layer` (по умолчанию `true`); `false` — плоская конкатенация в том же порядке. */
   readonly layers?: boolean
   /** Префикс имён слоёв. По умолчанию `granum`. */
   readonly layerPrefix?: string
@@ -37,7 +37,7 @@ export interface GranumCssOptions {
    * Один файл жмётся лучше, но инвалидируется целиком: правка разметки
    * приложения сбрасывает кеш токенов и тем, которые не менялись. При `true`
    * каждый непустой слой уезжает своим ассетом с собственным хешем, а `<link>`
-   * на них проставляются в порядке слоёв, так что каскад сохраняется (A-21).
+   * на них проставляются в порядке слоёв, так что каскад сохраняется.
    *
    * Работает только на сборке и только там, где есть HTML-точка входа: ссылки
    * проставляются в неё. В dev-режиме CSS по-прежнему приходит одним
@@ -57,7 +57,7 @@ export interface GranumJsOptions {
    * его место — в гите, рядом с исходниками.
    */
   readonly dts?: string
-  /** Импорт компонента вне селекции: ошибка (по умолчанию), предупреждение или молчание (A-6). */
+  /** Импорт компонента вне селекции: ошибка (по умолчанию), предупреждение или молчание. */
   readonly guard?: 'error' | 'warn' | 'off'
 }
 
@@ -79,14 +79,14 @@ export interface GranumReportOptions {
 export interface GranumConfig {
   /** Имена пакетов (манифест ищется через `exports`) или объекты контракта / прочитанные манифесты. */
   readonly providers: readonly (string | GranumProviderInput)[]
-  /** `'all'`, список или `'imports'` — по импортам в `appSources` (A-3). По умолчанию `'all'`. */
+  /** `'all'`, список или `'imports'` — по импортам в `appSources`. По умолчанию `'all'`. */
   readonly components?: ComponentSelection | 'imports'
   readonly themes?: GranumThemesInput
   /**
-   * Движок утилит — инстанс, а не имя и не опции (A-E1). Выбор реализации и её
+   * Движок утилит — инстанс, а не имя и не опции. Выбор реализации и её
    * настройка принадлежат приложению: `windEngine()` из
    * `@feugene/granum-engine-wind` или свой. Правила приложения передаются
-   * фабрике движка, у конфига поля для правил нет (E-10).
+   * фабрике движка, у конфига поля для правил нет.
    */
   readonly engine: GranumEngine
   readonly css?: GranumCssOptions

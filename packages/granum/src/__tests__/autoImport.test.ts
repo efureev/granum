@@ -1,6 +1,6 @@
 /**
- * A-8: резолвер auto-import и селекция по тегам в режиме `'imports'`.
- * A-17: кэш манифестов по stat файла и кэш вывода движка по множеству классов.
+ * Резолвер auto-import и селекция по тегам в режиме `'imports'`.
+ * Кэш манифестов по stat файла и кэш вывода движка по множеству классов.
  */
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +25,7 @@ function appWithManifest(): { root: string, dist: string } {
   return { root, dist }
 }
 
-describe('granumResolver (A-8)', () => {
+describe('granumResolver', () => {
   it('отдаёт subpath по имени; неизвестное и неоднозначное имя — undefined', () => {
     const { root } = appWithManifest()
     const other = makeProvider('@x/other', { components: [makeComponent('Card'), makeComponent('Modal')] })
@@ -57,7 +57,7 @@ describe('granumResolver (A-8)', () => {
     expect(granumExplain(app, '@x/kit:Card')).toMatchObject({ reason: 'dependency', chain: ['@x/kit:Panel', '@x/kit:Card'] })
   })
 
-  it('импорты: в селекцию идут только компоненты провайдеров графа, имя со строчной буквы тоже (A-3, C-3)', async () => {
+  it('импорты: в селекцию идут только компоненты провайдеров графа, имя со строчной буквы тоже', async () => {
     const root = mkdtempSync(join(tmpdir(), 'granum-imports-'))
     const dist = join(root, 'node_modules/@x/kit/dist')
     mkdirSync(dist, { recursive: true })
@@ -87,7 +87,7 @@ describe('granumResolver (A-8)', () => {
   })
 })
 
-describe('кэши подготовки (A-17)', () => {
+describe('кэши подготовки', () => {
   it('манифест читается один раз, пока файл не изменился', () => {
     const { root, dist } = appWithManifest()
     clearManifestCache()

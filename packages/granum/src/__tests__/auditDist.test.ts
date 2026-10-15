@@ -81,7 +81,7 @@ function fixture(patch: {
   return { root, dist }
 }
 
-describe('granumAuditDist (D-9, INV-DIST-1)', () => {
+describe('granumAuditDist', () => {
   it('чистый дистрибутив: невыбранный компонент вырезан, недостижимых токенов нет', () => {
     const f = fixture()
     const report = granumAuditDist({ dist: f.dist })
@@ -245,7 +245,7 @@ describe('granumAuditDist (D-9, INV-DIST-1)', () => {
   /**
    * Вердикт выносится по CSS, а не по JS: раскладку чанков выбирает бандлер, и
    * класс невыбранного компонента лежит в общем чанке не потому, что
-   * tree-shaking не сработал. granum на JS не влияет вовсе (A-7), поэтому число
+   * tree-shaking не сработал. granum на JS не влияет вовсе, поэтому число
    * в колонке `js` — информация, а не обвинение.
    */
   it('класс невыбранного компонента только в JS находкой не считается', () => {

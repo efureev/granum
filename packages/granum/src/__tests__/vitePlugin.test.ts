@@ -14,7 +14,7 @@ import { granum } from '../vite/plugin'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
- * Сквозная интеграция (A-2…A-20): провайдер собирается плагином `granumProvider`
+ * Сквозная интеграция: провайдер собирается плагином `granumProvider`
  * во временный пакет, приложение подключает его по имени через `node_modules`
  * и собирается плагином `granum` настоящим Vite.
  */
@@ -59,7 +59,7 @@ async function buildProvider(): Promise<string> {
 /**
  * Второй провайдер — с именами, которые `virtual:granum/components` не может
  * реэкспортировать: `Card` уже есть у `@t/kit`, а `date-picker` не является
- * идентификатором JS, хотя контракт его допускает (INV-CON-2).
+ * идентификатором JS, хотя контракт его допускает.
  */
 async function buildDashProvider(): Promise<string> {
   const root = mkdtempSync(join(tmpdir(), 'granum-app-dash-'))
@@ -134,7 +134,7 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
 describe('granum() с настоящим Vite', async () => {
   const providerRoot = await buildProvider()
 
-  it('cSS со слоями из манифеста, компонент по селекции, утилиты приложения, отчёт (A-9…A-15, A-19)', async () => {
+  it('cSS со слоями из манифеста, компонент по селекции, утилиты приложения, отчёт', async () => {
     const app = await buildApp(providerRoot, { components: ['@t/kit:Panel'], pruneTokens: { mode: 'on' } }, `<script setup lang="ts">import { Panel } from '@t/kit/components/Panel'</script><template><Panel class="mx-auto"/></template>`)
     expect(app.css).toContain('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities')
     expect(app.css).toContain('--t-space')
@@ -148,18 +148,18 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.report?.selection.map((s: { key: string }) => s.key)).toEqual(['@t/kit:Card', '@t/kit:Panel'])
     expect(app.report?.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@t/kit:Card'] }])
     expect(app.report?.prune.removable).toEqual(['t-unused'])
-    // Размеры слоёв — по блокам @layer собранного ассета (A-19); эмиссия лежит рядом.
+    // Размеры слоёв — по блокам @layer собранного ассета; эмиссия лежит рядом.
     expect(app.report?.sizesSource).toBe('bundle')
     expect(app.report?.sizes.utilities.raw).toBeGreaterThan(0)
     // Сборка теста без минификации, поэтому блок бандла с обёрткой `@layer …{}` не меньше эмиссии слоя.
     expect(app.report?.sizes.components.raw).toBeGreaterThan(0)
     expect(app.report?.emissionSizes.total.raw).toBeGreaterThan(0)
-    // Итог сборки — предпоследняя строка: последняя несёт время фаз (N-4).
+    // Итог сборки — предпоследняя строка: последняя несёт время фаз.
     expect(app.logs.at(-2)).toMatch(/2 components/)
     expect(app.logs.at(-1)).toMatch(/^time \d+ ms \(prepare \d+ \[manifests \d+, scan \d+, resolve \d+\], emit \d+, report \d+\)$/)
   })
 
-  it('virtual:granum/components реэкспортирует селекцию, virtual:granum/themes отдаёт манифест (A-5, T-4)', async () => {
+  it('virtual:granum/components реэкспортирует селекцию, virtual:granum/themes отдаёт манифест', async () => {
     const app = await buildApp(
       providerRoot,
       { components: ['@t/kit:Card'], report: { file: false } },
@@ -175,7 +175,7 @@ describe('granum() с настоящим Vite', async () => {
 
   /**
    * Имена реэкспортов зависят от селекции, а не от пакета, поэтому амбиентным
-   * `d.ts` их не выразить: точные объявления пишет плагин (A-5). Запись только
+   * `d.ts` их не выразить: точные объявления пишет плагин. Запись только
    * при изменении — иначе dev-сервер дёргал бы watcher на каждый перезапуск.
    */
   it('js.dts: объявления пишутся по селекции и только при изменении', async () => {
@@ -223,7 +223,7 @@ describe('granum() с настоящим Vite', async () => {
    * модуль из-за них не разбирался вовсе, и падала сборка любого приложения,
    * импортирующего из него хоть что-то.
    */
-  it('имя не идентификатор и имя у двух провайдеров не реэкспортируются, а называются (A-5)', async () => {
+  it('имя не идентификатор и имя у двух провайдеров не реэкспортируются, а называются', async () => {
     const dashRoot = await buildDashProvider()
     const root = mkdtempSync(join(tmpdir(), 'granum-app-'))
     mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
@@ -254,14 +254,14 @@ describe('granum() с настоящим Vite', async () => {
     ])
   })
 
-  it('срезы по слоям загружаются отдельными модулями (A-12)', async () => {
+  it('срезы по слоям загружаются отдельными модулями', async () => {
     const app = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, `<template><div/></template>`, `import 'virtual:granum/layers/tokens.css'\nimport 'virtual:granum/layers/components.css'`)
     expect(app.css).toContain('--t-space')
     expect(app.css).toContain('.t-card')
     expect(app.css).not.toContain('.p-4{')
   })
 
-  it('срез слоя обёрнут в свой @layer, а не отдаёт голое тело (A-12, INV-CSS-4)', async () => {
+  it('срез слоя обёрнут в свой @layer, а не отдаёт голое тело', async () => {
     const app = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, `<template><div/></template>`, `import 'virtual:granum/layers/components.css'`)
     // Без обёртки срез отдавал бы нелейерный CSS — ровно наоборот тому, что
     // обещает слой: он перебивал бы утилиты приложения вместо обратного.
@@ -269,7 +269,7 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).toContain('.t-card')
   })
 
-  describe('css.split: отдельный ассет на слой (A-21, INV-CSS-9)', () => {
+  describe('css.split: отдельный ассет на слой', () => {
     it('ассет на каждый непустой слой, ссылки в порядке слоёв, объявление порядка одно', async () => {
       const app = await buildApp(
         providerRoot,
@@ -434,7 +434,7 @@ describe('granum() с настоящим Vite', async () => {
     })
   })
 
-  it('импорт компонента вне селекции — ошибка; guard: warn — предупреждение; imports — попадает в селекцию (A-3, A-6, INV-SEL-5, INV-JS-2)', async () => {
+  it('импорт компонента вне селекции — ошибка; guard: warn — предупреждение; imports — попадает в селекцию', async () => {
     const code = `<script setup lang="ts">import { Table } from '@t/kit/components/Table'</script><template><Table/></template>`
     // Ошибку из `resolveId` бандлер заворачивает в свою; исходная лежит в `errors[0]`.
     const failure = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, code).then(() => undefined, (e: unknown) => e as { errors?: unknown[] })
@@ -450,7 +450,7 @@ describe('granum() с настоящим Vite', async () => {
     expect(byImports.report?.selection.map((s: { key: string }) => s.key)).toEqual(['@t/kit:Table'])
   })
 
-  it('плоский режим без @layer (A-14)', async () => {
+  it('плоский режим без @layer', async () => {
     const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], css: { layers: false } }, `<template><div/></template>`)
     expect(app.css).not.toContain('@layer')
     expect(app.css).toContain('.t-card')

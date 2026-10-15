@@ -10,7 +10,7 @@ export default {
       // `base.css` у провайдера фикстуры нет. Проверяется и место, и префикс —
       // переменные, на которые ссылаются утилиты, обязаны быть объявлены под тем
       // же именем, иначе значение `filter` невалидно и фильтра просто нет.
-      { what: 'preflight движка — в слое base, под нужным префиксом (E-15, INV-CSS-8)', css: '@layer granum.base{*,:before,:after,::backdrop{--ds-rotate:0' },
+      { what: 'preflight движка — в слое base, под нужным префиксом', css: '@layer granum.base{*,:before,:after,::backdrop{--ds-rotate:0' },
       { what: 'переменные фильтров объявлены в preflight', css: '--ds-blur: ' },
       { what: 'переменные font-variant-numeric объявлены в preflight', css: '--ds-numeric-spacing: ' },
       { what: 'keyframes анимации рождает правило, а не preflight', css: '@keyframes spin' },
@@ -34,7 +34,7 @@ export default {
       { what: 'переменные font-variant-numeric под чужим префиксом', css: '--un-numeric-' },
       { what: 'preflight движка под чужим префиксом', css: '--un-rotate' },
       // Preflight обязан предшествовать стилям компонентов, а не перебивать их:
-      // в слое утилит его быть не может (INV-CSS-8).
+      // в слое утилит его быть не может.
       { what: 'preflight движка в слое утилит', css: 'granum.utilities{*,:before' },
     ],
   },

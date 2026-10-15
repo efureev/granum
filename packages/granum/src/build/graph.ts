@@ -1,5 +1,5 @@
 /**
- * Анализ собранного бандла (B-6…B-9, B-16): какие файлы принадлежат
+ * Анализ собранного бандла: какие файлы принадлежат
  * компоненту, какие рёбра между компонентами реально отгружены, что
  * извлекается из кода. Типы бандла структурные, чтобы модуль тестировался
  * на синтетических данных без Vite.
@@ -44,13 +44,13 @@ export interface ComponentBundleInfo {
   readonly classes: string[]
   /** Потребляемые токены (с `--`). */
   readonly consumes: string[]
-  /** Потребления без fallback: значение обязан дать кто-то извне (T-5). */
+  /** Потребления без fallback: значение обязан дать кто-то извне. */
   readonly requires: string[]
   /** Токены, которым компонент присваивает значение сам: они требование закрывают. */
   readonly assigns: string[]
   /** Компоненты, чьи entry достигаются из entry этого: `Name` того же провайдера или `pkg:Name` чужого. */
   readonly edges: string[]
-  /** Чанки, импортирующие CSS-ассет из списка (двойная доставка, INV-CSS-5). */
+  /** Чанки, импортирующие CSS-ассет из списка (двойная доставка). */
   readonly cssImportedByChunk: string[]
 }
 
@@ -134,7 +134,7 @@ function walkComponent(
 
 export interface AnalyzeBundleOptions {
   readonly indexEntry?: string
-  /** Правила провайдера — учитываются при отборе классов (C-7). */
+  /** Правила провайдера — учитываются при отборе классов. */
   readonly rules?: readonly GranumRule[]
   readonly variants?: readonly GranumVariant[]
 }
@@ -143,7 +143,7 @@ export interface AnalyzeBundleOptions {
  * `classes` компонента — токены, извлечённые из его файлов, для которых у
  * движка (встроенного плюс правил провайдера) есть правило. Прочие токены
  * кода (`import`, `const`, имена переменных) классами не являются и в
- * манифест не попадают (INV-MAN-5).
+ * манифест не попадают.
  */
 export async function analyzeBundle(
   bundle: BundleLike,
@@ -208,7 +208,7 @@ export async function analyzeBundle(
       ...(options.variants ? { variants: options.variants } : {}),
     })
     const classes = new Set(generated.matched.keys())
-    // Классы, собранные в рантайме, статикой не считаются — их несёт safelist (C-8).
+    // Классы, собранные в рантайме, статикой не считаются — их несёт safelist.
     components.set(descriptor.name, {
       name: descriptor.name,
       files: sortedUnique(files),
@@ -262,7 +262,7 @@ function basename(file: string): string {
 }
 
 /**
- * Рёбра, не покрытые объявленным графом (INV-CON-5). Покрытие — транзитивное
+ * Рёбра, не покрытые объявленным графом. Покрытие — транзитивное
  * замыкание `dependencies` внутри провайдера; кросс-провайдерные ключи
  * сравниваются как есть.
  */

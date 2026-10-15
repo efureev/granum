@@ -8,7 +8,7 @@ import { serializeManifest } from '../node/manifest'
 import { makeManifest } from './helpers'
 
 /**
- * Движок приложения для CLI-фикстуры: конфиг обязан передать инстанс (A-E1), а
+ * Движок приложения для CLI-фикстуры: конфиг обязан передать инстанс, а
  * `.mjs`-конфиг грузится нативно — значит, движок тоже обычный `.mjs`-модуль
  * рядом. Знает ровно `p-4`: этого хватает, чтобы `p-4` попал в `matched`, а
  * `no-such-rule` из safelist остался мёртвым.
@@ -60,7 +60,7 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   }, {
     theme: { themes: {}, defaultThemes: [], tokenDefinitions: { light: { tokens: { space: '8px' } } }, declares: ['--space'] },
     // Пакет собран тем же движком, что стоит в конфиге: отпечатки совпадают,
-    // классы берутся из манифеста без пересчёта (A-E3).
+    // классы берутся из манифеста без пересчёта.
     engine: { dialect: 'granum-tests/mini@1', vocabulary: 'fnv64-clitestengine01', name: 'cli-test-engine', module: null },
   })
   writeFileSync(join(dist, 'granum.manifest.json'), serializeManifest(manifest))
@@ -81,7 +81,7 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   return root
 }
 
-describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
+describe('granum cli: вызов и коды выхода', () => {
   it('usage без аргументов, --help и -h — код 0; неизвестная команда — код 2', async () => {
     for (const argv of [[], ['--help'], ['-h'], ['doctor', '--help']]) {
       const t = io()
@@ -201,7 +201,7 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     expect(failing.out[0]).toContain('@x/kit:Card: classes missing from the CSS (p-4)')
     expect(failing.out[0]).toContain('@x/kit:Card: own rules missing from the CSS (card)')
     // Мёртвая запись safelist — находка отчёта: её называет `doctor`, а аудит
-    // доводит до кода возврата только со `--strict` (D-9).
+    // доводит до кода возврата только со `--strict`.
     expect(failing.out[0]).not.toContain('classes with no engine rule')
 
     const strict = io(root)

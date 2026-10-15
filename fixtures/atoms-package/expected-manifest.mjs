@@ -16,12 +16,12 @@ export default function ({ manifest, distDir, check }) {
   check(manifest.id === '@granum-fixtures/atoms', 'id')
   check(Object.keys(c).join(',') === 'AtBox,AtChip', `состав: ${Object.keys(c)}`)
 
-  // Блок движка — факт о происхождении списка классов (M-E2, M-E5, INV-ENG-10).
+  // Блок движка — факт о происхождении списка классов.
   check(manifest.engine.dialect === ATOMS_DIALECT, `dialect: ${manifest.engine.dialect}`)
   check(manifest.engine.name === 'granum-fixtures-atoms-engine', `engine.name: ${manifest.engine.name}`)
   check(/^fnv64-[0-9a-f]{16}$/.test(manifest.engine.vocabulary), `vocabulary: ${manifest.engine.vocabulary}`)
 
-  // Правила пакета едут модулем, а не в JSON (M-E4), и файл существует.
+  // Правила пакета едут модулем, а не в JSON, и файл существует.
   check(manifest.engine.module === 'granum-provider/engine.js', `engine.module: ${manifest.engine.module}`)
   check(existsSync(join(distDir, 'granum-provider/engine.js')), 'модуль правил собран')
 

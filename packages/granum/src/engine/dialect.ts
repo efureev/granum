@@ -1,10 +1,10 @@
 /**
- * Диалект — имя словаря классов (E-1). Формат `<vendor>/<vocabulary>@<major>`,
+ * Диалект — имя словаря классов. Формат `<vendor>/<vocabulary>@<major>`,
  * сравнение строгим равенством строк: мажор в конце — часть имени, а не
  * диапазон, потому что `@66` и `@67` — разные словари, а не версии одного.
  *
  * Диалектом управляется ровно одно решение — грузить ли модуль правил
- * провайдера (A-E6). Доверие списку классов манифеста ключуется отпечатком
+ * провайдера. Доверие списку классов манифеста ключуется отпечатком
  * словаря (`./fingerprint`), а не диалектом: внутри одного мажора набор имён
  * меняется, и диалект этого по определению не видит.
  */
@@ -25,7 +25,7 @@ export function isDialect(value: unknown): value is string {
   return typeof value === 'string' && GRANUM_DIALECT_PATTERN.test(value)
 }
 
-/** Разбор диалекта на части; `undefined`, если строка не проходит E-1. */
+/** Разбор диалекта на части; `undefined`, если строка не в формате `<vendor>/<vocabulary>@<major>`. */
 export function parseDialect(value: string): ParsedDialect | undefined {
   if (!GRANUM_DIALECT_PATTERN.test(value))
     return undefined

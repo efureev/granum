@@ -12,7 +12,7 @@ import { granum } from '../vite/plugin'
 import { testEngine } from './testEngine'
 
 /**
- * Dev-сервер на настоящем Vite (A-16): какие виртуальные модули перезагружаются
+ * Dev-сервер на настоящем Vite: какие виртуальные модули перезагружаются
  * и какие файлы провайдера отслеживаются. HMR-сокет выключен — решение плагина
  * видно по вызовам `reloadModule`, браузер для этого не нужен (сквозной
  * сценарий в браузере — `scripts/e2e-dev.mjs`).
@@ -105,7 +105,7 @@ function watching(server: ViteDevServer, dir: string): boolean {
   return Object.keys(server.watcher.getWatched()).includes(dir)
 }
 
-describe('granum() на dev-сервере (A-16)', async () => {
+describe('granum() на dev-сервере', async () => {
   const providerRoot = await buildProvider()
 
   /**

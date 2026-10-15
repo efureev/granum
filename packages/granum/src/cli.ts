@@ -1,7 +1,7 @@
 import type { GranumBuildReport } from './node/report'
 /**
- * Логика CLI `granum` (ТЗ §12), отделённая от `bin.ts`. Коды выхода
- * (INV-ERR-3): `0` — чисто; `1` — нарушения (`error`, с `--strict` и `warn`)
+ * Логика CLI `granum`, отделённая от `bin.ts`. Коды выхода:
+ * `0` — чисто; `1` — нарушения (`error`, с `--strict` и `warn`)
  * или ошибка выполнения; `2` — неверный вызов.
  */
 import { readFileSync } from 'node:fs'
@@ -285,7 +285,7 @@ export function formatBuildReport(report: GranumBuildReport): string {
     push(`Prune (${report.prune.mode}): removable ${report.prune.removable.length}, kept ${report.prune.kept}, dead patterns ${report.prune.deadPatterns.length}`)
   push()
   // brotli в отчёте не всегда: сжатие качества 11 стоит десятки миллисекунд
-  // на слой и включается отдельно (N-4).
+  // на слой и включается отдельно.
   const hasBrotli = Object.values(report.sizes).some(size => size.brotli !== undefined)
   push(`Sizes (raw / gzip${hasBrotli ? ' / brotli' : ''}, ${report.sizesSource === 'bundle' ? 'from the built bundle after minification' : 'from the emission before minification'}):`)
   for (const [name, size] of Object.entries(report.sizes))

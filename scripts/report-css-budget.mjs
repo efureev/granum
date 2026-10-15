@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Бюджет CSS/JS собранного стенда (N-4, N-5): что уехало в дистрибутив,
+ * Бюджет CSS/JS собранного стенда: что уехало в дистрибутив,
  * сколько весит по ролям и по слоям granum, какие токены дистрибутива не
  * достижимы. Запускается из каталога стенда (`yarn workspace <name> sizes:check`)
  * или с `--stand <name>` из корня.
@@ -97,7 +97,7 @@ const byChannel = channel => classRows.filter(r => r.evidence.includes(channel))
 
 const total = kind => stand.assets.filter(a => !kind || a.kind === kind).reduce((s, a) => ({ raw: s.raw + a.raw, gzip: s.gzip + a.gzip, brotli: s.brotli + a.brotli }), { raw: 0, gzip: 0, brotli: 0 })
 
-// INV-ENG-6: литералы движка, а не идентификаторы — их минификатор переименовывает.
+// Следы движка — литералы, а не идентификаторы: их минификатор переименовывает.
 const engineTraces = engineTracesIn(js, engineMarkers(stand.report))
 
 const report = {

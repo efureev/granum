@@ -1,5 +1,5 @@
 /**
- * Подготовка приложения к эмиссии (A-1…A-4, R-6): конфиг → провайдеры
+ * Подготовка приложения к эмиссии: конфиг → провайдеры
  * (манифесты через `exports`, объекты — материализованные) → селекция
  * (список или `'imports'`) → одна резолюция → движок с правилами провайдеров.
  * Node-only. Всё ниже (CSS, JS, токены, отчёт) читает только `PreparedApp`.
@@ -44,13 +44,13 @@ export interface PreparedApp {
    * `granum explain` строит цепочку: другой источник разошёлся бы с селекцией.
    */
   readonly selectionInput: ComponentSelection | undefined
-  /** Правила/варианты/preflights провайдеров графа, с источниками (E-9). */
+  /** Правила/варианты/preflights провайдеров графа, с источниками. */
   readonly engineContribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
-  /** Решение по каждому провайдеру: диалект, отпечаток, откуда взяты классы (A-E3). */
+  /** Решение по каждому провайдеру: диалект, отпечаток, откуда взяты классы. */
   readonly engineDecisions: readonly ProviderEngineDecision[]
   /**
    * Классы выбранных компонентов, потерянные пересчётом: подаются движку, чтобы
-   * остаться в `unmatched` (A-E7). Потерянное у невыбранных во вход не идёт — их
+   * остаться в `unmatched`. Потерянное у невыбранных во вход не идёт — их
    * классов там не было и до пересчёта; пакет целиком описывает `lost` решения.
    */
   readonly reextractLost: readonly string[]
@@ -59,22 +59,22 @@ export interface PreparedApp {
 
 export type PreparedWarning
   = | { readonly kind: 'provider-without-manifest', readonly providerId: string }
-    /** Объектный провайдер просканирован по `dist` (R-6): классы и токены известны, но без графа бандлера. */
+    /** Объектный провайдер просканирован по `dist`: классы и токены известны, но без графа бандлера. */
     | { readonly kind: 'provider-scanned', readonly providerId: string }
     | { readonly kind: 'imports-without-app-sources' }
     /** `appSources` не задан: разметку приложения никто не сканирует, её классы CSS не получат. */
     | { readonly kind: 'app-sources-unset' }
 
 /**
- * Провайдер по имени пакета — манифест через `exports` (A-2); объект —
- * материализованный (R-6).
+ * Провайдер по имени пакета — манифест через `exports`; объект —
+ * материализованный.
  *
  * Объектные доноры из `dependencies` подключаются наравне с перечисленными:
  * каждый инстанс материализуется один раз, а ссылки на него в `dependencies`
  * сводятся к `id`. Иначе материализация (и скан по `dist`) давала бы донору
  * новый объект, `dependencies` соседа держали бы старый, и проверка
  * идентичности в графе видела бы два инстанса с одним `id` там, где он один.
- * Строковая зависимость задаёт порядок так же, как объектная (INV-SEL-2), —
+ * Строковая зависимость задаёт порядок так же, как объектная, —
  * так же, как в синтетическом манифесте медленного пути.
  */
 export function loadProviderInputs(config: Pick<GranumConfig, 'providers'>, root: string): GranumProviderInput[] {
@@ -112,7 +112,7 @@ export function loadProviderInputs(config: Pick<GranumConfig, 'providers'>, root
 }
 
 /**
- * Медленный путь R-6: объектные провайдеры с раскладкой на диске заменяются
+ * Медленный путь: объектные провайдеры с раскладкой на диске заменяются
  * синтетическими манифестами; инстансы-доноры, которых нет во входе по id,
  * добавляются и сканируются тоже. Объекты без каталога остаются как есть.
  */
@@ -189,7 +189,7 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
 }
 
 /**
- * Теги разметки → ключи селекции (A-8): имя берётся, если ровно один
+ * Теги разметки → ключи селекции: имя берётся, если ровно один
  * провайдер графа его объявляет; неоднозначное или чужое имя пропускается.
  */
 export function tagSelection(tags: readonly string[], inputs: readonly GranumProviderInput[]): string[] {
@@ -211,7 +211,7 @@ export function tagSelection(tags: readonly string[], inputs: readonly GranumPro
 }
 
 /**
- * Импорты `<pkg>/components/<Name>` → ключи селекции (A-3): только те, чей
+ * Импорты `<pkg>/components/<Name>` → ключи селекции: только те, чей
  * провайдер есть в графе и объявляет компонент. Путь вида
  * `~/components/AppHeader` — алиас приложения, а `vuetify/components/VBtn` —
  * чужой пакет: в селекцию они не идут и сборку не роняют.
@@ -237,7 +237,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
    * приложения, резолюция. Печатается в строке времени сборки — без этой
    * раскладки `prepare` на дизайн-системе был просто большим числом, по
    * которому не понять, чинить сканер, кэшировать пересчёт или не трогать
-   * ничего (N-4).
+   * ничего.
    */
   const started = performance.now()
   const loaded = loadProviderInputs(config, root)
@@ -248,7 +248,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
   const providersStarted = performance.now()
   const { resolver: scanned, engineSources } = await scanProviderInputs(loaded, engine, warnings)
   // Сверка диалектов и отпечатков идёт ДО резолюции: она может заменить список
-  // классов провайдера, а резолюция уже считает его данностью (A-E3).
+  // классов провайдера, а резолюция уже считает его данностью.
   const reconciled = await reconcileProviderEngines(scanned, engineSources, engine)
   const providersMs = performance.now() - providersStarted
   const inputs = reconciled.inputs

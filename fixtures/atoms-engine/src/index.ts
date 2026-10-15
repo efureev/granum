@@ -15,7 +15,7 @@
 import type { EngineInput, EngineMatch, EngineOutput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from '@feugene/granum/engine'
 import { extractClasses, vocabularyFingerprint } from '@feugene/granum/engine'
 
-/** Имя словаря: по нему granum решает, грузить ли правила пакета (E-1). */
+/** Имя словаря: по нему granum решает, грузить ли правила пакета. */
 export const ATOMS_DIALECT = 'granum-fixtures/atoms@1'
 
 /** Шаг шкалы `atom-gap-<n>` и `atom-pad-<n>` в пикселях. */
@@ -32,7 +32,7 @@ const BUILTIN_RULES: readonly GranumRule[] = [
 ]
 
 export interface AtomsEngineOptions {
-  /** Правила пакета или приложения поверх встроенных: тот же диалект, другой отпечаток (E-4). */
+  /** Правила пакета или приложения поверх встроенных: тот же диалект, другой отпечаток. */
   readonly rules?: readonly GranumRule[]
   readonly variants?: readonly GranumVariant[]
   readonly preflights?: readonly GranumPreflight[]
@@ -62,7 +62,7 @@ function serialize(declarations: Record<string, string>): string {
 /**
  * Инстанс движка. `vocabulary` считается хелпером ядра по фактическому набору
  * правил, включая переданные фабрике: приложение с лишним правилом знает больше
- * имён, чем знала сборка пакета, и granum обязан это заметить (E-4, E-6).
+ * имён, чем знала сборка пакета, и granum обязан это заметить.
  */
 export function atomsEngine(options: AtomsEngineOptions = {}): GranumEngine {
   const rules: readonly GranumRule[] = [...BUILTIN_RULES, ...(options.rules ?? [])]
@@ -75,7 +75,7 @@ export function atomsEngine(options: AtomsEngineOptions = {}): GranumEngine {
     async generate(input: EngineInput): Promise<EngineOutput> {
       // Правила провайдеров приходят с входом; они добавляются ПОСЛЕ
       // встроенных и после фабричных, и при совпадении матчеров побеждает
-      // последнее совпавшее (INV-ENG-3).
+      // последнее совпавшее.
       const all: readonly GranumRule[] = [...rules, ...(input.rules ?? [])]
       const matched = new Map<string, EngineMatch>()
       const unmatched: string[] = []

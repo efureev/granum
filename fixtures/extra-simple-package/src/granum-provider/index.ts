@@ -6,7 +6,7 @@ import { xTokenizedLevel2Config } from '../components/XTokenizedLevel2/config.ts
 
 export const PROVIDER_ID = '@granum-fixtures/extra-simple'
 
-/** Донор объявлен по id (C-4): приложение подключит его манифест само. */
+/** Донор объявлен по id: приложение подключит его манифест само. */
 export const extraSimpleProvider = defineGranumProvider({
   id: PROVIDER_ID,
   contractVersion: 1,

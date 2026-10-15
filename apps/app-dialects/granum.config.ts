@@ -2,7 +2,7 @@ import { defineGranumConfig } from '@feugene/granum/vite'
 import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
- * Стенд ветки «другой диалект» (таблица §8 ТЗ движка).
+ * Стенд ветки «другой диалект».
  *
  * `@granum-fixtures/atoms` собран движком словаря `granum-fixtures/atoms@1` — у
  * него своя вселенная имён (`atom-stack`, `atom-gap-2`), и правила для них пакет

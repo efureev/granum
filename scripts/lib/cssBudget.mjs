@@ -1,5 +1,5 @@
 /**
- * Чистые функции измерителя бюджета CSS/JS стендов (N-4, N-5). Ни одного
+ * Чистые функции измерителя бюджета CSS/JS стендов. Ни одного
  * обращения к FS: ввод — текст, вывод — данные. I/O и печать живут в
  * `report-css-budget.mjs`.
  */
@@ -177,7 +177,7 @@ export const REFERENCE_ENGINE_MARKERS = ['granum-engine-wind', 'unocss/preset-wi
 
 /**
  * Следы движка в клиентском JS ищутся по строковым литералам, а не по
- * идентификаторам (INV-ENG-6): минификатор переименовывает `createGenerator`
+ * идентификаторам: минификатор переименовывает `createGenerator`
  * и `presetMini`, а строки оставляет как есть. Движок стенда называет отчёт
  * сборки — имя и диалект лежат литералами в его коде.
  */
@@ -215,7 +215,7 @@ export function strictCheck(expected, report) {
     push('granum.undefinedTokens', same(expected.granum.undefinedTokens ?? [], report.granum.undefinedTokens), report.granum.undefinedTokens, expected.granum.undefinedTokens ?? [])
     push('granum.pruneMode', report.granum.prune.mode === (expected.granum.pruneMode ?? 'off'), report.granum.prune.mode, expected.granum.pruneMode ?? 'off')
     if (expected.granum.noEngineInBundle)
-      // INV-ENG-6: литералов движка в клиентском бандле нет; провал называет найденные.
+      // Литералов движка в клиентском бандле нет; провал называет найденные.
       push('granum.noEngineInBundle', !report.engineInBundle, report.engineTraces ?? report.engineInBundle, [])
   }
   return checks

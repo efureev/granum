@@ -1,7 +1,7 @@
 /**
- * Резолвер (ТЗ §8): чистая функция над манифестами/объектами и конфигом,
- * результат — `GranumResolution`, единственный вход для всех каналов
- * (INV-RES-1). Ни FS, ни сети (INV-RES-2); мемоизация по идентичности входа.
+ * Резолвер: чистая функция над манифестами/объектами и конфигом,
+ * результат — `GranumResolution`, единственный вход для всех каналов.
+ * Ни FS, ни сети; мемоизация по идентичности входа.
  */
 import type { GranumProviderInput } from '../contract'
 import type { ProviderNode } from './providerNode'
@@ -18,7 +18,7 @@ import { collectTokenLayers } from './tokenLayers'
 
 export interface GranumThemesInput extends ResolveThemesInput {
   readonly tokenOverrides?: ThemeTokenOverrides
-  /** Override токена, не объявленного пакетным слоем, отбрасывается (INV-THM-3). */
+  /** Override токена, не объявленного пакетным слоем, отбрасывается. */
   readonly strictTokens?: boolean
 }
 
@@ -101,7 +101,7 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
   return result
 }
 
-/** Эффективное значение токена темы под селектором — та же функция для CSS, отчётов и CLI (R-5). */
+/** Эффективное значение токена темы под селектором — та же функция для CSS, отчётов и CLI. */
 export function resolveTokenValue(
   resolution: GranumResolution,
   theme: string,

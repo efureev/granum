@@ -4,7 +4,7 @@ export default function ({ manifest, check }) {
   check(Object.keys(c).join(',') === 'PlCard,PlNote', `состав: ${Object.keys(c)}`)
 
   // Ни одного класса и ни одной записи safelist — значит артефакт ни от какого
-  // словаря не зависит, и диалект с отпечатком равны `null` (E-3, M-E5).
+  // словаря не зависит, и диалект с отпечатком равны `null`.
   check(manifest.engine.dialect === null, `dialect: ${manifest.engine.dialect}`)
   check(manifest.engine.vocabulary === null, `vocabulary: ${manifest.engine.vocabulary}`)
   check(manifest.engine.module === null, `engine.module: ${manifest.engine.module}`)

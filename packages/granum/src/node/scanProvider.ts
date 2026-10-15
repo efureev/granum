@@ -1,5 +1,5 @@
 /**
- * Медленный путь для провайдера объектной формы (R-6): пакет без манифеста,
+ * Медленный путь для провайдера объектной формы: пакет без манифеста,
  * но с раскладкой `dist` по `baseUrl`. Приложение само проходит по файлам
  * компонентов, извлекает классы экстрактором движка (оставляя только те, для
  * которых есть правило), собирает потребление токенов и объявления темы — и
@@ -30,7 +30,7 @@ export function providerDistDir(provider: GranumProvider): string | undefined {
     return undefined
   try {
     // `resolve` снимает завершающий разделитель: `baseUrl` обязан кончаться на
-    // `/` (C-6), а сравнение путей ниже идёт по префиксу `${distDir}/`.
+    // `/`, а сравнение путей ниже идёт по префиксу `${distDir}/`.
     const dir = resolve(fileURLToPath(provider.baseUrl))
     return statSync(dir).isDirectory() ? dir : undefined
   }
@@ -60,7 +60,7 @@ function listFiles(dir: string, filter: (name: string) => boolean): string[] {
 /**
  * Файлы компонента: всё под `components/<Name>/` плюс относительные импорты,
  * ведущие в общие чанки (`chunks/`, `groups/<g>/shared/`). Файл из директории
- * ДРУГОГО компонента — ребро графа, а не файл (B-7): внутрь не заходим.
+ * ДРУГОГО компонента — ребро графа, а не файл: внутрь не заходим.
  */
 function walkComponentFiles(distDir: string, name: string, componentDirs: ReadonlySet<string>): string[] {
   const own = join(distDir, 'components', name)
@@ -154,8 +154,8 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       for (const n of scan.assigns)
         assigns.add(`--${n}`)
     }
-    // Правила пакета исполняются только движком объявленного словаря
-    // (INV-ENG-8): чужой диалект — классы считаются без них, и они окажутся
+    // Правила пакета исполняются только движком объявленного словаря:
+    // чужой диалект — классы считаются без них, и они окажутся
     // в `unmatched`, а не молча выпадут.
     const rulesAllowed = objectRulesAllowed(provider, engine)
     const generated = await engine.generate({
@@ -230,7 +230,7 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     },
     engine: {
       // Классы просканированного пакета отфильтровал движок ПРИЛОЖЕНИЯ здесь и
-      // сейчас — значит, его диалект и отпечаток и есть факт о списке (M-E5).
+      // сейчас — значит, его диалект и отпечаток и есть факт о списке.
       dialect: usesVocabulary ? engine.dialect : null,
       vocabulary: usesVocabulary ? engine.vocabulary : null,
       name: engine.name,

@@ -13,7 +13,7 @@ import { readManifestSync } from '../node/manifest'
 import { testEngine } from './testEngine'
 
 /**
- * `vite build --watch` на сборке провайдера (B-15).
+ * `vite build --watch` на сборке провайдера.
  *
  * Отдельный файл от `buildPlugin.test.ts`, потому что проверяется то, чего два
  * последовательных `build()` не воспроизводят: в watch-сессии `configResolved`
@@ -110,7 +110,7 @@ async function watch(root: string, provider: GranumProvider, logs: string[], bou
   }
 }
 
-describe('vite build --watch на сборке провайдера (B-15)', () => {
+describe('vite build --watch на сборке провайдера', () => {
   it('пересборка перезаписывает манифест', { timeout: TIMEOUT }, async () => {
     const { root, provider } = makeFixture()
     const logs: string[] = []

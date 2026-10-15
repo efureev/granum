@@ -4,7 +4,7 @@ export default {
   doctor: {
     // `--card` и `--ds-radius-lg` приложение не переопределило — их и называет
     // доктор. Предупреждения `safelist-redundant` больше нет: сборка пакета
-    // вычищает такие записи из манифеста сама (C-8).
+    // вычищает такие записи из манифеста сама.
     warnings: { 'token-undefined': 2 },
   },
   css: {
@@ -21,7 +21,7 @@ export default {
   report: (report, check) => {
     check(report.selection.map(s => s.key).join(',') === '@granum-fixtures/simple:XTestStyled', `selection: ${report.selection.map(s => s.key)}`)
     check(report.classes.unmatched.length === 0, `unmatched: ${JSON.stringify(report.classes.unmatched)}`)
-    // `--card` и `--ds-radius-lg` компонент потребляет, а не объявляет никто — отчёт обязан это назвать (INV-TOK-4).
+    // `--card` и `--ds-radius-lg` компонент потребляет, а не объявляет никто — отчёт обязан это назвать.
     check(report.tokens.undefined.join(',') === '--card,--ds-radius-lg', `undefined tokens: ${report.tokens.undefined}`)
     // Safelist компонента вычищен на сборке пакета, поэтому пересечения у
     // приложения нет вовсе — а CSS от этого не изменился: класс в `classes`.

@@ -8,7 +8,7 @@ export const PROVIDER_ID = '@granum-fixtures/plain'
 
 /**
  * Пакет без утилит: вся отделка — собственный CSS компонентов и токены. Блок
- * `engine` он не объявляет вовсе (C-E3) — объявлять нечего.
+ * `engine` он не объявляет вовсе — объявлять нечего.
  */
 export const plainProvider = defineGranumProvider({
   id: PROVIDER_ID,

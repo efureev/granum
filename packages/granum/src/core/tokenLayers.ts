@@ -1,7 +1,7 @@
 /**
- * Единственный источник правды о значениях токенов (R-5, INV-RES-3): какие
+ * Единственный источник правды о значениях токенов: какие
  * слои писали каждый токен, в каком порядке и что уедет в CSS. Из него
- * сериализуется CSS и считаются отчёты — расходиться им негде (INV-DIAG-1).
+ * сериализуется CSS и считаются отчёты — расходиться им негде.
  */
 import type { ResolvedThemeItem, ResolvedThemes } from './resolveThemes'
 import { themeFileSelector } from './resolveThemes'
@@ -18,7 +18,7 @@ export interface TokenLayerValue {
   readonly value: string
   /** Квалифицированный ключ компонента-автора — только у `component:*`. */
   readonly componentKey?: string
-  /** Слой написан, но отброшен `strictTokens` и в CSS не уехал (INV-THM-3). */
+  /** Слой написан, но отброшен `strictTokens` и в CSS не уехал. */
   readonly skipped?: 'strict-tokens'
 }
 

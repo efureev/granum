@@ -9,7 +9,7 @@ import {
   UnsupportedContractVersionError,
 } from '../core/errors'
 
-describe('defineGranumProvider — проверки при регистрации (C-19, INV-ERR-1)', () => {
+describe('defineGranumProvider — проверки при регистрации', () => {
   const base = { contractVersion: 1 as const, components: [] }
 
   it('возвращает тот же объект: identity держит дедупликацию графа', () => {
@@ -27,7 +27,7 @@ describe('defineGranumProvider — проверки при регистраци�
     }
   })
 
-  it('чужая версия контракта, включая БОЛЬШУЮ, — ошибка (INV-CON-3)', () => {
+  it('чужая версия контракта, включая БОЛЬШУЮ, — ошибка', () => {
     for (const version of [0, 2, '1']) {
       const bad = { id: 'p', contractVersion: version, components: [] } as unknown as Parameters<typeof defineGranumProvider>[0]
       expect(() => defineGranumProvider(bad)).toThrow(UnsupportedContractVersionError)
@@ -35,7 +35,7 @@ describe('defineGranumProvider — проверки при регистраци�
     expect(GRANUM_CONTRACT_VERSION).toBe(1)
   })
 
-  it('baseUrl не URL или без завершающего слеша — ошибка с подсказкой (C-6)', () => {
+  it('baseUrl не URL или без завершающего слеша — ошибка с подсказкой', () => {
     try {
       defineGranumProvider({ id: 'p', ...base, baseUrl: './dist/' })
       throw new Error('should have thrown')
@@ -58,7 +58,7 @@ describe('defineGranumProvider — проверки при регистраци�
     expect(() => defineGranumProvider(bad)).toThrow(InvalidProviderError)
   })
 
-  it('имя компонента — валидный сегмент пути (INV-CON-2)', () => {
+  it('имя компонента — валидный сегмент пути', () => {
     for (const name of ['', '1abc', 'a/b', 'a b', '../x', 'a.b']) {
       expect(() => defineGranumProvider({ id: 'p', ...base, components: [{ name }] }))
         .toThrow(InvalidComponentNameError)
@@ -67,12 +67,12 @@ describe('defineGranumProvider — проверки при регистраци�
       expect(() => defineGranumProvider({ id: 'p', ...base, components: [{ name }] })).not.toThrow()
   })
 
-  it('дубль имени компонента — ошибка сразу (INV-CON-1)', () => {
+  it('дубль имени компонента — ошибка сразу', () => {
     expect(() => defineGranumProvider({ id: 'p', ...base, components: [{ name: 'A' }, { name: 'A' }] }))
       .toThrow(DuplicateComponentNameError)
   })
 
-  it('ключ токена с `--` — ошибка регистрации, а не молчаливое `----x` (INV-CON-7)', () => {
+  it('ключ токена с `--` — ошибка регистрации, а не молчаливое `----x`', () => {
     expect(() => defineGranumProvider({
       id: 'p',
       ...base,
@@ -112,7 +112,7 @@ describe('defineGranumProvider — проверки при регистраци�
     expect(() => defineGranumProvider(bad)).toThrow(InvalidProviderError)
   })
 
-  it('все ошибки — GranumError с кодом (INV-ERR-2)', () => {
+  it('все ошибки — GranumError с кодом', () => {
     const thrown: unknown[] = []
     for (const call of [
       () => defineGranumProvider({ id: '', ...base }),
@@ -134,7 +134,7 @@ describe('defineGranumProvider — проверки при регистраци�
   })
 })
 
-describe('defineGranumComponent (C-18)', () => {
+describe('defineGranumComponent', () => {
   const url = 'file:///pkg/src/components/XhPanel/config.ts'
 
   it('cssFiles нормализуются к путям относительно корня раскладки, исходник — в sourceUrl', () => {

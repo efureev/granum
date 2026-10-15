@@ -4,7 +4,7 @@ import { bundleLayerSizes } from '../node/report'
 
 const MINIFIED = '@layer granum.tokens,granum.base;@layer granum.themes{:root{--a:"}"}@supports not (x:y){:root{--b:1}}}@layer other{.x{y:1}}@layer granum.components{.card{padding:1rem}}@layer granum.utilities{.p-4{padding:1rem}}@layer granum.utilities{.flex{display:flex}}.app{color:red}'
 
-describe('extractLayerBlocks (A-19)', () => {
+describe('extractLayerBlocks', () => {
   it('собирает блоки своего префикса, склеивает повторы, чужой слой и нелейерный CSS не берёт', () => {
     const { blocks, statements } = extractLayerBlocks(MINIFIED, 'granum')
     expect(statements).toEqual(['@layer granum.tokens,granum.base;'])

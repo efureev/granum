@@ -55,8 +55,9 @@ jobs:
         if: matrix.node == 24
         run: yarn test:scripts
 
-  # Сборка пакета, валидация метаданных и границ на `dist` (N-1, INV-DEP-1,
-  # INV-BND-1, INV-BND-2). Артефакт уходит в публикацию по тегу.
+  # Сборка пакета, валидация метаданных и границ на `dist`: у ядра нет
+  # зависимостей, браузерные entry не тянут node. Артефакт уходит в публикацию
+  # по тегу.
   build:
     needs: [ test ]
     runs-on: ubuntu-latest
@@ -73,7 +74,7 @@ jobs:
       - name: Build packages
         run: yarn build
       # Вендоренное ядро UnoCSS порождается скриптом; расхождение с
-      # зафиксированным в git означает ручную правку (ADR-2). Импорты скрипт
+      # зафиксированным в git означает ручную правку. Импорты скрипт
       # разбирает функцией собранного ядра, поэтому шаг идёт после сборки.
       - name: Check vendored UnoCSS core is up to date
         run: yarn check:vendor
@@ -84,7 +85,7 @@ jobs:
         working-directory: packages/granum-engine-wind
         run: npx --yes publint@latest --pack npm
       # Границы проверяются на ядре: у движка вендоренный код внутри законен, а
-      # у ядра его быть не должно вовсе (INV-ENG-9).
+      # у ядра его быть не должно вовсе.
       - name: Check dependency and browser/node boundaries on dist
         run: yarn check:boundary
       - name: Upload dist
@@ -120,15 +121,15 @@ jobs:
         run: yarn check:determinism
       - name: Verify built CSS of apps
         run: yarn verify:apps
-      - name: Compare bench-one CSS rules with the v1 snapshot (AC-2)
+      - name: Compare bench-one CSS rules with the v1 snapshot
         run: yarn compare:css
-      - name: Compare bench-one JS with a build without the plugin (AC-3)
+      - name: Compare bench-one JS with a build without the plugin
         run: yarn compare:js
       - name: Verify size budget of benchmark stands
         run: yarn sizes:check
 
-  # e2e на dev-сервере: INV-CSS-6 (утилита приложения перебивает базовый стиль
-  # компонента) и AC-9 (правка разметки приезжает по HMR без перезагрузки). Оба
+  # e2e на dev-сервере: утилита приложения перебивает базовый стиль компонента,
+  # а правка разметки приезжает по HMR без перезагрузки. Оба
   # утверждения наблюдаемы только в браузере — ни снапшот CSS, ни отчёт сборки
   # их не подтверждают.
   e2e:

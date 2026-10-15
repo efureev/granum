@@ -1,8 +1,8 @@
 /**
- * Сверка движка приложения с движком, которым собран каждый пакет (A-E3…A-E8).
+ * Сверка движка приложения с движком, которым собран каждый пакет.
  *
  * Список классов в манифесте — не свойство пакета, а результат фильтрации его
- * кандидатов конкретной реализацией движка (B-6). Поэтому доверять списку можно
+ * кандидатов конкретной реализацией движка. Поэтому доверять списку можно
  * только при совпадении отпечатков словаря: реализация, знающая больше имён,
  * нашла бы в тех же файлах больше классов, и разница пропала бы молча. Диалект
  * решает другой вопрос — грузить ли модуль правил пакета: правило написано
@@ -10,7 +10,7 @@
  *
  * При любом различии отпечатков классы извлекаются заново из `files` движком
  * приложения. Потерянные при пересчёте имена не выбрасываются: они уезжают в
- * вход движка и остаются видны в `unmatched` (A-E7, INV-DIAG-2).
+ * вход движка и остаются видны в `unmatched`.
  */
 import type { GranumLoadedManifest, GranumManifest, GranumProvider, GranumProviderInput } from '../contract'
 import type { EngineInput, GranumEngine, GranumPreflight, GranumRule, GranumVariant } from '../engine/types'
@@ -38,7 +38,7 @@ export interface ProviderEngineDecision {
   readonly classes: ProviderClassSource
   readonly reason: ReextractReason
   readonly rulesLoaded: boolean
-  /** Пакет привёз правила, но их словарь чужой — не загружены (INV-ENG-8). */
+  /** Пакет привёз правила, но их словарь чужой — не загружены. */
   readonly rulesSkipped: boolean
   /** Было в манифесте, не нашлось при пересчёте: движок приложения этих имён не знает. */
   readonly lost: readonly string[]
@@ -54,7 +54,7 @@ export interface ReconciledProviders {
   readonly contribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
   /**
    * Классы, потерянные пересчётом, по ключу компонента. Движку подаются только
-   * классы выбранных — а селекцию сверка ещё не знает (A-E7).
+   * классы выбранных — а селекцию сверка ещё не знает.
    */
   readonly lostByComponent: ReadonlyMap<string, readonly string[]>
 }
@@ -67,7 +67,7 @@ interface EngineModuleShape {
 
 /**
  * Правила объектного провайдера исполняются, только если он не объявил чужой
- * словарь (INV-ENG-8). Не объявил ничего — исполняются: без артефакта утверждать
+ * словарь. Не объявил ничего — исполняются: без артефакта утверждать
  * о словаре нечего, и классы всё равно считает движок приложения.
  */
 export function objectRulesAllowed(provider: GranumProvider, engine: GranumEngine): boolean {
@@ -80,7 +80,7 @@ function hasRules(shape: EngineModuleShape | undefined): boolean {
 }
 
 /**
- * Кэш пересчёта на процесс (A-E8): ключ — хеш манифеста, отпечаток движка и
+ * Кэш пересчёта на процесс: ключ — хеш манифеста, отпечаток движка и
  * факт загрузки правил пакета. Дисковый кэш намеренно не вводится: пересчёт
  * идёт только при расхождении, а ключ «что именно пересчитывали» на диске
  * пришлось бы инвалидировать руками.
@@ -124,8 +124,8 @@ export async function reconcileProviderEngines(
 
   for (const input of inputs) {
     if (!isLoadedManifest(input)) {
-      // Объектная форма без раскладки на диске: артефакта нет, классов тоже
-      // (R-6), и сверять нечего — решается только судьба правил.
+      // Объектная форма без раскладки на диске: артефакта нет, классов тоже,
+      // и сверять нечего — решается только судьба правил.
       const allowed = objectRulesAllowed(input, engine)
       const declares = hasRules(input.engine)
       if (allowed)
@@ -234,7 +234,7 @@ async function importEngineModule(module: string, baseUrl: string): Promise<Engi
 /**
  * Классы каждого компонента заново: кандидаты экстрактором движка приложения из
  * `files` манифеста, затем один `generate` на пакет — только имена с правилом
- * остаются (тот же порядок, что у сборки провайдера, B-6).
+ * остаются (тот же порядок, что у сборки провайдера).
  */
 async function reextractProvider(
   loaded: GranumLoadedManifest,

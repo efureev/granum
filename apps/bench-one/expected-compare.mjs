@@ -1,6 +1,6 @@
 /**
  * Допустимые расхождения множеств CSS-правил bench-one на granum и на пресете
- * v1 (`v1-snapshot.css`). Проверяется `node scripts/compare-css.mjs` (AC-2).
+ * v1 (`v1-snapshot.css`). Проверяется `node scripts/compare-css.mjs`.
  *
  * Список был пуст, пока движок вендорил preset-mini с теми же доп-правилами, что
  * у пресета v1. С переходом на preset-wind3 появились два расхождения, и оба

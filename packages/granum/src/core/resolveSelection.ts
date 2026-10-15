@@ -7,8 +7,8 @@ import { splitComponentKey, toComponentKey } from './registry'
 
 /**
  * Элемент селекции приложения: квалифицированный ключ `'providerId:Name'`
- * (разделитель — последнее двоеточие, INV-SEL-1) или объектная форма.
- * Короткая форма `'Name'` здесь запрещена (INV-SEL-4).
+ * (разделитель — последнее двоеточие) или объектная форма.
+ * Короткая форма `'Name'` здесь запрещена.
  */
 export type ComponentSelectionItem
   = | string
@@ -89,7 +89,7 @@ export function collectDependencyClosure(registry: ComponentRegistry, root: Comp
 }
 
 export interface ResolvedSelection {
-  /** Ключи в порядке post-order DFS: зависимости раньше зависящих (INV-SEL-2). */
+  /** Ключи в порядке post-order DFS: зависимости раньше зависящих. */
   readonly order: readonly ComponentKey[]
   readonly entries: readonly RegistryEntry[]
   /** Провайдеры селекции в порядке первого появления. */
@@ -149,7 +149,7 @@ export function resolveSelection(
   }
 }
 
-/** Объединение safelist селекции — отсортированное множество (INV-DET-3). */
+/** Объединение safelist селекции — отсортированное множество. */
 export function collectSafelist(entries: readonly RegistryEntry[]): string[] {
   return sortedUnique(entries.flatMap(e => e.component.safelist))
 }
@@ -166,7 +166,7 @@ export interface ComponentCssRef {
   readonly path: string
 }
 
-/** CSS компонентов в порядке селекции, дедуп по паре (провайдер, путь) — INV-CSS-2. */
+/** CSS компонентов в порядке селекции, дедуп по паре (провайдер, путь). */
 export function collectComponentCss(entries: readonly RegistryEntry[]): ComponentCssRef[] {
   const seen = new Set<string>()
   const result: ComponentCssRef[] = []

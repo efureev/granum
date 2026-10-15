@@ -25,7 +25,7 @@ function flatten(result: ReturnType<typeof collectTokenLayers>): Record<string, 
   return out
 }
 
-describe('collectTokenLayers: цепочки слоёв (INV-THM-2)', () => {
+describe('collectTokenLayers: цепочки слоёв', () => {
   it('провайдер → компонент → app-override, в порядке применения', () => {
     const themes = themed(
       { tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#aaa' } } } },
@@ -50,7 +50,7 @@ describe('collectTokenLayers: цепочки слоёв (INV-THM-2)', () => {
   })
 })
 
-describe('collectTokenLayers: strictTokens (INV-THM-3)', () => {
+describe('collectTokenLayers: strictTokens', () => {
   const themes = themed({ tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#aaa' } } } })
 
   it('отброшенный override остаётся в layers с пометкой, но не становится effective', () => {

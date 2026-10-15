@@ -14,7 +14,7 @@ import { granum } from '../vite/plugin'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
- * Интеграция плагина с настоящим Vite (B-1…B-17): временный провайдер из двух
+ * Интеграция плагина с настоящим Vite: временный провайдер из двух
  * компонентов, темы и объявленного CSS собирается программным `build()`, а
  * манифест читается штатным читателем.
  */
@@ -170,7 +170,7 @@ function importsOf(code: string): string[] {
   return out
 }
 describe('granumProvider с настоящим Vite', () => {
-  it('правила движка без engineModule — предупреждение, а не тихая потеря (M-7)', async () => {
+  it('правила движка без engineModule — предупреждение, а не тихая потеря', async () => {
     // Правила известны сборке (классы провайдера ими извлекаются), но манифест
     // ссылается на модуль, и без пути приложение их не получит.
     const { manifest, logs } = await run(makeFixture({ engineRules: true }))
@@ -185,7 +185,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(withModule.manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
   })
 
-  it('нарушение границы не переезжает в следующую сборку того же инстанса (B-15)', async () => {
+  it('нарушение границы не переезжает в следующую сборку того же инстанса', async () => {
     /*
      * Состояние границы, собранное в одной сборке, не имеет права дожить до
      * следующей: `transform` при пересборке идёт только по изменённым модулям,
@@ -222,19 +222,19 @@ describe('granumProvider с настоящим Vite', () => {
     expect(logs.filter(line => line.includes('node:fs'))).toEqual([])
   })
 
-  it('движок артефакта — факт: блок engine и отказ приписать чужой словарь (INV-ENG-10, M-E5)', async () => {
+  it('движок артефакта — факт: блок engine и отказ приписать чужой словарь', async () => {
     const engine = testEngine()
     const { manifest } = await run(makeFixture())
     expect(manifest.engine).toEqual({ dialect: engine.dialect, vocabulary: engine.vocabulary, name: engine.name, module: null })
 
     // Провайдер утверждает один словарь, а собирают его другим — записать в
     // манифест чужой диалект нельзя. Падает на создании плагина, до первого
-    // хука: раньше некуда (INV-ERR-1).
+    // хука: раньше некуда.
     const provider = { ...makeFixture().provider, engine: { dialect: 'other/atoms@1' } }
     expect(() => granumProvider({ provider, engine, log: () => {} })).toThrow(EngineDialectMismatchError)
   })
 
-  it('пакет без утилит получает dialect: null (E-3, M-E5)', async () => {
+  it('пакет без утилит получает dialect: null', async () => {
     // Компонент без классов и без safelist ни от какого словаря не зависит:
     // писать в манифест диалект было бы догадкой, а не фактом.
     const plain = makeFixture({ plain: true })
@@ -251,7 +251,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(manifest.warnings.map(w => w.code)).not.toContain('engine-module-missing')
   })
 
-  it('раскладка, манифест, классы, токены, копии CSS, @apply, exports (B-1…B-14)', async () => {
+  it('раскладка, манифест, классы, токены, копии CSS, @apply, exports', async () => {
     const { manifest, dist, logs } = await run(makeFixture())
 
     expect(manifest.id).toBe('@t/kit')
@@ -261,8 +261,8 @@ describe('granumProvider с настоящим Vite', () => {
     const card = manifest.components.Card!
     expect(card.entry).toBe('components/Card/index.js')
     expect(card.classes).toEqual(['bg-[var(--t-bg)]', 'p-4'])
-    // `p-4` объявлен в safelist и найден извлечением — в манифест он не едет
-    // (C-8, INV-MAN-4): CSS от записи не зависит, а манифест от неё пухнет.
+    // `p-4` объявлен в safelist и найден извлечением — в манифест он не едет:
+    // CSS от записи не зависит, а манифест от неё пухнет.
     expect(card.safelist).toEqual(['shadow-legacy'])
     expect(card.css).toEqual(['components/Card/styles.css'])
     const cardCss = readFileSync(join(dist, 'components/Card/styles.css'), 'utf8')
@@ -288,20 +288,20 @@ describe('granumProvider с настоящим Vite', () => {
     expect(logs.at(-1)).toMatch(/@t\/kit: 2 components/)
   })
 
-  it('неучтённое ребро графа — UndeclaredDependencyError; с dependencyCheck: warn — предупреждение (B-8)', async () => {
+  it('неучтённое ребро графа — UndeclaredDependencyError; с dependencyCheck: warn — предупреждение', async () => {
     await expect(run(makeFixture({ declareDependency: false }))).rejects.toBeInstanceOf(UndeclaredDependencyError)
     const { manifest, logs } = await run(makeFixture({ declareDependency: false }), { dependencyCheck: 'warn' })
     expect(manifest.components.Panel!.dependencies).toEqual([])
     expect(logs.some(l => l.includes('Panel → @t/kit:Card'))).toBe(true)
   })
 
-  it('exports без манифеста и subpath — PackageExportsError; exportsCheck: warn пропускает (B-13)', async () => {
+  it('exports без манифеста и subpath — PackageExportsError; exportsCheck: warn пропускает', async () => {
     await expect(run(makeFixture({ exportsOk: false }))).rejects.toBeInstanceOf(PackageExportsError)
     const { logs } = await run(makeFixture({ exportsOk: false }), { exportsCheck: 'warn' })
     expect(logs.some(l => l.includes('./granum.manifest.json'))).toBe(true)
   })
 
-  it('node-импорт в браузерном чанке — BoundaryViolationError (B-16)', async () => {
+  it('node-импорт в браузерном чанке — BoundaryViolationError', async () => {
     await expect(run(makeFixture({ nodeImport: true }))).rejects.toBeInstanceOf(BoundaryViolationError)
     const { logs } = await run(makeFixture({ nodeImport: true }), { boundaryCheck: 'warn' })
     expect(logs.some(l => l.includes('node:fs'))).toBe(true)
@@ -314,7 +314,7 @@ describe('granumProvider с настоящим Vite', () => {
   })
 
   /*
-   * Двойная доставка от плагина, который вшивает CSS ПОЗЖЕ нас (INV-CSS-5).
+   * Двойная доставка от плагина, который вшивает CSS ПОЗЖЕ нас.
    *
    * Так устроен `vite-plugin-lib-inject-css` и всё, что делает то же самое: он
    * объявлен `enforce: 'post'`, а Vite сортирует плагины pre → normal → post.
@@ -354,7 +354,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(files?.every(f => f.endsWith('.js'))).toBe(true)
   })
 
-  it('`/*` в строке чанка не съедает классы и токены дальше по коду (INV-ENG-5, INV-DIAG-2)', async () => {
+  it('`/*` в строке чанка не съедает классы и токены дальше по коду', async () => {
     const { manifest } = await run(makeFixture({ fileInput: true }))
     const card = manifest.components.Card!
 
@@ -362,7 +362,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(card.tokens.consumes).toEqual(expect.arrayContaining(['--t-bg', '--t-space']))
   })
 
-  it('`<style>` SFC и объявленный `styles.css` склеиваются, а не затирают друг друга (B-3, INV-MAN-6)', async () => {
+  it('`<style>` SFC и объявленный `styles.css` склеиваются, а не затирают друг друга', async () => {
     const { manifest, dist } = await run(makeFixture({ panelStyle: true }))
     const panel = manifest.components.Panel!
     const css = readFileSync(join(dist, 'components/Panel/styles.css'), 'utf8')
@@ -375,7 +375,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(panel.tokens.consumes).toEqual(expect.arrayContaining(['--t-fg', '--t-gap']))
   })
 
-  it('пути темы и engineModule с `./` уезжают в манифест нормализованными (C-16, INV-MAN-2)', async () => {
+  it('пути темы и engineModule с `./` уезжают в манифест нормализованными', async () => {
     // Манифест читается штатным читателем: путь с `./` он отверг бы, и упало бы
     // каждое приложение-потребитель, а не сборка провайдера.
     const { manifest } = await run(makeFixture({ dotPaths: true, engineRules: true }), { engineModule: './engine.js' })
@@ -447,7 +447,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(() => granumProvider({ provider, engine: testEngine(), engineModule: '/abs/engine.js' })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
   })
 
-  it('переменная v-bind() из <style> — присваивание самого компонента, не требование (T-5)', async () => {
+  it('переменная v-bind() из <style> — присваивание самого компонента, не требование', async () => {
     const { manifest } = await run(makeFixture({ vbind: true }))
     const tokens = manifest.components.Card!.tokens
     const vueVar = tokens.consumes.find(t => /^--[0-9a-f]{8}/.test(t))
@@ -456,7 +456,7 @@ describe('granumProvider с настоящим Vite', () => {
     expect(tokens.requires).not.toContain(vueVar)
   })
 
-  it('часть чужого компонента в общем чанке группы — тоже ребро (B-7)', async () => {
+  it('часть чужого компонента в общем чанке группы — тоже ребро', async () => {
     await expect(run(groupFixture())).rejects.toBeInstanceOf(UndeclaredDependencyError)
     const { manifest } = await run(groupFixture({ declareDependency: true }))
     expect(manifest.components.GA!.dependencies).toEqual(['GB'])

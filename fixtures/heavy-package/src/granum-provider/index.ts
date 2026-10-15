@@ -13,7 +13,7 @@ export const PROVIDER_ID = '@granum-fixtures/heavy'
 
 /**
  * Провайдер с пакетным фундаментом: tokens/base/темы. Пути — относительно
- * корня раскладки `dist`; исходники лежат зеркально в `src/theme/` (§6.3).
+ * корня раскладки `dist`; исходники лежат зеркально в `src/theme/`.
  */
 export const heavyProvider = defineGranumProvider({
   id: PROVIDER_ID,

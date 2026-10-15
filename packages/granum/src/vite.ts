@@ -1,5 +1,5 @@
 /**
- * Точка входа `./vite`: плагин приложения и `defineGranumConfig` (ТЗ §10).
+ * Точка входа `./vite`: плагин приложения и `defineGranumConfig`.
  * Node-only, peer `vite`.
  */
 export type * from './config'

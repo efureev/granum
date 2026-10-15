@@ -1,7 +1,7 @@
 /**
  * Минимальный `debug`-совместимый логгер по переменной окружения `DEBUG`.
  * Namespace ядра — `granum:resolve`. Browser-safe: без `process` логирование
- * выключено; импорт из `node:process` здесь запрещён (INV-BND-1).
+ * выключено; импорт из `node:process` здесь запрещён.
  */
 
 function debugPatterns(): string[] {

@@ -4,14 +4,14 @@ import { join } from 'node:path'
 export default function ({ manifest, distDir, check }) {
   const c = manifest.components
   check(manifest.id === '@granum-fixtures/heavy', 'id')
-  // Фундамент скопирован из зеркального src/theme и объявлен в манифесте (§6.3).
+  // Фундамент скопирован из зеркального src/theme и объявлен в манифесте.
   for (const path of ['theme/tokens.css', 'theme/base.css', 'theme/light.css', 'theme/dark.css'])
     check(existsSync(join(distDir, path)), `theme file ${path}`)
   check(manifest.theme.defaultThemes.join(',') === 'light', 'defaultThemes')
   // Объявленные токены — полный скан, включая блоки внутри @supports.
   check(manifest.theme.declares.includes('--xh-accent-hover') && manifest.theme.declares.includes('--xh-space-2') && manifest.theme.declares.includes('--xh-elevated-fg'), `declares: ${manifest.theme.declares.length}`)
 
-  // Граф: XhPanel объявляет всех, кого импортирует (INV-CON-5); общий модуль overlayZ ребром не является (INV-CON-6).
+  // Граф: XhPanel объявляет всех, кого импортирует; общий модуль overlayZ ребром не является.
   check(c.XhPanel.dependencies.join(',') === 'XhAlert,XhButton,XhCard,XhOverlay', `XhPanel.deps: ${c.XhPanel.dependencies}`)
   check(c.XhOverlay.dependencies.length === 0, 'XhOverlay has no deps')
   // Файлы компонента — только его директория и общие чанки; чанки чужих
@@ -19,7 +19,7 @@ export default function ({ manifest, distDir, check }) {
   check(c.XhPanel.files.every(f => f.startsWith('components/XhPanel/') || f.startsWith('chunks/')), `XhPanel.files: ${c.XhPanel.files}`)
   check(c.XhOverlay.files.every(f => f.startsWith('components/XhOverlay/') || f.startsWith('chunks/')), `XhOverlay.files: ${c.XhOverlay.files}`)
 
-  // Токены: var() в шаблонах и CSS, литералы в JS, dynamicTokens (B-9).
+  // Токены: var() в шаблонах и CSS, литералы в JS, dynamicTokens.
   check(c.XhCard.tokens.consumes.includes('--xh-card-bg') && c.XhCard.tokens.consumes.includes('--xh-space-2'), `XhCard.consumes: ${c.XhCard.tokens.consumes}`)
   check(c.XhAlert.tokens.consumes.includes('--xh-alert-duration') && c.XhAlert.tokens.consumes.includes('--xh-blue-100'), `XhAlert.consumes: ${c.XhAlert.tokens.consumes}`)
   check(c.XhOverlay.tokens.dynamic.join(',') === '--xh-z-dropdown', `XhOverlay.dynamic: ${c.XhOverlay.tokens.dynamic}`)
@@ -34,9 +34,9 @@ export default function ({ manifest, distDir, check }) {
   }
   check(c.XhList.classes.includes('divide-y') && c.XhTable.classes.includes('odd:bg-[var(--xh-table-stripe)]'), 'group member own classes')
 
-  // Safelist: собранные в рантайме классы, включая намеренно мёртвый `shadow-legacy` (INV-CON-4).
+  // Safelist: собранные в рантайме классы, включая намеренно мёртвый `shadow-legacy`.
   check(c.XhButton.safelist.includes('shadow-legacy') && c.XhButton.safelist.includes('p-2'), `XhButton.safelist: ${c.XhButton.safelist}`)
-  // Запись safelist, которую извлечение и так нашло, в манифест не едет (C-8):
+  // Запись safelist, которую извлечение и так нашло, в манифест не едет:
   // CSS от неё не зависит, а манифест от неё пухнет. Класс тона лежит в чанке
   // литералом, поэтому статика его видит — и в safelist его больше нет.
   check(!c.XhButton.safelist.includes('bg-[var(--xh-btn-bg)]'), `XhButton.safelist: ${c.XhButton.safelist}`)
