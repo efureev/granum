@@ -51,7 +51,9 @@ The list of components is closed transitively over the `dependencies` of
 the manifests: dependencies come before dependants (post-order DFS), and
 that order is normative for CSS and tokens. `components: 'imports'` computes
 the initial list from imports like `@acme/ui/components/XhPanel` and from
-PascalCase tags in `appSources`.
+PascalCase tags in `appSources`. Only components of providers in the graph
+count: the application's `~/components/…` and other packages' `components/`
+leave the selection alone, and so does a commented-out import.
 
 The recommended mode is the explicit list: it keeps the selection in one place
 where a reviewer can see it. `'imports'` fits applications whose component set

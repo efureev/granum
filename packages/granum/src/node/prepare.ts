@@ -160,6 +160,26 @@ export function tagSelection(tags: readonly string[], inputs: readonly GranumPro
   return out
 }
 
+/**
+ * Импорты `<pkg>/components/<Name>` → ключи селекции (A-3): только те, чей
+ * провайдер есть в графе и объявляет компонент. Путь вида
+ * `~/components/AppHeader` — алиас приложения, а `vuetify/components/VBtn` —
+ * чужой пакет: в селекцию они не идут и сборку не роняют.
+ */
+export function importSelection(
+  imports: readonly string[],
+  providers: readonly { readonly id: string, readonly components: readonly { readonly name: string }[] }[],
+): string[] {
+  if (imports.length === 0)
+    return []
+  const known = new Set<string>()
+  for (const provider of providers) {
+    for (const component of provider.components)
+      known.add(`${provider.id}:${component.name}`)
+  }
+  return imports.filter(key => known.has(key))
+}
+
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {
   const engine = config.engine
   /*
@@ -187,7 +207,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
   if (config.components === 'imports') {
     if (!config.appSources)
       warnings.push({ kind: 'imports-without-app-sources' })
-    components = [...appScan.componentImports, ...tagSelection(appScan.componentTags, inputs)]
+    components = [...importSelection(appScan.componentImports, inputs.map(toProviderNode)), ...tagSelection(appScan.componentTags, inputs)]
   }
   else {
     components = config.components

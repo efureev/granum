@@ -8,6 +8,7 @@ import type { GranumEngine } from '../engine/types'
 import { readdirSync, readFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { sortedUnique } from '../core/dedupe'
+import { stripComments } from '../engine/extract'
 import { scanTokenConsumption } from './tokenScan'
 
 export const DEFAULT_APP_EXTENSIONS = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'jsx', 'tsx', 'vue', 'svelte', 'astro', 'html', 'css'] as const
@@ -23,7 +24,12 @@ export interface AppSourcesScan {
   readonly componentTags: readonly string[]
 }
 
-const COMPONENT_IMPORT_RE = /["'](@[^/"']+\/[^/"']+|[^./@"'][^/"']*)\/components\/([A-Z][\w-]*)["']/g
+/**
+ * Кандидат в импорт компонента: `'<pkg>/components/<Name>'`. Имя — по C-3, со
+ * строчной буквы тоже. Под шаблон попадают и чужие пути (`~/components/…`,
+ * `vuetify/components/…`) — их отсекает сверка с графом в `importSelection`.
+ */
+const COMPONENT_IMPORT_RE = /["'](@[^/"']+\/[^/"']+|[^./@"'][^/"']*)\/components\/([A-Za-z][\w-]*)["']/g
 
 export function listSourceFiles(dir: string, extensions: readonly string[]): string[] {
   const allowed = new Set(extensions.map(e => `.${e}`))
@@ -64,7 +70,8 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
       if (!file.endsWith('.css')) {
         for (const token of engine.extract(text, file))
           classes.add(token)
-        for (const m of text.matchAll(COMPONENT_IMPORT_RE))
+        // Закомментированный импорт — не импорт.
+        for (const m of stripComments(text, file).matchAll(COMPONENT_IMPORT_RE))
           imports.add(`${m[1]}:${m[2]}`)
         for (const m of text.matchAll(COMPONENT_TAG_RE))
           tags.add(m[1]!)

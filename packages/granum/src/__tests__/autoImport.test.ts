@@ -52,6 +52,29 @@ describe('granumResolver (A-8)', () => {
     expect(app.resolution.selection.order).toEqual(['@x/kit:Card', '@x/kit:Panel'])
   })
 
+  it('импорты: в селекцию идут только компоненты провайдеров графа, имя со строчной буквы тоже (A-3, C-3)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'granum-imports-'))
+    const dist = join(root, 'node_modules/@x/kit/dist')
+    mkdirSync(dist, { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'node_modules/@x/kit/package.json'), JSON.stringify({ name: '@x/kit', exports: { './granum.manifest.json': './dist/granum.manifest.json' } }))
+    writeFileSync(join(dist, 'granum.manifest.json'), serializeManifest(makeManifest('@x/kit', { Card: {}, button: {} }).manifest))
+    // Алиас приложения, чужой пакет со своими `components/` и закомментированный
+    // импорт — не granum: селекцию они не трогают и сборку не роняют.
+    writeFileSync(join(root, 'src/App.vue'), [
+      '<script setup lang="ts">',
+      'import AppHeader from \'~/components/AppHeader\'',
+      'import { VBtn } from \'vuetify/components/VBtn\'',
+      '// import { Card } from \'@x/kit/components/Card\'',
+      'import { button } from \'@x/kit/components/button\'',
+      '</script>',
+      '<template><div/></template>',
+      '',
+    ].join('\n'))
+    const app = await prepareTestApp({ providers: ['@x/kit'], components: 'imports', appSources: { dirs: ['src'] } }, root)
+    expect(app.resolution.selection.order).toEqual(['@x/kit:button'])
+  })
+
   it('tagSelection: неоднозначное имя пропускается', () => {
     const a = makeProvider('@x/a', { components: [makeComponent('Card'), makeComponent('Modal')] })
     const b = makeProvider('@x/b', { components: [makeComponent('Card')] })
