@@ -10,12 +10,15 @@ import type { GranumConfig } from '../config'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
 import type { GranumThemeManifestOptions } from '../node/themeManifest'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { ComponentOutsideSelectionError } from '../core/errors'
 import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
+import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCss'
+import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
 import { buildReport } from '../node/report'
 import { getThemeManifest } from '../node/themeManifest'
@@ -123,6 +126,26 @@ function componentTypes(exports: readonly ComponentExport[]): string {
   ].join('\n')
 }
 
+/**
+ * Файлы провайдеров, которые читают подготовка и эмиссия: манифест, инлайнимый
+ * CSS, CSS компонентов. В dev за ними следят явно (A-16): пакет-воркспейс лежит
+ * вне корня приложения, а симлинк в `node_modules` watcher Vite игнорирует.
+ */
+function providerFilesOf(app: PreparedApp): string[] {
+  const { resolution } = app
+  const byId = new Map(resolution.providers.map(p => [p.id, p]))
+  const files: string[] = []
+  for (const provider of resolution.providers) {
+    if (provider.form === 'manifest' && provider.baseUrl !== undefined)
+      files.push(fileURLToPath(new URL(MANIFEST_FILE_NAME, provider.baseUrl)))
+  }
+  for (const source of resolveInlinedCssSources(resolution))
+    files.push(source.path)
+  for (const ref of resolution.componentCss)
+    files.push(resolveProviderPath(ref.path, byId.get(ref.providerId)?.baseUrl))
+  return files
+}
+
 /** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
 function assetNameOf(layer: LayerName): string {
   return `granum.${layer}.css`
@@ -177,11 +200,37 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
    */
   const timings = { prepare: 0, emit: 0, report: 0 }
 
+  /** Файлы провайдеров под наблюдением dev-сервера — реальные пути (A-16). */
+  const providerFiles = new Set<string>()
+  const watchProviderFiles = (app: PreparedApp): void => {
+    if (!server)
+      return
+    const added: string[] = []
+    for (const file of providerFilesOf(app)) {
+      let real: string
+      try {
+        // Симлинк воркспейса ведёт за пределы `node_modules`: по реальному
+        // пути игнор watcher Vite файл не задевает. Data URL путём не является.
+        real = realpathSync(file)
+      }
+      catch {
+        continue
+      }
+      if (!providerFiles.has(real)) {
+        providerFiles.add(real)
+        added.push(real)
+      }
+    }
+    if (added.length > 0)
+      server.watcher.add(added)
+  }
+
   const prepare = (): Promise<PreparedApp> => {
     if (prepared === undefined) {
       const started = performance.now()
       prepared = prepareApp(config, root).then((app) => {
         timings.prepare = performance.now() - started
+        watchProviderFiles(app)
         return app
       })
     }
@@ -238,6 +287,67 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     log(`types: ${relative(root, file)}`)
   }
 
+  /** Код виртуальных модулей — то, что отдаёт `load`. */
+  const render = async (id: string): Promise<string | null> => {
+    if (id === RESOLVED_CSS) {
+      /*
+       * При `split` содержимое уезжает отдельными ассетами, и здесь остаётся
+       * ровно объявление порядка слоёв. Оно обязано быть первым (INV-CSS-1), и
+       * ссылку на этот ассет Vite ставит раньше наших — значит место верное.
+       * Дублировать его в ассете первого слоя не надо: объявление одно.
+       */
+      return splitting() ? layerOrderDeclaration(config.css ?? {}) : (await emit()).css
+    }
+    if (id.startsWith(RESOLVED_LAYER_PREFIX)) {
+      const name = id.slice(RESOLVED_LAYER_PREFIX.length).replace(/\.css$/, '') as LayerName
+      if (!LAYER_NAMES.includes(name))
+        throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
+      return wrapLayer((await emit()).layers, name, config.css ?? {})
+    }
+    if (id.startsWith(RESOLVED_SPLIT_PREFIX)) {
+      const name = id.slice(RESOLVED_SPLIT_PREFIX.length).replace(/\.css$/, '') as LayerName
+      if (!LAYER_NAMES.includes(name))
+        throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
+      return wrapLayer((await emit()).layers, name, config.css ?? {}, { declareOrder: false })
+    }
+    if (id === RESOLVED_COMPONENTS) {
+      const app = await prepare()
+      return `${reexports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
+    }
+    if (id === RESOLVED_THEMES) {
+      const app = await prepare()
+      return `export default ${JSON.stringify(getThemeManifest(app.resolution, options.themeManifest ?? {}))}\n`
+    }
+    return null
+  }
+
+  /** Последний отданный dev-серверу код каждого виртуального модуля. */
+  const served = new Map<string, string>()
+  /*
+   * Перезагружается только модуль, чей код изменился (A-16). Модули тем и
+   * компонентов — JS без границы HMR: их перезагрузка поднимается до входа
+   * приложения, и Vite перезагружает страницу. Правка разметки их код не
+   * меняет, а безусловная перезагрузка превращала любую правку в перезагрузку
+   * страницы.
+   */
+  const refresh = async (devServer: ViteDevServer): Promise<void> => {
+    for (const [id, before] of served) {
+      const mod = devServer.moduleGraph.getModuleById(id)
+      if (!mod)
+        continue
+      let after: string | null | undefined
+      try {
+        after = await render(id)
+      }
+      catch {
+        // Ошибку покажет оверлеем `load` — ради этого модуль и перезагружается.
+        after = undefined
+      }
+      if (after !== before)
+        void devServer.reloadModule(mod)
+    }
+  }
+
   const invalidate = (): void => {
     prepared = undefined
     emitted = undefined
@@ -249,13 +359,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     splitLayers = []
     splitLinked = false
     componentsWarned = false
-    if (!server)
-      return
-    for (const id of [RESOLVED_CSS, RESOLVED_COMPONENTS, RESOLVED_THEMES, ...LAYER_NAMES.map(n => `${RESOLVED_LAYER_PREFIX}${n}.css`)]) {
-      const mod = server.moduleGraph.getModuleById(id)
-      if (mod)
-        void server.reloadModule(mod)
-    }
+    if (server)
+      void refresh(server)
   }
 
   const providerKeyOf = (app: PreparedApp, source: string): string | undefined => {
@@ -300,7 +405,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       const onChange = (file: string): void => {
         if (dirs.some(dir => file.startsWith(`${dir}/`) || file.startsWith(`${dir}\\`)))
           invalidate()
-        else if (file.endsWith('granum.manifest.json'))
+        else if (providerFiles.has(file) || file.endsWith('granum.manifest.json'))
           invalidate()
       }
       devServer.watcher.on('change', onChange)
@@ -379,36 +484,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     },
 
     async load(id) {
-      if (id === RESOLVED_CSS) {
-        /*
-         * При `split` содержимое уезжает отдельными ассетами, и здесь остаётся
-         * ровно объявление порядка слоёв. Оно обязано быть первым (INV-CSS-1), и
-         * ссылку на этот ассет Vite ставит раньше наших — значит место верное.
-         * Дублировать его в ассете первого слоя не надо: объявление одно.
-         */
-        return splitting() ? layerOrderDeclaration(config.css ?? {}) : (await emit()).css
-      }
-      if (id.startsWith(RESOLVED_LAYER_PREFIX)) {
-        const name = id.slice(RESOLVED_LAYER_PREFIX.length).replace(/\.css$/, '') as LayerName
-        if (!LAYER_NAMES.includes(name))
-          throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
-        return wrapLayer((await emit()).layers, name, config.css ?? {})
-      }
-      if (id.startsWith(RESOLVED_SPLIT_PREFIX)) {
-        const name = id.slice(RESOLVED_SPLIT_PREFIX.length).replace(/\.css$/, '') as LayerName
-        if (!LAYER_NAMES.includes(name))
-          throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
-        return wrapLayer((await emit()).layers, name, config.css ?? {}, { declareOrder: false })
-      }
-      if (id === RESOLVED_COMPONENTS) {
-        const app = await prepare()
-        return `${reexports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
-      }
-      if (id === RESOLVED_THEMES) {
-        const app = await prepare()
-        return `export default ${JSON.stringify(getThemeManifest(app.resolution, options.themeManifest ?? {}))}\n`
-      }
-      return null
+      const code = await render(id)
+      // Отданный код запоминается: `refresh` сравнит с ним новый.
+      if (code !== null && server)
+        served.set(id, code)
+      return code
     },
 
     /**

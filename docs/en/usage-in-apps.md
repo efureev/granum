@@ -263,10 +263,13 @@ class, `:root`) — is derived from the same resolution. Details in
 
 ## Dev mode
 
-Editing an application source regenerates the `utilities` layer; a change of
-a provider manifest (monorepo, `vite build --watch` in the provider)
-invalidates the whole resolution. Resolution errors show up in the Vite
-overlay.
+Editing an application source regenerates the `utilities` layer and arrives
+over HMR: a module whose code did not change (say, `virtual:granum/themes`)
+is not reloaded, and the page stays in place. A change of a provider manifest
+or CSS (monorepo, `vite build --watch` in the provider) invalidates the whole
+resolution — the dev server watches the provider files itself, even when the
+package lies outside the application root. Resolution errors show up in the
+Vite overlay.
 
 ## Build report
 

@@ -14,6 +14,11 @@
  * `components` и утилита `gap-0` из слоя `utilities`, дописываемая в разметку
  * на ходу.
  *
+ * Второй стенд — `apps/app-5` (A-16): он импортирует `virtual:granum/themes`,
+ * JS-модуль без границы HMR. Правка разметки его код не меняет и не обязана
+ * его перезагружать — иначе обновление поднимается до входа приложения, и Vite
+ * перезагружает страницу.
+ *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
  *
@@ -30,6 +35,13 @@ import { createServer } from 'vite'
 const root = fileURLToPath(new URL('../apps/app-1/', import.meta.url))
 const appSource = join(root, 'src/App.vue')
 const original = readFileSync(appSource, 'utf8')
+
+/**
+ * Пауза после обновления. Перезагрузка, если она будет, приходит следом за
+ * HMR-обновлениями: проверка сразу после них её не застала бы и осталась бы
+ * зелёной на дефекте.
+ */
+const SETTLE_MS = 1500
 
 /** Утилита, которой в разметке ещё нет: её правило обязано приехать по HMR. */
 const HMR_CLASS = 'gap-0'
@@ -113,6 +125,7 @@ try {
     undefined,
     { timeout: 20_000 },
   )
+  await page.waitForTimeout(SETTLE_MS)
 
   const after = await page.evaluate(() => {
     const style = getComputedStyle(document.querySelector('.x-sp-test'))
@@ -132,8 +145,68 @@ finally {
   await server?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1)\n  ${steps.join('\n  ')}\n`)
+/*
+ * app-5: правка разметки приезжает по HMR и у приложения с модулем тем.
+ */
+const themedRoot = fileURLToPath(new URL('../apps/app-5/', import.meta.url))
+const themedSource = join(themedRoot, 'src/App.vue')
+const themedOriginal = readFileSync(themedSource, 'utf8')
+const THEMED_CLASS = 'italic'
+
+try {
+  server = await createServer({
+    root: themedRoot,
+    configFile: join(themedRoot, 'vite.config.ts'),
+    logLevel: 'warn',
+    server: { port: 5198, strictPort: true },
+  })
+  await server.listen()
+  const url = server.resolvedUrls?.local?.[0] ?? 'http://localhost:5198/app-5/'
+
+  browser = await chromium.launch()
+  const page = await browser.newPage()
+  await page.goto(url, { waitUntil: 'networkidle' })
+  const reloads = []
+  page.on('load', () => reloads.push(Date.now()))
+  await page.evaluate(() => {
+    window.__granumE2E = 'before-hmr'
+  })
+
+  const before = await page.evaluate(cls => ({
+    rendered: document.querySelector('main') !== null,
+    hasRule: [...document.querySelectorAll('style')].some(node => node.textContent?.includes(`.${cls}`)),
+  }), THEMED_CLASS)
+  check(before.rendered, 'app-5: страница отрендерилась (`main` в DOM)')
+  check(before.hasRule === false, `app-5: правила \`.${THEMED_CLASS}\` в CSS пока нет`)
+
+  writeFileSync(themedSource, themedOriginal.replace('<main class="', `<main class="${THEMED_CLASS} `), 'utf8')
+  await page.waitForFunction(
+    cls => Boolean(document.querySelector('main')?.classList.contains(cls))
+      && [...document.querySelectorAll('style')].some(node => node.textContent?.includes(`.${cls}`)),
+    THEMED_CLASS,
+    { timeout: 20_000 },
+  )
+  await page.waitForTimeout(SETTLE_MS)
+  const after = await page.evaluate(() => ({
+    marker: window.__granumE2E,
+    fontStyle: getComputedStyle(document.querySelector('main')).fontStyle,
+  }))
+
+  check(after.marker === 'before-hmr', 'app-5: страница не перезагружалась — модуль тем не перезагружен')
+  check(reloads.length === 0, `app-5: полных перезагрузок после правки: ${reloads.length}`)
+  check(after.fontStyle === 'italic', `app-5: утилита приехала по HMR: font-style ${after.fontStyle}`)
+}
+catch (error) {
+  failures.push(`app-5: прогон упал: ${error?.message ?? error}`)
+}
+finally {
+  writeFileSync(themedSource, themedOriginal, 'utf8')
+  await browser?.close()
+  await server?.close()
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ INV-CSS-6 и AC-9 подтверждены в браузере\n'
+  ? '✓ INV-CSS-6, AC-9 и A-16 подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1
