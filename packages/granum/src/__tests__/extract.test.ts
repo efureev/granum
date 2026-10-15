@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { extractClasses, stripComments, stripCssComments } from '../engine/extract'
+import { collectClassAttributes } from '../node/appSources'
 import { collectImportSpecifiers, findPackageRootImports } from '../node/imports'
 import { scanTokenConsumption } from '../node/tokenScan'
 
@@ -229,5 +230,29 @@ describe('findPackageRootImports: компоненты из корня паке�
   it('несколько импортов одного пакета сводятся в одну находку', () => {
     expect(find(`import { Button } from '@acme/ui'\nimport { Chip } from '@acme/ui'\nimport * as all from '@acme/ui'\n`))
       .toEqual([{ providerId: '@acme/ui', components: ['Button', 'Chip'], whole: true }])
+  })
+})
+
+describe('collectClassAttributes: классы из атрибутов разметки приложения', () => {
+  it('статические class и className, JSX в фигурных скобках', () => {
+    expect(collectClassAttributes(`<div class="p-4  flex">x</div><span class='m-2'></span>`, 'App.vue')).toEqual(['flex', 'm-2', 'p-4'])
+    expect(collectClassAttributes(`const a = <div className="gap-2 grid" />\nconst b = <p className={'text-sm'} />\nconst c = <i className={\`i-logo\`} />`, 'App.tsx')).toEqual(['gap-2', 'grid', 'i-logo', 'text-sm'])
+  })
+
+  it('vue :class — строковые литералы классов, но не операнды сравнения и не имена без кавычек', () => {
+    const code = `<div :class="['p-2', size === 'lg' ? 'p-8' : 'p-4', { 'text-red-500': bad, active: on }]" v-bind:class="'rounded'"></div>`
+    expect(collectClassAttributes(code, 'App.vue')).toEqual(['p-2', 'p-4', 'p-8', 'rounded', 'text-red-500'])
+  })
+
+  it('не кандидаты: вставки, data-class, class: у Svelte, закомментированная разметка', () => {
+    const code = [
+      `<div class="p-{{ size }}"></div>`,
+      `<div class="card {active ? 'on' : ''}"></div>`,
+      `<i className={\`p-\${n}\`} />`,
+      `<div data-class="fake-x"></div>`,
+      `<div class:active={on}></div>`,
+      `<!-- <div class="old-x"></div> -->`,
+    ].join('\n')
+    expect(collectClassAttributes(code, 'App.vue')).toEqual([])
   })
 })

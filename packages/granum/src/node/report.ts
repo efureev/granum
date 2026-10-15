@@ -7,10 +7,12 @@ import type { ProviderClassSource, ReextractReason } from './dialects'
 import type { EmittedCss, LayerName } from './emit'
 import type { PreparedApp } from './prepare'
 import { Buffer } from 'node:buffer'
+import { relative } from 'node:path'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
 import { sortedUnique } from '../core/dedupe'
 import { GRANUM_VERSION } from '../version'
 import { extractLayerBlocks } from './cssLayerBlocks'
+import { declaredCssClasses } from './diagnostics/auditDist'
 import { LAYER_NAMES } from './emit'
 import { findUndefinedTokens } from './undefinedTokens'
 
@@ -107,6 +109,37 @@ function sizeOf(text: string, brotli: boolean): LayerSize {
     gzip: gzipSync(text).length,
     ...(brotli ? { brotli: brotliCompressSync(text).length } : {}),
   }
+}
+
+/**
+ * Классы без правила с известным источником. Слово из исходников приложения
+ * само по себе не класс — экстрактор берёт всё подряд, — и не судится. Класс
+ * из атрибута разметки судится, если его нет ни у движка, ни в CSS собранного
+ * бандла (утилиты, CSS провайдеров, свой CSS приложения, стили SFC); без CSS
+ * бандла собственный CSS приложения не виден, и вердикта нет.
+ */
+function unmatchedClasses(
+  app: PreparedApp,
+  css: EmittedCss,
+  sourcesOf: (className: string) => string[],
+  bundleCss: string | undefined,
+): { className: string, sources: string[] }[] {
+  const out = new Map<string, string[]>()
+  for (const className of css.engine.unmatched) {
+    const known = sourcesOf(className).filter(source => source !== 'app')
+    if (known.length > 0)
+      out.set(className, known)
+  }
+  if (bundleCss !== undefined) {
+    const declared = declaredCssClasses(bundleCss)
+    for (const [className, files] of Object.entries(app.appScan.classAttributes)) {
+      if (css.engine.matched.has(className) || declared.has(className))
+        continue
+      const sources = files.map(file => relative(app.root, file).replace(/\\/g, '/'))
+      out.set(className, sortedUnique([...(out.get(className) ?? []), ...sources]))
+    }
+  }
+  return [...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([className, sources]) => ({ className, sources }))
 }
 
 export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
@@ -212,11 +245,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
     classes: {
       input: css.engineInput.length,
       matched: css.engine.matched.size,
-      // Токены из исходников приложения без правила — норма (экстрактор берёт
-      // всё подряд); вердикт выносится только классам с известным источником.
-      unmatched: css.engine.unmatched
-        .map(className => ({ className, sources: sourcesOf(className).filter(s => s !== 'app') }))
-        .filter(entry => entry.sources.length > 0),
+      unmatched: unmatchedClasses(app, css, sourcesOf, options.bundleCss),
       safelistRedundant: css.safelistRedundant,
       app: [...appClasses].filter(className => packageClasses.has(className)).sort(),
     },

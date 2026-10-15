@@ -348,6 +348,33 @@ describe('granum() с настоящим Vite', async () => {
     })
   })
 
+  describe('класс разметки приложения без правила — в unmatched', () => {
+    it('опечатка в атрибуте — в unmatched с файлом; свой CSS приложения и текст разметки — нет', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'] },
+        `<template><div class="p-4 p-44x app-own">plain words here</div></template>\n<style>.app-own{color:red}</style>\n`,
+      )
+      const fromMarkup = app.report.classes.unmatched.filter((u: { sources: string[] }) => u.sources.includes('src/App.vue'))
+      expect(fromMarkup).toEqual([{ className: 'p-44x', sources: ['src/App.vue'] }])
+      expect(app.logs.some(l => l.includes(`${app.report.classes.unmatched.length} without a rule`))).toBe(true)
+    })
+
+    it(':class ловится; класс из CSS приложения вне appSources — нет', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-app-markup-'))
+      write(root, 'shared.css', '.shell-x{margin:0}\n')
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'] },
+        `<script setup lang="ts">const big = true</script>\n<template><div class="shell-x" :class="[big ? 'p-8' : 'p-4', 'gap-zz']"/></template>\n`,
+        `import 'virtual:granum.css'\nimport '../shared.css'`,
+        root,
+      )
+      const fromMarkup = app.report.classes.unmatched.filter((u: { sources: string[] }) => u.sources.includes('src/App.vue'))
+      expect(fromMarkup.map((u: { className: string }) => u.className)).toEqual(['gap-zz'])
+    })
+  })
+
   describe('компонент из корня пакета — ошибка guard', () => {
     /** Исходная ошибка сборки: из хука трансформации бандлер заворачивает её в свою. */
     const failureOf = (promise: Promise<unknown>): Promise<unknown> =>

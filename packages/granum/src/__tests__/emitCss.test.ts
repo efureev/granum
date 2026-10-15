@@ -274,6 +274,30 @@ describe('buildReport (A-19, A-20)', () => {
   })
 })
 
+describe('buildReport: класс разметки приложения без правила', () => {
+  /** Приложение с опечаткой в атрибуте класса и словами в тексте разметки. */
+  async function markupApp() {
+    const root = mkdtempSync(join(tmpdir(), 'granum-markup-'))
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/App.vue'), `<template><div class="p-4 not-a-rule-xyz">text words</div></template>\n`)
+    const app = await prepareTestApp({ providers: [makeProvider('@x/empty')], appSources: { dirs: ['src'] } }, root)
+    return { app, css: await emitCss(app) }
+  }
+  const fromMarkup = (report: ReturnType<typeof buildReport>): string[] =>
+    report.classes.unmatched.filter(u => u.sources.includes('src/App.vue')).map(u => u.className)
+
+  it('в CSS бандла класса нет — в unmatched с файлом; слова текста — нет', async () => {
+    const { app, css } = await markupApp()
+    expect(fromMarkup(buildReport(app, css, { bundleCss: css.css }))).toEqual(['not-a-rule-xyz'])
+  })
+
+  it('класс объявлен в CSS бандла — не находка; CSS бандла нет — вердикта нет', async () => {
+    const { app, css } = await markupApp()
+    expect(fromMarkup(buildReport(app, css, { bundleCss: `${css.css}\n.not-a-rule-xyz{color:red}` }))).toEqual([])
+    expect(fromMarkup(buildReport(app, css))).toEqual([])
+  })
+})
+
 describe('prepareApp: tokensRef тем приложения', () => {
   it('значения читаются из CSS относительно корня, литералы важнее, as → селектор; битая ссылка — TokenRefError', async () => {
     const { root, manifest } = fixture()

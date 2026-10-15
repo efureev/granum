@@ -30,6 +30,19 @@ or add the rule to your own factory (`windEngine({ rules: […] })`). Two
 vocabularies cannot be mixed in one build. The classes themselves never vanish
 silently: they are named in `provider-classes-dropped` and in `unmatched`.
 
+## A class in the application markup produces no CSS
+
+A typo or a class with no engine rule in a class attribute of the application
+markup lands in the report's `unmatched` together with the file it sits in. The
+build line says `N without a rule`, `granum report` shows `✗ <class> ← src/App.vue`,
+and `granum report --strict` and `granum audit --strict` fail. Judged are classes
+from `class` and `className` (in JSX also a string in curly braces) and string
+literals in `:class` that neither the engine nor the build's CSS has: utilities,
+package CSS, the application's own CSS, SFC styles. A class assembled on the fly
+(`clsx`, a template string with an interpolation) and the other words of the
+sources are not judged — use `granum why-css <class>` for them. `doctor` does not
+see the build's CSS and does not judge such classes.
+
 ## Why granum re-extracts package classes
 
 The class list in a manifest was filtered by the engine of the package build,

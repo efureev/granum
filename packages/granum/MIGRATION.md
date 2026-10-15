@@ -18,6 +18,10 @@ read by 2.0 and the other way round.
 
 Application:
 
+- A class in a class attribute of the application markup that neither the engine
+  nor the build's CSS knows — a typo, a missing icon rule — now lands in the
+  report's `unmatched` with its file, so `granum report --strict` and
+  `granum audit --strict` fail on it. Fix the class or add the rule.
 - A component imported from the provider package root
   (`import { GrChip } from '@feugene/granularity'`) or the root imported as a whole
   (`import * as`, `export * from`, `import()`) is a `ComponentRootImportError`
