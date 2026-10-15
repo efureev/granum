@@ -59,8 +59,13 @@ function strip(token: string): string {
  * значило в двух местах разное.
  */
 export function patternMatcher(pattern: string | RegExp): (token: string) => boolean {
-  if (pattern instanceof RegExp)
-    return token => pattern.test(token)
+  if (pattern instanceof RegExp) {
+    // С `g` и `y` метод `test` помнит `lastIndex`: после совпадения следующий
+    // токен проверялся бы не с начала, и шаблон держал бы через раз. Флаги
+    // снимаются на копии — объект из конфига приложения не трогаем.
+    const re = pattern.global || pattern.sticky ? new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, '')) : pattern
+    return token => re.test(token)
+  }
   const p = strip(pattern)
   if (p.endsWith('*')) {
     const prefix = p.slice(0, -1)

@@ -18,7 +18,10 @@ export interface GranumAppSources {
 
 export interface GranumPruneTokensOptions {
   readonly mode?: GranumPruneMode
-  /** Токены (без `--`), сохраняемые безусловно; строка с `*` в конце — префикс. */
+  /**
+   * Токены (без `--`), сохраняемые безусловно; строка с `*` в конце — префикс,
+   * `RegExp` проверяется по имени без `--`. Флаги `g` и `y` на проверку не влияют.
+   */
   readonly keep?: readonly (string | RegExp)[]
   readonly keepPrefixes?: readonly string[]
 }

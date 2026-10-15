@@ -89,6 +89,19 @@ describe('planTokenPrune: keep и мёртвые шаблоны', () => {
     expect(plan({ options: { keep: ['--lonely'] } }).kept.has('lonely')).toBe(true)
   })
 
+  /**
+   * С флагом `g` или `y` метод `test` помнит `lastIndex`: после совпадения
+   * следующий токен проверяется не с начала, и `/^by-/g` держал бы через раз.
+   */
+  it('шаблон RegExp с флагами g и y держит каждый совпавший токен и не меняет lastIndex шаблона', () => {
+    for (const pattern of [/^by-/g, /^by-/y]) {
+      const p = plan({ options: { keep: [pattern] } })
+      for (const token of ['by-app', 'by-override', 'by-pattern'])
+        expect(p.kept.get(token)?.kind, `${pattern} → ${token}`).toBe('keep-pattern')
+      expect(pattern.lastIndex).toBe(0)
+    }
+  })
+
   it('несовпавший шаблон — мёртвый; совпавший (даже второй) и целящийся в base — нет', () => {
     expect(plan({ options: { keep: ['xh-typo-*'] } }).deadPatterns).toEqual(['xh-typo-*'])
     expect(plan({ options: { keep: ['lonely', 'lone*'] } }).deadPatterns).toEqual([])
