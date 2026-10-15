@@ -111,3 +111,30 @@ describe('findUndeclaredEdges (INV-CON-5, INV-CON-6)', () => {
     expect(analysis.components.get('XhPanel')!.edges).not.toContain('chunks/overlayZ-a.js')
   })
 })
+
+describe('модуль компонента в общем чанке группы (B-7)', () => {
+  /*
+   * Бандлер кладёт в один чанк модули с одинаковым набором зависящих entry:
+   * `shared/Header.vue` группы и часть `XhGrid`, которую он импортирует. Чанк
+   * называется по группе, и по пути файла ребро `XhTable → XhGrid` не видно.
+   */
+  const grouped: BundleLike = {
+    'components/XhTable/index.js': chunk('components/XhTable/index.js', 'import H from "../../groups/data/shared/Header-b.js"', ['groups/data/shared/Header-b.js']),
+    'components/XhGrid/index.js': chunk('components/XhGrid/index.js', 'import H from "../../groups/data/shared/Header-b.js"', ['groups/data/shared/Header-b.js']),
+    'groups/data/shared/Header-b.js': chunk('groups/data/shared/Header-b.js', 'const c = "w-full"', [], {
+      moduleIds: ['/pkg/src/components/data/shared/Header.vue', '/pkg/src/components/data/XhGrid/parts/Item.vue'],
+    } as Partial<BundleLike[string]>),
+  }
+  const groupDescriptors = [
+    defineGranumComponent(`${root}/data/XhTable/config.ts`, { name: 'XhTable', group: 'data' }),
+    defineGranumComponent(`${root}/data/XhGrid/config.ts`, { name: 'XhGrid', group: 'data' }),
+  ]
+
+  it('ребро считается по модулям чанка, а не только по пути файла', async () => {
+    const analysis = await analyzeBundle(grouped, groupDescriptors, engine)
+    expect(analysis.components.get('XhTable')!.edges).toEqual(['XhGrid'])
+    // Свой модуль в общем чанке ребром на себя не становится.
+    expect(analysis.components.get('XhGrid')!.edges).toEqual([])
+    expect(findUndeclaredEdges('@x/heavy', groupDescriptors, analysis)).toEqual([['XhTable', '@x/heavy:XhGrid']])
+  })
+})

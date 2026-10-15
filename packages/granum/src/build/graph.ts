@@ -6,11 +6,12 @@
  */
 import type { GranumComponentDescriptor } from '../contract'
 import type { GranumEngine, GranumRule, GranumVariant } from '../engine/types'
+import type { ComponentSource } from './layout'
 import { builtinModules } from 'node:module'
 import { sortedUnique } from '../core/dedupe'
 import { normalizeDependency } from '../core/resolveSelection'
 import { scanTokenConsumption } from '../node/tokenScan'
-import { classifyOutputFile, componentEntryFileName } from './layout'
+import { classifyModule, classifyOutputFile, collectComponentSources, componentEntryFileName } from './layout'
 
 export interface BundleChunkLike {
   readonly type: 'chunk'
@@ -20,6 +21,8 @@ export interface BundleChunkLike {
   readonly name: string
   readonly imports: readonly string[]
   readonly dynamicImports: readonly string[]
+  /** Модули чанка (у rolldown есть всегда): по ним видно, чей код в него попал. */
+  readonly moduleIds?: readonly string[]
   readonly viteMetadata?: { readonly importedCss?: ReadonlySet<string> } | undefined
 }
 
@@ -78,6 +81,7 @@ function walkComponent(
   entryFile: string,
   componentNames: ReadonlySet<string>,
   self: string,
+  sources: readonly ComponentSource[],
 ): { files: Set<string>, edges: Set<string> } {
   const files = new Set<string>()
   const edges = new Set<string>()
@@ -90,6 +94,18 @@ function walkComponent(
     if (!isChunk(chunk))
       continue
     files.add(file)
+    /*
+     * Чанк называется по одному владельцу, а модулей в нём может быть больше:
+     * бандлер кладёт вместе модули с одинаковым набором зависящих entry, и
+     * часть чужого компонента, импортированная общим SFC группы, лежит в
+     * `groups/<g>/shared/`. По пути файла такое ребро не видно — только по
+     * модулям чанка.
+     */
+    for (const id of chunk.moduleIds ?? []) {
+      const owner = classifyModule(id, sources)
+      if (owner.kind === 'component' && owner.name !== self && componentNames.has(owner.name))
+        edges.add(owner.name)
+    }
     for (const spec of [...chunk.imports, ...chunk.dynamicImports]) {
       const target = bundle[spec]
       if (isChunk(target)) {
@@ -132,12 +148,13 @@ export async function analyzeBundle(
   options: AnalyzeBundleOptions = {},
 ): Promise<BundleAnalysis> {
   const componentNames = new Set(descriptors.map(d => d.name))
+  const sources = collectComponentSources(descriptors)
   const components = new Map<string, ComponentBundleInfo>()
   const browserFiles = new Set<string>()
 
   for (const descriptor of descriptors) {
     const entryFile = componentEntryFileName(descriptor.name)
-    const { files, edges } = walkComponent(bundle, entryFile, componentNames, descriptor.name)
+    const { files, edges } = walkComponent(bundle, entryFile, componentNames, descriptor.name, sources)
     for (const f of files)
       browserFiles.add(f)
 

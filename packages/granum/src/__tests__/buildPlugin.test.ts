@@ -88,6 +88,32 @@ function makeFixture(options: {
   return { root, provider }
 }
 
+/**
+ * Провайдер с группой `g`: `GA` и `GB` используют общий `shared/S.vue`, а тот
+ * импортирует часть `GB`. У `S` и `GB/parts/Item.vue` один набор зависящих
+ * entry, бандлер кладёт их в один чанк, и чанк называется по группе.
+ */
+function groupFixture(options: { declareDependency?: boolean } = {}): Fixture {
+  const root = mkdtempSync(join(tmpdir(), 'granum-group-'))
+  write(root, 'package.json', JSON.stringify({
+    name: '@t/grp',
+    version: '1.0.0',
+    type: 'module',
+    exports: { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/GA': './dist/components/GA/index.js', './components/GB': './dist/components/GB/index.js' },
+  }))
+  write(root, 'src/index.ts', `export * from './components/g/GA/index.ts'\nexport * from './components/g/GB/index.ts'\n`)
+  write(root, 'src/components/g/shared/S.vue', `<script setup lang="ts">\nimport Item from '../GB/parts/Item.vue'\n</script>\n<template><header class="p-2"><Item /></header></template>\n`)
+  write(root, 'src/components/g/GB/parts/Item.vue', `<template><span class="p-3">item</span></template>\n`)
+  write(root, 'src/components/g/GA/GA.vue', `<script setup lang="ts">\nimport S from '../shared/S.vue'\n</script>\n<template><div class="p-4"><S /></div></template>\n`)
+  write(root, 'src/components/g/GB/GB.vue', `<script setup lang="ts">\nimport S from '../shared/S.vue'\nimport Item from './parts/Item.vue'\n</script>\n<template><div class="p-5"><S /><Item /></div></template>\n`)
+  write(root, 'src/components/g/GA/index.ts', `export { default as GA } from './GA.vue'\n`)
+  write(root, 'src/components/g/GB/index.ts', `export { default as GB } from './GB.vue'\n`)
+  const ga = defineGranumComponent(pathToFileURL(join(root, 'src/components/g/GA/config.ts')).href, { name: 'GA', group: 'g', ...(options.declareDependency ? { dependencies: ['GB'] } : {}) })
+  const gb = defineGranumComponent(pathToFileURL(join(root, 'src/components/g/GB/config.ts')).href, { name: 'GB', group: 'g' })
+  const provider = defineGranumProvider({ id: '@t/grp', contractVersion: 1, components: [ga, gb], theme: { themes: {}, defaultThemes: [] } })
+  return { root, provider }
+}
+
 async function run(
   fixture: Fixture,
   pluginOptions: Partial<Parameters<typeof granumProvider>[0]> = {},
@@ -334,6 +360,12 @@ describe('granumProvider с настоящим Vite', () => {
 
     expect(vueVar).toBeDefined()
     expect(tokens.requires).not.toContain(vueVar)
+  })
+
+  it('часть чужого компонента в общем чанке группы — тоже ребро (B-7)', async () => {
+    await expect(run(groupFixture())).rejects.toBeInstanceOf(UndeclaredDependencyError)
+    const { manifest } = await run(groupFixture({ declareDependency: true }))
+    expect(manifest.components.GA!.dependencies).toEqual(['GB'])
   })
 
   it('без такого плагина предупреждения нет', async () => {
