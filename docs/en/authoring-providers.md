@@ -47,6 +47,14 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 })
 ```
 
+The provider build embeds the `@feugene/granum/contract` helpers in `dist` as a
+separate `granum/contract.js`. So the descriptor may be re-exported from the
+component entry: the package does not pull granum at runtime, and granum stays in
+the provider's `devDependencies`. Other granum entry points imported at runtime
+(for example, a re-export of `@feugene/granum/runtime`) are a dependency of the
+package: list `@feugene/granum` in `peerDependencies`, otherwise the build writes
+`peer-missing` to the manifest.
+
 | Field | Purpose |
 |---|---|
 | `dependencies` | components whose code this component imports; the short form means the same provider, `id:Name` another one |
@@ -192,5 +200,6 @@ await runRegistryCodegen({
 - a package with rules declares `engine.dialect`, is built by an engine of that
   dialect, and `engineModule` points at the built rule module;
 - component `dependencies` cover the imports — otherwise the build fails;
-- a cross-provider donor is listed in `peerDependencies`;
+- a cross-provider donor is listed in `peerDependencies`; so is granum if `dist`
+  imports any of its entry points besides the embedded `./contract`;
 - `doctor --strict` of a consuming application exits with `0`.

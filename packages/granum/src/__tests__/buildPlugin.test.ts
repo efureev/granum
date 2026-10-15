@@ -1,5 +1,5 @@
 import type { GranumManifest, GranumProvider } from '../contract'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { collectImportSpecifiers } from '../node/imports'
 import { readManifestSync } from '../node/manifest'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
@@ -43,9 +44,15 @@ function makeFixture(options: {
   dotPaths?: boolean
   /** `v-bind()` в `<style>` Card: Vue выставляет переменную сам, через `useCssVars`. */
   vbind?: boolean
+  /** Дескрипторы в `config.ts` и реэкспорт из entry компонента — как фикстура heavy и ядро granularity. */
+  runtimeConfig?: boolean
+  /** Реэкспорт из другой точки входа granum в корне пакета — рантайм-зависимость от granum. */
+  runtimeImport?: boolean
+  /** Поля `package.json` поверх стандартных (`peerDependencies` и т.п.). */
+  packageJson?: Record<string, unknown>
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {} } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
@@ -56,18 +63,23 @@ function makeFixture(options: {
     exports: exportsOk
       ? { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js', './components/Panel': './dist/components/Panel/index.js' }
       : { '.': './dist/index.js' },
+    ...packageJson,
   }))
-  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n`)
+  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n${runtimeImport ? `export { createThemeController } from '@feugene/granum/runtime'\n` : ''}`)
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-bg:#fff}\n@supports (x:1){:root{--t-fallback:1}}')
   write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
   write(root, 'src/components/Card/Card.vue', plain
     ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
     : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}${vbind ? `const color = 'red'` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;${vbind ? 'color:v-bind(color);' : ''}}</style>\n`)
-  write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
+  write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n${runtimeConfig ? `export { cardConfig } from './config.ts'\n` : ''}`)
+  if (runtimeConfig)
+    write(root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card', cssFiles: ['./card.css'], tokenDefinitionsRef: { light: './light.css' } })\n`)
   write(root, 'src/components/Panel/Panel.vue', plain
     ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
     : `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n${panelStyle ? '<style>.t-panel-sfc{margin:var(--t-gap)}</style>\n' : ''}`)
-  write(root, 'src/components/Panel/index.ts', `export { default as Panel } from './Panel.vue'\n`)
+  write(root, 'src/components/Panel/index.ts', `export { default as Panel } from './Panel.vue'\n${runtimeConfig ? `export { panelConfig } from './config.ts'\n` : ''}`)
+  if (runtimeConfig)
+    write(root, 'src/components/Panel/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const panelConfig = defineGranumComponent(import.meta.url, { name: 'Panel', dependencies: ['Card'] })\n`)
   if (!brokenCss)
     write(root, 'src/components/Panel/styles.css', '.t-panel{color:var(--t-fg, red)}\n')
 
@@ -344,6 +356,40 @@ describe('granumProvider с настоящим Vite', () => {
     expect(manifest.theme.tokensCss).toBe('theme/tokens.css')
     expect(manifest.theme.themes).toEqual({ dark: 'theme/dark.css' })
     expect(manifest.engine.module).toBe('engine.js')
+  })
+
+  /**
+   * Провайдер реэкспортирует дескриптор из entry компонента, как ядро
+   * granularity. Контракт встраивается в `dist`: собранный компонент
+   * грузится в Node без granum — так его грузит SSR с внешними пакетами при
+   * деплое с `--omit=dev`.
+   */
+  it('контракт встроен в dist: компонент грузится без granum, классы строк контракта не берут', async () => {
+    const baseline = await run(makeFixture())
+    const { dist, manifest } = await run(makeFixture({ runtimeConfig: true }))
+    const files = readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.js'))
+    const granumImports = files.flatMap(f => collectImportSpecifiers(readFileSync(join(dist, f), 'utf8'))).filter(s => s.startsWith('@feugene/granum'))
+    expect(granumImports).toEqual([])
+    expect(existsSync(join(dist, 'granum/contract.js'))).toBe(true)
+    expect(manifest.warnings).toEqual([])
+    // Чанк контракта — не код компонента: его строки в классы и токены не попадают.
+    expect(manifest.components.Card!.classes).toEqual(baseline.manifest.components.Card!.classes)
+    expect(manifest.components.Panel!.classes).toEqual(baseline.manifest.components.Panel!.classes)
+
+    // Рядом есть только vue — granum в node_modules пакета нет.
+    mkdirSync(join(dist, '../node_modules'), { recursive: true })
+    symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(dist, '../node_modules/vue'), 'dir')
+    const card = await import(pathToFileURL(join(dist, 'components/Card/index.js')).href) as { cardConfig: { name: string, cssFiles: string[], tokenDefinitionsRef: Record<string, { url: string }> } }
+    expect(card.cardConfig.name).toBe('Card')
+    expect(card.cardConfig.cssFiles).toEqual(['components/Card/card.css'])
+    expect(card.cardConfig.tokenDefinitionsRef.light!.url).toMatch(/^file:.*\/light\.css$/)
+  })
+
+  it('рантайм-импорт другой точки входа granum без peer — peer-missing; с peer — тишина', async () => {
+    const missing = await run(makeFixture({ runtimeImport: true }))
+    expect(missing.manifest.warnings).toContainEqual({ code: 'peer-missing', provider: '@feugene/granum' })
+    const declared = await run(makeFixture({ runtimeImport: true, packageJson: { peerDependencies: { '@feugene/granum': '^2.0.0' } } }))
+    expect(declared.manifest.warnings).not.toContainEqual(expect.objectContaining({ provider: '@feugene/granum' }))
   })
 
   /**

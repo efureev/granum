@@ -119,6 +119,17 @@ without a DOM the controller is constructed, answers questions about the list an
 the current theme, and simply does not apply it. That makes it usable on the
 server for validating a theme name.
 
+## granum on the server
+
+Vite's server build keeps packages from `node_modules` external: the server
+loads their `dist` at runtime. A provider built by `granumProvider` does not
+import granum then — the contract helpers are embedded in its `dist` — so granum
+can stay in `devDependencies`, and a deploy with `--omit=dev` works. The
+exception is the application's own server code: if it imports
+`@feugene/granum/runtime` (the theme controller, as the stand does), granum
+belongs in `dependencies` or in `ssr.noExternal`. A provider built by granum
+before 2.0 pulls `@feugene/granum/contract` at runtime — rebuilding it is enough.
+
 ## What to check in your own application
 
 The `apps/app-ssr` stand checks this with a script that imports the built server
@@ -129,4 +140,5 @@ bundle and renders with it. The minimum set for your own application:
    returns the same theme;
 3. starting the controller does not change the root, while switching does;
 4. an unknown theme name falls back to the default one;
-5. there is exactly one CSS asset and the template references it.
+5. there is exactly one CSS asset and the template references it;
+6. providers from `node_modules` load without granum, as after `--omit=dev`.

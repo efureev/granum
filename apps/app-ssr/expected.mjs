@@ -8,6 +8,13 @@ export default {
   themes: ['light', 'dark'],
 
   /**
+   * Провайдеры, которые серверный бандл грузит из node_modules. Granum у
+   * приложения — devDependency, и после `--omit=dev` его нет: `dist` провайдера
+   * обязан обходиться без него.
+   */
+  externalProviders: ['@granum-fixtures/extra-simple', '@granum-fixtures/simple', '@granum-fixtures/heavy'],
+
+  /**
    * Манифест тем: селекторы в порядке CSS и активация. `heavy` ставит темы
    * файлами, и селектор его файла идёт первым — манифест читает файлы тем, а
    * не только блоки компонентов (T-4), так что активация не зависит от того,

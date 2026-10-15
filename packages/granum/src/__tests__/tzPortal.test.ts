@@ -121,25 +121,6 @@ async function buildApp(packages: Record<string, string>, config: Omit<GranumCon
   return { css, report: JSON.parse(readFileSync(join(root, 'dist/granum-report.json'), 'utf8')), logs }
 }
 
-describe('пункт ТЗ-3: контракт в рантайме провайдера', () => {
-  /**
-   * Провайдер реэкспортирует дескриптор из entry компонента, как эталонная
-   * фикстура heavy и ядро granularity. Импорт контракта остаётся в dist, а
-   * `package.json` пакета granum не объявляет — и сборка об этом молчит.
-   */
-  it('3: чанк компонента импортирует `@feugene/granum/contract`, а сборка не предупреждает', async () => {
-    const root = await barrelPackage('cfg', {
-      'src/components/Card/index.ts': `export { default as Card } from './Card.vue'\nexport { cardConfig } from './config.ts'\n`,
-      'src/components/Card/config.ts': `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card' })\n`,
-    })
-    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)])
-    const cardJs = walk(join(root, 'dist/components/Card')).filter(f => f.endsWith('.js')).map(f => readFileSync(f, 'utf8')).join('\n')
-    expect(cardJs).toContain('from "@feugene/granum/contract"')
-    const manifest = JSON.parse(readFileSync(join(root, 'dist/granum.manifest.json'), 'utf8'))
-    expect(manifest.warnings).toEqual([])
-  })
-})
-
 describe('пункт ТЗ-4: импорт из корня провайдера', () => {
   it('4: guard не видит компонент вне селекции, импортированный из корня пакета', async () => {
     const pkg = await barrelPackage('bar')

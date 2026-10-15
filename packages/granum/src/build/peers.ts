@@ -33,12 +33,17 @@ export function collectDonorIds(provider: GranumProvider): string[] {
   return [...out].sort()
 }
 
-/** Доноры, которых нет ни в `peerDependencies`, ни в `dependencies`, ни в `optionalDependencies` пакета. */
-export function findMissingPeers(provider: GranumProvider, pkg: PackageDependencyFields): string[] {
+/**
+ * Пакеты, которых нет ни в `peerDependencies`, ни в `dependencies`, ни в
+ * `optionalDependencies`: доноры провайдера и пакеты, которые `dist`
+ * импортирует в рантайме, — сам granum, если провайдер тянет его точку входа
+ * кроме встроенного `./contract`.
+ */
+export function findMissingPeers(provider: GranumProvider, pkg: PackageDependencyFields, runtimePackages: readonly string[] = []): string[] {
   const declared = new Set([
     ...Object.keys(pkg.peerDependencies ?? {}),
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.optionalDependencies ?? {}),
   ])
-  return collectDonorIds(provider).filter(id => !declared.has(id))
+  return [...collectDonorIds(provider), ...runtimePackages].filter(id => !declared.has(id))
 }

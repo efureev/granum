@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { builtinModules } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
@@ -27,7 +27,7 @@ import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenSca
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
 import { analyzeBundle, findUndeclaredEdges } from './graph'
-import { collectComponentSources, componentEntryFileName, granumAssetFileNames, granumChunkFileNames } from './layout'
+import { collectComponentSources, componentEntryFileName, GRANUM_CONTRACT_CHUNK, granumAssetFileNames, granumChunkFileNames } from './layout'
 import { findMissingPeers } from './peers'
 
 export interface GranumProviderPluginOptions {
@@ -64,8 +64,32 @@ interface ComponentSourceEntry {
   readonly entry: string
 }
 
-/** Ядро granum — peer пакета провайдера, а не его содержимое: в сборку не вклеивается. */
-const GRANUM_EXTERNAL = /^@feugene\/granum(?:\/.*)?$/
+/**
+ * Ядро granum — peer пакета провайдера, а не его содержимое: в сборку не
+ * вклеивается. Кроме `./contract`: его хелперы встраиваются, иначе
+ * дескриптор, реэкспортированный из entry компонента, тянул бы granum в рантайм
+ * и SSR с внешними пакетами падал бы без него.
+ */
+const GRANUM_EXTERNAL = /^@feugene\/granum(?:\/(?!contract$).*)?$/
+const GRANUM_CONTRACT = '@feugene/granum/contract'
+/** Любая точка входа granum в импортах `dist`. */
+const GRANUM_PACKAGE = /^@feugene\/granum(?:\/|$)/
+
+/**
+ * Точка входа `./contract` того granum, что собирает провайдер, и каталог его
+ * модулей. Встраивается свой контракт, а не найденный в `node_modules`
+ * провайдера: так код в `dist` совпадает с `generatedBy` манифеста. Раскладок
+ * две — исходники (тесты гоняют плагин из `src`) и собранный пакет
+ * (`dist/build.js` рядом с `dist/contract.js`).
+ */
+function ownContract(): { readonly entry: string, readonly dir: string } {
+  for (const [entry, dir] of [['./contract.js', './'], ['../contract/index.ts', '../']] as const) {
+    const path = fileURLToPath(new URL(entry, import.meta.url))
+    if (existsSync(path))
+      return { entry: path, dir: fileURLToPath(new URL(dir, import.meta.url)) }
+  }
+  throw new Error(`granumProvider: cannot locate the @feugene/granum/contract module next to ${import.meta.url}`)
+}
 
 /**
  * `external` пользователя плюс правило ядра — в той форме, в какой его задал
@@ -146,6 +170,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   let analysis: BundleAnalysis | undefined
   /** Нарушения границы, замеченные на графе модулей (B-16): Vite подменяет `node:*` в браузерной сборке заглушкой, и в выводе их уже нет. */
   let graphViolations: BoundaryViolation[] = []
+  /** Точки входа granum, оставшиеся внешними в `dist`. */
+  let granumImports: string[] = []
+  const contract = ownContract()
 
   const sources = (): ComponentSourceEntry[] => provider.components.map((descriptor) => {
     const source = collectComponentSources([descriptor])[0]
@@ -202,11 +229,23 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           rolldownOptions: {
             output: {
               chunkFileNames: granumChunkFileNames(componentSources),
+              // Контракт — отдельным чанком при любой селекции и в `--watch`:
+              // строки его сообщений не должны смешаться с кодом компонента.
+              codeSplitting: { groups: [{ name: GRANUM_CONTRACT_CHUNK, test: (id: string) => id.startsWith(contract.dir) }] },
               assetFileNames: granumAssetFileNames(componentSources),
             },
           },
         },
       }
+    },
+
+    // Свой контракт — раньше `vite:resolve`: тот нашёл бы granum в
+    // `node_modules` провайдера, а его может и не быть.
+    resolveId: {
+      order: 'pre',
+      handler(source) {
+        return source === GRANUM_CONTRACT ? contract.entry : null
+      },
     },
 
     // Опции rolldown — уже после слияния конфигов: `external` здесь в той
@@ -229,6 +268,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     buildStart(): void {
       graphViolations = []
       analysis = undefined
+      granumImports = []
     },
 
     // Граница ловится на исходном коде модулей: `vite:resolve` подменяет `node:*`
@@ -255,6 +295,11 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         if (item.type === 'asset' && fileName.endsWith('.css') && typeof item.source === 'string')
           (item as { source: string }).source = await expandApply(item.source, engine, fileName)
       }
+
+      // Что от granum осталось внешним в `dist`: встроенный контракт сюда не
+      // попадает, остальное — рантайм-зависимость пакета.
+      granumImports = sortedUnique(Object.values(typed).flatMap(item =>
+        item.type === 'chunk' ? [...item.imports, ...item.dynamicImports].filter(spec => GRANUM_PACKAGE.test(spec)) : []))
 
       analysis = await analyzeBundle(typed, provider.components, engine, {
         ...(hasIndex ? { indexEntry: 'index.js' } : {}),
@@ -484,8 +529,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         }
       }
 
-      // 5b. Кросс-провайдерные доноры без peerDependencies (C-5, INV-CON-9).
-      for (const donor of findMissingPeers(provider, pkg))
+      // 5b. Кросс-провайдерные доноры без peerDependencies и granum, если `dist`
+      // импортирует его в рантайме.
+      for (const donor of findMissingPeers(provider, pkg, granumImports.length > 0 ? ['@feugene/granum'] : []))
         warnings.push({ code: 'peer-missing', provider: donor })
 
       // 6. Манифест.

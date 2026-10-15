@@ -26,14 +26,13 @@ Vite 8.2.2 (`yarn install`, `yarn build`).
 
 ## Сводка
 
-| Класс | Суть                                                                                                                                                         | Пункт |
-|-------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|-------|
-| B     | `extends` от темы-файла молчит, если в селекции есть компонент с токенами этой темы                                                                          | ТЗ-2  |
-| B     | классы приложения без правила не попадают в `unmatched` — вопреки INV-DIAG-2                                                                                 | ТЗ-8  |
-| C     | `@feugene/granum/contract` грузится в рантайме провайдера; где держать granum приложению (SSR, тесты, `--omit=dev`) — дока молчит, быстрый старт ставит `-D` | ТЗ-3  |
-| C     | guard не видит импорт компонента из корня пакета при явном списке                                                                                            | ТЗ-4  |
-| C     | «вынести правила в пакет-провайдер» — путь назван, но не описан                                                                                              | ТЗ-7  |
-| C     | без `appSources` классы разметки молча не генерируются; пример в README движка без него                                                                      | ТЗ-9  |
+| Класс | Суть                                                                                    | Пункт |
+|-------|-----------------------------------------------------------------------------------------|-------|
+| B     | `extends` от темы-файла молчит, если в селекции есть компонент с токенами этой темы     | ТЗ-2  |
+| B     | классы приложения без правила не попадают в `unmatched` — вопреки INV-DIAG-2            | ТЗ-8  |
+| C     | guard не видит импорт компонента из корня пакета при явном списке                       | ТЗ-4  |
+| C     | «вынести правила в пакет-провайдер» — путь назван, но не описан                         | ТЗ-7  |
+| C     | без `appSources` классы разметки молча не генерируются; пример в README движка без него | ТЗ-9  |
 
 ## Пункты
 
@@ -80,72 +79,6 @@ Vite 8.2.2 (`yarn install`, `yarn build`).
 **Критерий готовности.** Фикстура с темой-файлом и компонентом, у которого есть
 `tokenDefinitions` той же темы: `extends` от неё даёт предупреждение либо наследует
 значения файла.
-
-### ТЗ-3. `@feugene/granum/contract` в рантайме провайдера: где granum жить у приложения
-
-**Класс:** C. **Касается:** §4.2 (`./contract` — browser + node), C-5 / INV-CON-9 (peer),
-N-1, `docs/*/getting-started.md`, `docs/*/ssr.md`, `docs/*/authoring-providers.md`. **Roadmap:** «Долги вне очереди» —
-ломает SSR-деплой; если ответ окажется только
-документацией, пункт уходит в 3.3.
-
-**Что ожидает потребитель.**
-
-- Портал: `installation.md:23` — «`@feugene/granum` | `^1.0` | конвейер CSS; на сборке, в
-  бандл не попадает», `:66-67` — «`@feugene/granum` и движок — в `devDependencies`»;
-  `getting-started.md:28-32`; `introduction.md:40`; `performance.md:78-80`.
-- `docs/ru/getting-started.md:13-18` — «`yarn add -D @feugene/granum
-  @feugene/granum-engine-wind vite` … `vite` — единственный peer, и нужен он только точкам
-  входа `./build` и `./vite`»; `docs/ru/authoring-providers.md:5-7` — «JS провайдера ради
-  резолюции не исполняется».
-- `docs/spec.md:125` — `./contract`: «browser + node», то есть рантайм-импорт задуман.
-
-**Что делает код и как устроены провайдеры.**
-
-- Эталонная фикстура `fixtures/heavy-package` отдаёт дескриптор из entry компонента (`src/components/XhButton/index.ts`:
-  `export { xhButtonConfig } from './config'`), и
-  собранный чанк импортирует контракт:
-  `dist/components/XhButton/chunks/XhButton-jv3UR9rr.js:2` — `import {
-  defineGranumComponent } from "@feugene/granum/contract"`. В `package.json` фикстуры
-  granum нет ни в `peerDependencies`, ни в `dependencies`.
-- Ядро 1.0.21 сделано так же: 82 чанка `config-*.js` импортируют контракт
-  (`dist/components/GrButton/chunks/config-C-jAgYtU.js:3`), granum объявлен обязательным peer.
-- В клиентском бандле при `import { GrButton }` конфиг вытряхивается (`sideEffects`
-  провайдера), granum — 0 байт. При `export *` из подпути контракт остаётся: +857 B gzip у
-  `GrButton`.
-- В Node без granum компонент не грузится:
-  `import('@feugene/granularity/components/GrButton')` → `ERR_MODULE_NOT_FOUND Cannot find
-  package '@feugene/granum' imported from …/GrButton/chunks/config-C-jAgYtU.js`. Vite SSR по
-  умолчанию выносит пакеты из `node_modules` во внешние, значит серверный бандл грузит
-  провайдер в рантайме, и при деплое с `--omit=dev` (granum в `devDependencies`, как велит
-  быстрый старт) SSR падает. То же в тестах без бандлера.
-- Стенд `apps/app-ssr` этого не ловит: фикстуры — симлинки воркспейса, Vite встраивает их в
-  серверный бандл (`dist/server/entry-server.js` содержит `defineGranumComponent`,
-  импортирует только `vue`).
-- C-5 / `peer-missing` проверяет только доноров-провайдеров; что чанки провайдера
-  импортируют `@feugene/granum/*`, а `package.json` granum не объявляет, не видит никто.
-
-**Подтверждено на `main`:** `packages/granum/src/__tests__/tzPortal.test.ts` › «пункт ТЗ-3» — чанк компонента провайдера,
-реэкспортирующего дескриптор, импортирует `@feugene/granum/contract`, `package.json` пакета
-granum не объявляет, манифест без предупреждений. Быстрый старт (`getting-started.md`) ставит
-granum с `-D`.
-
-**Вопрос к пакету — какой путь правильный:**
-
-1. Дескриптор — часть рантайм-API провайдера. Тогда провайдер MUST объявлять
-   `@feugene/granum` peer-зависимостью, приложение держит его в `dependencies`, если код
-   провайдера исполняется в Node (SSR с внешними пакетами, тесты, скрипты), быстрый старт и
-   `ssr.md` говорят об этом, `granumProvider` пишет `peer-missing` и для самого granum.
-2. Дескриптор — только для сборки. Тогда провайдер не реэкспортирует его из entry
-   компонента (дескрипторы живут в `granum-provider/index.ts`), фикстура меняется, а
-   `granumProvider` предупреждает, если entry компонента тянет `./contract`.
-3. `granumProvider` встраивает или вырезает вызов `defineGranumComponent` (хелпер чистый,
-   C-20), и в `dist` провайдера рантайм-импорта granum нет.
-
-**Критерий готовности.** Выбранный путь записан в `getting-started`,
-`authoring-providers`, `ssr` (ru/en); проверка в `granumProvider` (предупреждение в
-манифесте или `peer-missing`); вариант SSR-стенда с провайдером, вынесенным во внешние (`ssr.external` или установка из
-упакованного tarball), проходит `verify-ssr` в той
-конфигурации зависимостей, которую предписывает дока.
 
 ### ТЗ-4. Guard и `'imports'` не видят импорт компонента из корня пакета
 

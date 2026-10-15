@@ -150,7 +150,8 @@
 
 `{ code: string, component?: string, ...details }`. Коды, которые пишет сборка
 провайдера: `safelist-redundant` (`classes`), `css-double-delivery` (`files`),
-`peer-missing` (`provider` — донор, которого нет в `peerDependencies` пакета, C-5),
+`peer-missing` (`provider` — донор, которого нет в `peerDependencies` пакета, C-5, или
+`@feugene/granum`, когда `dist` импортирует его в рантайме, B-18),
 `engine-module-missing` (провайдер объявил правила движка, но не передал
 `granumProvider({ engineModule })`, и манифест уехал бы с `engine.module: null`,
 M-7).

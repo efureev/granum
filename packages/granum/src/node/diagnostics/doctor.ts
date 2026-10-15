@@ -292,6 +292,8 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
         warn('safelist-redundant', subject, 'safelist duplicates statically extracted classes', (w.classes as string[] | undefined) ?? [])
       else if (w.code === 'css-double-delivery')
         warn('css-double-delivery', subject, 'component CSS is both inlined by granum and imported by its chunk — it arrives twice (INV-CSS-5)', (w.files as string[] | undefined) ?? [])
+      else if (w.code === 'peer-missing' && w.provider === '@feugene/granum')
+        warn('peer-missing', provider.id, `imports '@feugene/granum' at runtime but does not list it in peerDependencies: only './contract' is embedded by the provider build`)
       else if (w.code === 'peer-missing')
         warn('peer-missing', provider.id, `depends on provider '${String(w.provider)}' but does not list it in peerDependencies (C-5)`)
     }

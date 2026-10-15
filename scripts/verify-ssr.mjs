@@ -25,12 +25,16 @@
  *      ссылки из шаблона.
  *   5. Селекция, обрезка токенов и диагностика ведут себя как в обычной сборке:
  *      серверный рендер их не обманывает.
+ *   6. Провайдеры, вынесенные во внешние, грузятся без granum: так их
+ *      грузит сервер, задеплоенный с `--omit=dev`, где granum — devDependency
+ *      приложения. Хук разрешения модулей запрещает `dist` провайдера
+ *      импортировать `@feugene/granum`.
  *
  * Запуск: `yarn workspace @granum-apps/app-ssr verify` (после `yarn build`).
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { createRequire, registerHooks } from 'node:module'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -56,7 +60,38 @@ const check = (ok, message) => {
 
 check(globalThis.document === undefined, 'в окружении проверки есть document — тогда она ничего не доказывает про SSR')
 
-const ssr = await import(pathToFileURL(server).href)
+// 6. Провайдеры без granum — до загрузки серверного бандла -------------------
+
+const serverImports = [...readFileSync(server, 'utf8').matchAll(/from\s*"([^"]+)"/g)].map(m => m[1])
+for (const provider of expected.externalProviders) {
+  check(
+    serverImports.some(spec => spec === provider || spec.startsWith(`${provider}/`)),
+    `серверный бандл не импортирует ${provider} извне — провайдер встроен, и проверка ниже ничего не доказывает`,
+  )
+}
+const granumFromProvider = []
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    // Провайдеры — фикстуры воркспейса; Node видит их по реальному пути.
+    if (/^@feugene\/granum(?:\/|$)/.test(specifier) && context.parentURL?.includes('/fixtures/')) {
+      granumFromProvider.push(`${specifier} ← ${context.parentURL}`)
+      const error = new Error(`Cannot find package '@feugene/granum' imported from ${context.parentURL} (granum is a devDependency of the app, absent after --omit=dev)`)
+      error.code = 'ERR_MODULE_NOT_FOUND'
+      throw error
+    }
+    return nextResolve(specifier, context)
+  },
+})
+
+let ssr
+try {
+  ssr = await import(pathToFileURL(server).href)
+}
+catch (error) {
+  console.error(`verify-ssr: ✗ серверный бандл не загрузился: ${error.message}`)
+  process.exit(1)
+}
+check(granumFromProvider.length === 0, `dist провайдера импортирует granum в рантайме: ${granumFromProvider.join('; ')}`)
 for (const name of ['render', 'ROOT_TAG', 'themeManifest', 'readActiveTheme', 'rootAttributes'])
   check(ssr[name] !== undefined, `серверный бандл не экспортирует ${name}`)
 

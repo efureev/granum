@@ -79,6 +79,13 @@ export function classifyModule(id: string, sources: readonly ComponentSource[]):
   return { kind: 'shared' }
 }
 
+/**
+ * Встроенный контракт granum в `dist` провайдера: отдельный чанк с
+ * постоянным именем. Это не код компонента — анализ сборки в него не заходит.
+ */
+export const GRANUM_CONTRACT_CHUNK = 'granum-contract'
+export const GRANUM_CONTRACT_FILE = 'granum/contract.js'
+
 export interface ChunkInfoLike {
   readonly moduleIds?: readonly string[]
   readonly name?: string
@@ -93,6 +100,8 @@ export interface AssetInfoLike {
 /** `output.chunkFileNames` по раскладке контракта. */
 export function granumChunkFileNames(sources: readonly ComponentSource[]): (chunk: ChunkInfoLike) => string {
   return (chunk) => {
+    if (chunk.name === GRANUM_CONTRACT_CHUNK)
+      return GRANUM_CONTRACT_FILE
     for (const id of chunk.moduleIds ?? []) {
       const owner = classifyModule(id, sources)
       if (owner.kind === 'group')

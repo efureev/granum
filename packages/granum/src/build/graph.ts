@@ -11,7 +11,7 @@ import { builtinModules } from 'node:module'
 import { sortedUnique } from '../core/dedupe'
 import { normalizeDependency } from '../core/resolveSelection'
 import { scanTokenConsumption } from '../node/tokenScan'
-import { classifyModule, classifyOutputFile, collectComponentSources, componentEntryFileName } from './layout'
+import { classifyModule, classifyOutputFile, collectComponentSources, componentEntryFileName, GRANUM_CONTRACT_FILE } from './layout'
 
 export interface BundleChunkLike {
   readonly type: 'chunk'
@@ -107,6 +107,10 @@ function walkComponent(
         edges.add(owner.name)
     }
     for (const spec of [...chunk.imports, ...chunk.dynamicImports]) {
+      // Встроенный контракт granum — не код компонента: строки его сообщений
+      // не классы и не потребление токенов.
+      if (spec === GRANUM_CONTRACT_FILE)
+        continue
       const target = bundle[spec]
       if (isChunk(target)) {
         // Бандлер импортирует чужой компонент и через его entry, и напрямую

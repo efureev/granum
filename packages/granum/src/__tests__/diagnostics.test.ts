@@ -177,6 +177,16 @@ describe('granum doctor (D-2)', () => {
     expect(countDoctorDiagnostics(report).errors).toBe(byCode.boundary!.length + 1)
   })
 
+  it('peer-missing: донор и сам granum — разными словами', async () => {
+    const f = fixture({ warnings: [{ code: 'peer-missing', provider: '@x/base' }, { code: 'peer-missing', provider: '@feugene/granum' }] })
+    const report = await granumDoctor(await app(f, { components: ['@x/kit:Card'] }))
+    const messages = report.diagnostics.filter(d => d.code === 'peer-missing').map(d => d.message)
+    expect(messages).toEqual([
+      expect.stringContaining(`depends on provider '@x/base'`),
+      expect.stringContaining(`imports '@feugene/granum' at runtime`),
+    ])
+  })
+
   it('предупреждение манифеста о невыбранном компоненте не показывается', async () => {
     const f = fixture({ warnings: [{ code: 'safelist-redundant', component: 'Panel', classes: ['p-4'] }] })
     const report = await granumDoctor(await app(f, { components: ['@x/kit:Card'] }))

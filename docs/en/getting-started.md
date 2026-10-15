@@ -19,6 +19,11 @@ the `./build` and `./vite` entry points. Node ≥ 22, ESM. The utility engine
 lives in its own package because the application picks it, not granum — see
 [engines and dialects](./engines-and-dialects.md) for the details.
 
+The application needs granum at build time: provider packages built by
+`granumProvider` embed its contract in their `dist` and do not need granum at
+runtime. On the server it is needed only if the server code itself imports
+`@feugene/granum/runtime` — see [server-side rendering](./ssr.md).
+
 ## A provider in three steps
 
 1. A component descriptor next to its source:

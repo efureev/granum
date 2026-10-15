@@ -46,6 +46,14 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 })
 ```
 
+Хелперы `@feugene/granum/contract` сборка провайдера встраивает в `dist` отдельным
+файлом `granum/contract.js`. Поэтому дескриптор можно реэкспортировать из entry
+компонента: пакет не потянет granum в рантайм, и granum остаётся в
+`devDependencies` провайдера. Другие точки входа granum, импортированные в
+рантайме (например, реэкспорт `@feugene/granum/runtime`), — зависимость пакета:
+объявите `@feugene/granum` в `peerDependencies`, иначе сборка запишет в манифест
+`peer-missing`.
+
 | Поле | Зачем |
 |---|---|
 | `dependencies` | компоненты, чей код этот компонент импортирует; короткая форма — тот же провайдер, `id:Name` — чужой |
@@ -187,5 +195,6 @@ await runRegistryCodegen({
 - пакет с правилами объявляет `engine.dialect` и собран движком того же
   диалекта, а `engineModule` указывает на собранный модуль правил;
 - `dependencies` компонентов покрывают импорты — сборка иначе не пройдёт;
-- кросс-провайдерный донор перечислен в `peerDependencies`;
+- кросс-провайдерный донор перечислен в `peerDependencies`; granum — тоже, если
+  `dist` импортирует его точку входа кроме встроенного `./contract`;
 - `doctor --strict` приложения-потребителя выходит с кодом `0`.
