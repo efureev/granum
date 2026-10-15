@@ -57,7 +57,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `safelist-redundant` | warn | safelist дублирует статически извлечённые классы |
 | `css-double-delivery` | warn | CSS компонента и инлайнится, и импортируется его чанком |
 | `safelist-dead` | warn | запись safelist без правила у движка |
-| `token-undefined` | warn | токен нужен компоненту извне, но не объявлен ни одним слоем. Потребление с fallback, токен, который компонент присваивает сам, и `dynamicTokens` находкой не считаются |
+| `token-undefined` | warn | токен нужен компоненту извне, но не объявлен ни одним слоем. Потребление с fallback, токен, который компонент присваивает сам (в том числе переменная `v-bind()` из `<style>`), и `dynamicTokens` находкой не считаются |
 | `token-conflict` | warn | токен пишут несколько слоёв; показана цепочка и итог |
 | `theme-warning` | warn | предупреждения резолюции тем (`extends`, неполные темы) |
 | `override-skipped` | warn | `strictTokens` отбросил override |

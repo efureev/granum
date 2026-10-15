@@ -58,7 +58,7 @@ legal but suspicious.
 | `safelist-redundant` | warn | the safelist duplicates statically extracted classes |
 | `css-double-delivery` | warn | component CSS is both inlined and imported by its chunk |
 | `safelist-dead` | warn | a safelist entry without a rule in the engine |
-| `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself and `dynamicTokens` are not findings |
+| `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself (including a `v-bind()` variable from `<style>`) and `dynamicTokens` are not findings |
 | `token-conflict` | warn | several layers write the token; the chain and the outcome are shown |
 | `theme-warning` | warn | theme resolution warnings (`extends`, partial themes) |
 | `override-skipped` | warn | `strictTokens` dropped an override |

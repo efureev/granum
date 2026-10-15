@@ -31,6 +31,15 @@ const VAR_LITERAL_RE = /(['"`])(--[\w-]+)\1/g
  * стоит `(`.
  */
 const VAR_ASSIGN_RE = /(?:^|[\s;{,['"])--([\w-]+)['"]?\s*:/g
+/**
+ * Переменная `v-bind()` из `<style>` SFC. Vue кладёт её в CSS как
+ * `var(--ef6ea078)` (в dev — `var(--<scope id>-<имя>)`), а значение выставляет
+ * в JS через `useCssVars(_ctx => ({ "ef6ea078": … }))` — ключом объекта без
+ * `--`. После минификации ключ без кавычек, а функция переименована, поэтому
+ * ищется форма ключа, а не вызов: 8 hex-символов (хэш или scope id) и
+ * необязательный `-<имя>`.
+ */
+const VUE_CSS_VAR_KEY_RE = /[{,]\s*(["']?)([0-9a-f]{8}(?:-[\w-]+)?)\1\s*:/g
 
 /** Имя (без `--`) → есть ли хотя бы одно потребление с fallback. */
 export function extractTokenUses(text: string): Map<string, boolean> {
@@ -103,10 +112,16 @@ export function scanTokenConsumption(text: string, id: string): {
   const isCss = /\.css$/i.test(id)
   const stripped = stripComments(text, id)
   const source = isCss ? unescapeCss(stripped) : stripped
+  const assigns = extractTokenAssignments(source)
+  // Переменные `v-bind()` выставляет код компонента: это его присваивание, а не требование извне (T-5).
+  if (!isCss) {
+    for (const match of source.matchAll(VUE_CSS_VAR_KEY_RE))
+      assigns.add(match[2]!)
+  }
   return {
     uses: extractTokenUses(source),
     literals: isCss ? new Set() : extractTokenLiterals(source),
     required: extractRequiredTokenUses(source),
-    assigns: extractTokenAssignments(source),
+    assigns,
   }
 }

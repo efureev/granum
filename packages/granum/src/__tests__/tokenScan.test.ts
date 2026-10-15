@@ -101,3 +101,21 @@ describe('scanTokenConsumption: комментарии', () => {
     expect([...r.assigns]).toEqual(['own'])
   })
 })
+
+describe('scanTokenConsumption: переменные v-bind() из <style> SFC (T-5, INV-DIAG-4)', () => {
+  /*
+   * `color: v-bind(color)` Vue компилирует в `var(--ef6ea078)`, а значение
+   * выставляет в JS через `useCssVars` ключом без `--`. После минификации ключ
+   * без кавычек, а сама функция переименована — искать её по имени нельзя.
+   */
+  it('ключ useCssVars — присваивание: минифицированная и dev-форма', () => {
+    expect([...scanTokenConsumption('a((e) => ({ ef6ea078: s.value }));', 'chunk.js').assigns]).toContain('ef6ea078')
+    expect([...scanTokenConsumption('_useCssVars(_ctx => ({\n  "7ba5bd90-color": (_ctx.color)\n}))', 'chunk.js').assigns]).toContain('7ba5bd90-color')
+    expect([...scanTokenConsumption('useCssVars((e) => ({ "1a2b3c4d": x, ef6ea079: y }))', 'chunk.js').assigns]).toEqual(expect.arrayContaining(['1a2b3c4d', 'ef6ea079']))
+  })
+
+  it('обычный ключ объекта присваиванием не считается; в CSS канал не работает', () => {
+    expect([...scanTokenConsumption('const o = { primary: 1, "accent": 2 }', 'chunk.js').assigns]).toEqual([])
+    expect([...scanTokenConsumption('.x{content:"{ ef6ea078: 1 }"}', 'a.css').assigns]).toEqual([])
+  })
+})

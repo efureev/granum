@@ -41,9 +41,11 @@ function makeFixture(options: {
   panelStyle?: boolean
   /** Пути темы с `./` — так их пишут руками; в манифест они обязаны уехать нормализованными. */
   dotPaths?: boolean
+  /** `v-bind()` в `<style>` Card: Vue выставляет переменную сам, через `useCssVars`. */
+  vbind?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
@@ -60,7 +62,7 @@ function makeFixture(options: {
   write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
   write(root, 'src/components/Card/Card.vue', plain
     ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
-    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
+    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}${vbind ? `const color = 'red'` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;${vbind ? 'color:v-bind(color);' : ''}}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/components/Panel/Panel.vue', plain
     ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
@@ -323,6 +325,15 @@ describe('granumProvider с настоящим Vite', () => {
     const escaping = { ...provider, theme: { ...provider.theme!, tokensCss: '../outside.css' } }
     expect(() => granumProvider({ provider: escaping, engine: testEngine() })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
     expect(() => granumProvider({ provider, engine: testEngine(), engineModule: '/abs/engine.js' })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+  })
+
+  it('переменная v-bind() из <style> — присваивание самого компонента, не требование (T-5)', async () => {
+    const { manifest } = await run(makeFixture({ vbind: true }))
+    const tokens = manifest.components.Card!.tokens
+    const vueVar = tokens.consumes.find(t => /^--[0-9a-f]{8}/.test(t))
+
+    expect(vueVar).toBeDefined()
+    expect(tokens.requires).not.toContain(vueVar)
   })
 
   it('без такого плагина предупреждения нет', async () => {
