@@ -529,7 +529,7 @@ export default defineGranumConfig({
 | неизвестная версия формата манифеста | `UnsupportedManifestVersionError` | чтение манифеста |
 | манифест не найден через `exports` | `ManifestNotFoundError` | подготовка приложения (первый хук сборки) |
 | манифест не проходит схему / хеш не совпадает | `InvalidManifestError` (`reason`) | чтение манифеста |
-| путь в манифесте абсолютный или с `..` | `InvalidManifestError` (`path-escapes-package`) | чтение манифеста |
+| путь в манифесте абсолютный или с `..` (в том числе `%2e%2e`) | `InvalidManifestError` (`path-escapes-package`) | чтение манифеста |
 | пустой / невалидный `id` | `InvalidProviderError` (`invalid-id`) | регистрация |
 | `baseUrl` не URL / без `/` | `InvalidProviderError` (`invalid-base-url`, `base-url-not-a-directory`) | регистрация |
 | запись `dependencies` не инстанс и не непустая строка | `InvalidProviderError` (`invalid-dependency`) | регистрация |

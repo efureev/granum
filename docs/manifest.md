@@ -170,7 +170,8 @@ M-7).
 3. Схема: обязательные поля присутствуют, типы верны; иначе `InvalidManifestError`
    (`schema`, с путём до поля).
 4. Все пути относительные, без `..`, без `\`; иначе `InvalidManifestError`
-   (`path-escapes-package`).
+   (`path-escapes-package`). Точечный сегмент считается так же, как его видит
+   парсер URL, которым пути разрешаются: `%2e%2e` и `.%2e` — это `..`.
 5. Блок `engine` согласован: `dialect` и `vocabulary` равны `null` одновременно
    (`dialect-vocabulary-mismatch`), и при `dialect: null` у компонентов нет ни
    классов, ни safelist, а `module` пуст (`dialect-without-classes`). Проверка

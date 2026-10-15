@@ -11,6 +11,7 @@ import {
   isPackageRelativePath,
   loadPackageManifest,
   locateManifest,
+  normalizePackagePath,
   parseManifest,
   readManifestSync,
   serializeManifest,
@@ -205,6 +206,24 @@ describe('parseManifest — порядок проверок (manifest.md §4; IN
     }
     expect(isPackageRelativePath('components/X/styles.css')).toBe(true)
     expect(isPackageRelativePath('./x.css')).toBe(false)
+  })
+
+  /**
+   * Пути манифеста разрешаются через `new URL(path, baseUrl)`, а парсер URL
+   * считает `%2e` точкой: `%2e%2e/x.css` уходит на уровень выше так же, как
+   * `../x.css`. Посегментная проверка на `..` такой путь пропускала, и пакет
+   * мог подсунуть CSS или модуль правил из-за своих пределов (INV-MAN-2).
+   */
+  it('4а: закодированные точки — те же сегменты . и .. (INV-MAN-2)', () => {
+    for (const bad of ['%2e%2e/x.css', '%2E%2e/x.css', '.%2e/x.css', '%2e./x.css', 'a/%2e%2e/b.css', '%2e/x.css']) {
+      const text = serializeManifest(draft({ theme: { ...draft().theme, baseCss: bad } }))
+      expect(() => parseManifest(text, BASE), bad).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+    }
+    expect(isPackageRelativePath('a%2eb/x.css')).toBe(true)
+
+    expect(normalizePackagePath('%2e%2e/x.css')).toBeUndefined()
+    expect(normalizePackagePath('a/%2E%2e/b.css')).toBe('b.css')
+    expect(normalizePackagePath('%2e/x.css')).toBe('x.css')
   })
 
   it('5: ручная правка ловится по hash (INV-MAN-1)', () => {

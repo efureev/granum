@@ -360,7 +360,17 @@ function validateDialectScope(manifest: GranumManifest, file?: string): void {
   }
 }
 
-/** Путь относителен к манифесту, POSIX, без `..` и без выхода за пакет (INV-MAN-2). */
+/**
+ * Сегмент `.` или `..` так, как его видит парсер URL: `%2e` в любом регистре —
+ * тоже точка (WHATWG URL, «single-dot / double-dot path segment»). Пути
+ * манифеста разрешаются через `new URL(path, baseUrl)`, поэтому `%2e%2e/x.css`
+ * уходит на уровень выше ровно как `../x.css`.
+ */
+function dotSegment(segment: string): '.' | '..' | undefined {
+  const decoded = segment.replace(/%2e/gi, '.')
+  return decoded === '.' || decoded === '..' ? decoded : undefined
+}
+
 /**
  * Путь внутри пакета в форме, которую принимает `isPackageRelativePath`: без
  * `./`, пустых сегментов и `..`. Писатель манифеста нормализует им пути автора
@@ -372,9 +382,10 @@ export function normalizePackagePath(path: string): string | undefined {
     return undefined
   const segments: string[] = []
   for (const segment of path.split('/')) {
-    if (segment === '' || segment === '.')
+    const dot = dotSegment(segment)
+    if (segment === '' || dot === '.')
       continue
-    if (segment === '..') {
+    if (dot === '..') {
       if (segments.length === 0)
         return undefined
       segments.pop()
@@ -385,10 +396,11 @@ export function normalizePackagePath(path: string): string | undefined {
   return segments.length > 0 ? segments.join('/') : undefined
 }
 
+/** Путь относителен к манифесту, POSIX, без `..` и без выхода за пакет (INV-MAN-2). */
 export function isPackageRelativePath(path: string): boolean {
   if (path.length === 0 || path.startsWith('/') || path.includes('\\') || /^[a-z]+:/i.test(path))
     return false
-  return !path.split('/').some(segment => segment === '..' || segment === '.' || segment === '')
+  return !path.split('/').some(segment => segment === '' || dotSegment(segment) !== undefined)
 }
 
 function validatePaths(manifest: GranumManifest, file?: string): void {
