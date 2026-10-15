@@ -132,7 +132,11 @@ The plugin:
    extractor and keeps only those that have a rule;
 3. collects consumed tokens: `var(--x)` in CSS, `var(--x)` and `'--x'`
    literals in JS, `dynamicTokens`;
-4. expands `@apply` in component CSS; no directives remain in `dist`;
+4. expands `@apply` in component CSS: a class is replaced by the
+   declarations of its single flat rule. A variant (`hover:`, `md:`,
+   `print:`), a class made of several rules (`container`) and a directive
+   outside a flat rule are an `ApplyExpansionError`; no directives remain in
+   `dist`;
 5. computes the actual component → component graph from bundle imports and
    compares it with `dependencies`: an undeclared edge is an
    `UndeclaredDependencyError`;

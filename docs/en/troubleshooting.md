@@ -100,6 +100,20 @@ is removed and why.
 can be enabled in the application, but the right path is to rebuild the
 provider.
 
+## `ApplyExpansionError` when building a provider
+
+`@apply` substitutes the declarations of a flat rule; there is nowhere to put
+a variant's condition or the second half of a class. The `reason` tells what
+to do:
+
+- `non-flat-rule` — a variant (`md:flex`, `hover:underline`) or a class made
+  of several rules (`container`): put the class into the component markup or
+  write the `@media`/`:hover` in CSS by hand;
+- `unmatched-class` — the engine has no such rule: a typo or a class from
+  another vocabulary;
+- `nested-context` — the directive is inside `@media` or a nested rule: move
+  it to a top-level rule.
+
 ## `node:fs` in the client bundle
 
 `BoundaryViolationError`: provider browser code (often a component's

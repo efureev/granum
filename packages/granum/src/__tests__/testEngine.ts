@@ -81,6 +81,12 @@ export interface TestEngineOptions {
   readonly extra?: Readonly<Record<string, string>>
   /** CSS базового уровня, который движок отдаёт полем `preflight` (E-15). */
   readonly preflight?: string
+  /**
+   * Имена с готовым выводом: класс → CSS ровно в той форме, в какой его отдаёт
+   * настоящий движок (`@media{…}` вокруг варианта, несколько правил у
+   * `container`). Селектор совпадения — экранированное имя.
+   */
+  readonly raw?: Readonly<Record<string, string>>
 }
 
 /** Экранирование селектора как в движке: `.gap-[var(--x)]` → `.gap-\[var\(--x\)\]`. */
@@ -135,7 +141,7 @@ function declarationsFromRule(rule: GranumRule): string {
  * потому что ни один тест ядра их не требует.
  */
 export function testEngine(options: TestEngineOptions = {}): GranumEngine {
-  const known = [...Object.keys(STATIC), ...Object.keys(PROPERTY), ...Object.keys(options.extra ?? {})]
+  const known = [...Object.keys(STATIC), ...Object.keys(PROPERTY), ...Object.keys(options.extra ?? {}), ...Object.keys(options.raw ?? {})]
   return {
     name: options.name ?? 'test-engine',
     ...(options.version !== undefined ? { version: options.version } : {}),
@@ -149,6 +155,12 @@ export function testEngine(options: TestEngineOptions = {}): GranumEngine {
       const unmatched: string[] = []
       const blocks: string[] = []
       for (const className of classes) {
+        const raw = options.raw?.[className]
+        if (raw !== undefined) {
+          matched.set(className, { rule: className, selector: `.${escapeSelector(className)}`, source: 'builtin', layer: 'default' })
+          blocks.push(raw)
+          continue
+        }
         const variant = VARIANT_RE.exec(className)
         const base = variant ? variant[2]! : className
         const declarations = declarationsOf(base, options, rules)
