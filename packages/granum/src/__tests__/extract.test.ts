@@ -156,6 +156,37 @@ describe('collectImportSpecifiers: комментарии срезаются с 
     expect(collectImportSpecifiers(code)).toEqual([])
   })
 
+  it('текст импорта в строке, шаблоне и регэкспе — не импорт', () => {
+    // Так выглядит сообщение об ошибке встроенного контракта granum.
+    const template = 'throw new Error(`base $' + '{x}. ` + `Use resolvePackageBaseUrl() from \'@feugene/granum/contract\'.`)\n'
+    expect(collectImportSpecifiers(template)).toEqual([])
+    expect(collectImportSpecifiers(`const hint = "import { readFileSync } from 'node:fs'"\nconst re = /from 'node:os'/\n`)).toEqual([])
+    expect(collectImportSpecifiers(`log('see require("node:path")')\n`)).toEqual([])
+  })
+
+  it('слово перед строкой — не ключевое слово импорта: свойство, вызов метода, CSS @import', () => {
+    expect(collectImportSpecifiers(`const o = { from: 'x', import: 'y' }\nArray.from('ab')\nloader.require('node:fs')\nconst m = import.meta\n`)).toEqual([])
+    expect(collectImportSpecifiers(`@import 'node:fs';\n`)).toEqual([])
+  })
+
+  it('все формы настоящего импорта: минифицированные, с атрибутами, внутри подстановки шаблона', () => {
+    const code = [
+      `import a, { b as c } from './a.js'`,
+      `import * as ns from "../ns.js"`,
+      `import 'side-effect'`,
+      `import type { T } from './types.js'`,
+      `export { d } from 'node:fs'`,
+      `export * from './e.js'`,
+      `import{x}from"./min.js";export*from"./min2.js"`,
+      `const f = await import('./f.js')`,
+      `const g = await import('./g.js', { with: { type: 'json' } })`,
+      `const h = require('css-tree')`,
+      `import fs = require('node:path')`,
+      'const t = `$' + '{await import(\'./in-template.js\')}`',
+    ].join('\n')
+    expect(collectImportSpecifiers(code)).toEqual(['../ns.js', './a.js', './e.js', './f.js', './g.js', './in-template.js', './min.js', './min2.js', './types.js', 'css-tree', 'node:fs', 'node:path', 'side-effect'])
+  })
+
   it('импорт в комментарии не считается, URL в строке не режется', () => {
     const code = `const u = 'https://cdn.example/x' // import 'node:path'\n/* import 'node:os' */\nimport a from './a.js'\n`
     expect(collectImportSpecifiers(code)).toEqual(['./a.js'])

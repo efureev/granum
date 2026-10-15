@@ -190,8 +190,24 @@ function skipRegex(code: string, from: number): number {
   return -1
 }
 
-function stripScript(code: string, lineComments: LineComments): string {
-  const out = cuts(code)
+/** Что видит обход JS-кода: всё вне строк, шаблонов, регэкспов и комментариев — кодом. */
+export interface ScriptScanVisitor {
+  /** Комментарий `[start, end)`; `lineHasCode` — до него на той же строке был код. */
+  readonly comment?: (start: number, end: number, kind: 'block' | 'line', lineHasCode: boolean) => void
+  /** Слово кода: идентификатор или ключевое слово. */
+  readonly word?: (start: number, end: number) => void
+  /** Строка в кавычках вместе с кавычками; обрывается на переводе строки, если не закрыта. */
+  readonly string?: (start: number, end: number) => void
+  /** Прочий символ кода: скобка, точка, оператор. */
+  readonly punct?: (at: number) => void
+}
+
+/**
+ * Обход JS/TS-кода по лексемам. Строки, тела шаблонов и регэксп-литералы
+ * пропускаются целиком, подстановки `${…}` — код. Незакрытый блочный
+ * комментарий останавливает обход: его конец неизвестен.
+ */
+export function scanScript(code: string, visitor: ScriptScanVisitor): void {
   /** Глубина `{` в каждом открытом `${…}` шаблонной строки. */
   const templates: number[] = []
   let regexOk = true
@@ -220,23 +236,24 @@ function stripScript(code: string, lineComments: LineComments): string {
     if (ch === '/' && next === '*') {
       const end = blockCommentEnd(code, i + 2)
       if (end < 0)
-        break
-      out.cut(i, end, ' ')
+        return
+      visitor.comment?.(i, end, 'block', lineHasCode)
       i = end
       continue
     }
     if (ch === '/' && next === '/') {
-      // Комментарий пропускается целиком в любом режиме: апостроф в нём не открывает строку.
+      // Комментарий пропускается целиком: апостроф в нём не открывает строку.
       const eol = lineEnd(code, i)
-      if (lineComments === 'all' || !lineHasCode)
-        out.cut(i, eol, '')
+      visitor.comment?.(i, eol, 'line', lineHasCode)
       i = eol
       continue
     }
 
     lineHasCode = true
     if (ch === '\'' || ch === '"') {
+      const start = i
       i = skipQuoted(code, i)
+      visitor.string?.(start, i)
       regexOk = false
     }
     else if (ch === '`') {
@@ -244,6 +261,8 @@ function stripScript(code: string, lineComments: LineComments): string {
     }
     else if (ch === '/') {
       const end: number = regexOk ? skipRegex(code, i) : -1
+      if (end < 0)
+        visitor.punct?.(i)
       i = end > 0 ? end : i + 1
       regexOk = end < 0
     }
@@ -251,6 +270,7 @@ function stripScript(code: string, lineComments: LineComments): string {
       const top = templates.length - 1
       if (top >= 0)
         templates[top] = templates[top]! + 1
+      visitor.punct?.(i)
       i++
       regexOk = true
     }
@@ -263,6 +283,7 @@ function stripScript(code: string, lineComments: LineComments): string {
       }
       if (top >= 0)
         templates[top] = templates[top]! - 1
+      visitor.punct?.(i)
       i++
       regexOk = true
     }
@@ -270,13 +291,27 @@ function stripScript(code: string, lineComments: LineComments): string {
       const start = i
       while (i < code.length && isWordChar(code.charCodeAt(i)))
         i++
+      visitor.word?.(start, i)
       regexOk = REGEX_AFTER_WORD.has(code.slice(start, i))
     }
     else {
+      visitor.punct?.(i)
       regexOk = ch !== ')' && ch !== ']'
       i++
     }
   }
+}
+
+function stripScript(code: string, lineComments: LineComments): string {
+  const out = cuts(code)
+  scanScript(code, {
+    comment(start, end, kind, lineHasCode) {
+      if (kind === 'block')
+        out.cut(start, end, ' ')
+      else if (lineComments === 'all' || !lineHasCode)
+        out.cut(start, end, '')
+    },
+  })
   return out.done()
 }
 
