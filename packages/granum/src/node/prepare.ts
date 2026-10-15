@@ -8,7 +8,7 @@ import type { GranumConfig } from '../config'
 import type { GranumProvider, GranumProviderInput } from '../contract'
 import type { GranumResolution, GranumThemesInput } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
-import type { GranumAppThemeDefinition } from '../core/resolveThemes'
+import type { GranumAppThemeDefinition, ThemeFileFacts, ThemeFilesInput } from '../core/resolveThemes'
 import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
 import type { ProviderEngineDecision } from './dialects'
@@ -22,8 +22,10 @@ import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
 import { scanAppSources } from './appSources'
-import { tokenSetFromCssSync } from './cssTokens'
+import { readCssSync } from './css'
+import { parseCssTokenBlocksFromText, tokenSetFromCssSync } from './cssTokens'
 import { reconcileProviderEngines } from './dialects'
+import { resolveProviderPath } from './inlinedCss'
 import { loadPackageManifest } from './manifest'
 import { materializeProviderRefs } from './materializeRefs'
 import { collectProviderInstances, scanObjectProvider } from './scanProvider'
@@ -264,6 +266,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     providers: inputs,
     ...(components !== undefined ? { components } : {}),
     ...(themes ? { themes } : {}),
+    themeFiles: readThemeFiles(inputs),
   })
   for (const w of resolution.warnings) {
     if (w.kind === 'provider-without-manifest')
@@ -287,4 +290,33 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     reextractLost: sortedUnique(resolution.selection.order.flatMap(key => reconciled.lostByComponent.get(key) ?? [])),
     warnings,
   }
+}
+
+/**
+ * Селектор и токены файлов тем провайдеров — для блоков без своего селектора у
+ * темы-файла и для `strictTokens` (T-1): ядро файлов не читает. Файл, который не
+ * читается или не содержит плоских блоков токенов, фактов не даёт; ошибку чтения
+ * назовёт эмиссия.
+ */
+function readThemeFiles(inputs: readonly GranumProviderInput[]): ThemeFilesInput {
+  const out: Record<string, Record<string, ThemeFileFacts>> = {}
+  for (const input of inputs) {
+    const id = isLoadedManifest(input) ? input.manifest.id : input.id
+    const files = isLoadedManifest(input) ? input.manifest.theme.themes : input.theme?.themes
+    const baseUrl = input.baseUrl
+    for (const [theme, ref] of Object.entries(files ?? {})) {
+      let blocks
+      try {
+        blocks = parseCssTokenBlocksFromText(readCssSync(resolveProviderPath(ref, baseUrl))).blocks
+      }
+      catch {
+        continue
+      }
+      if (blocks.length === 0)
+        continue
+      const tokens = [...new Set(blocks.flatMap(block => Object.keys(block.tokens)))]
+      ;(out[id] ??= {})[theme] = { selector: blocks[0]!.selector, tokens }
+    }
+  }
+  return out
 }

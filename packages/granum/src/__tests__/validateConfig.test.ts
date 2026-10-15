@@ -8,7 +8,7 @@ const engine = testEngine()
 describe('validateGranumConfig (A-1)', () => {
   it('валидные формы проходят', () => {
     expect(() => validateGranumConfig({ providers: ['@x/a'], engine })).not.toThrow()
-    expect(() => validateGranumConfig({ providers: ['@x/a'], engine, components: 'imports', appSources: { dirs: ['src'] }, themes: { names: ['light'] }, pruneTokens: { mode: 'on' }, js: { guard: 'warn' }, css: { layerPrefix: 'ds' } })).not.toThrow()
+    expect(() => validateGranumConfig({ providers: ['@x/a'], engine, components: 'imports', appSources: { dirs: ['src'] }, themes: { names: ['light'], define: { ocean: { tokens: { 'p-bg': '#000' } } }, tokenOverrides: { dark: { 'p-bg': '#111', '.dark': { 'p-fg': '#fff' } } } }, pruneTokens: { mode: 'on' }, js: { guard: 'warn' }, css: { layerPrefix: 'ds' } })).not.toThrow()
   })
 
   it.each([
@@ -26,6 +26,12 @@ describe('validateGranumConfig (A-1)', () => {
     [{ providers: ['a'], engine, components: 42 }, 'components'],
     [{ providers: ['a'], engine, components: 'imports' }, 'components'],
     [{ providers: ['a'], engine, themes: { names: 'light' } }, 'themes.names'],
+    // Имена токенов — без `--` (INV-CON-7): ключ с ним дал бы в CSS `----имя`.
+    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '--p-primary': '#000' } } } }, 'themes.tokenOverrides.dark'],
+    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '.dark': { '--p-primary': '#000' } } } } }, 'themes.tokenOverrides.dark'],
+    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: '#000' } } }, 'themes.tokenOverrides.dark'],
+    [{ providers: ['a'], engine, themes: { define: { ocean: { tokens: { '--p-bg': '#000' } } } } }, 'themes.define.ocean.tokens'],
+    [{ providers: ['a'], engine, themes: { define: { ocean: 'dark' } } }, 'themes.define.ocean'],
     [{ providers: ['a'], engine, pruneTokens: { mode: 'maybe' } }, 'pruneTokens.mode'],
     [{ providers: ['a'], engine, appSources: { dirs: 'src' } }, 'appSources'],
     [{ providers: ['a'], engine, js: { guard: 'loud' } }, 'js.guard'],

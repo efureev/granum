@@ -88,7 +88,10 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 The v1 preset options move almost one to one: `providers`, `components`,
 `themes.names/define/tokenOverrides/strictTokens`, `pruneTokens` keep their
 names; `pruneTokens.appSources` became a top-level `appSources` because it
-now also feeds the extraction of application classes.
+now also feeds the extraction of application classes. There is no swap of
+provider files (`themes.themeFiles`, `baseFile`, `tokensFile`): theme values are
+changed by `tokenOverrides`, a whole theme by `define` with `tokensRef` to your
+CSS, also over a theme the provider ships as a file ([Themes and tokens](./themes-and-tokens.md)).
 
 One thing has no v1 counterpart at all: the engine. In the preset it was part
 of the package and configured through `uno.config.ts`; in granum the application

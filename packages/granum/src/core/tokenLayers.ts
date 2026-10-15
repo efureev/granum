@@ -4,6 +4,7 @@
  * сериализуется CSS и считаются отчёты — расходиться им негде (INV-DIAG-1).
  */
 import type { ResolvedThemeItem, ResolvedThemes } from './resolveThemes'
+import { themeFileSelector } from './resolveThemes'
 
 /** Форма `themes.tokenOverrides`: строка — плоская запись в первичный селектор, объект — по селектору. */
 export type ThemeTokenOverrides = Partial<Record<
@@ -64,7 +65,10 @@ export function collectTokenLayers(
       continue
 
     const blocks = entry?.blocks ?? []
-    const primarySelector = blocks[0]?.selector ?? ':root'
+    // Тема, которую провайдер поставил файлом: блоки без своего селектора
+    // встают под селектор файла (как в `resolveThemes`). `:root` — селектор
+    // светлой темы, и override тёмной лёг бы в неё (INV-THM-2).
+    const primarySelector = themeFileSelector(themes.items, themeName) ?? blocks[0]?.selector ?? ':root'
 
     // Провенанс по паре (селектор, токен); запасной — по имени токена, потому
     // что `define` со `extends` переписывает блок под новым селектором.
@@ -97,6 +101,11 @@ export function collectTokenLayers(
     // `known` — имена по ВСЕЙ теме, поверх всех селекторов: override в другой
     // селектор той же темы обязан проходить.
     const known = new Set<string>()
+    // Токены файла темы — тоже пакетный слой: `strictTokens` их не отбрасывает.
+    for (const item of themes.items) {
+      if (item.themeName === themeName && item.file)
+        item.file.tokens.forEach(token => known.add(token))
+    }
     for (const block of blocks) {
       const target = ensure(block.selector)
       for (const [token, value] of Object.entries(block.tokens)) {

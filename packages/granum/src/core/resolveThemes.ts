@@ -54,11 +54,26 @@ export type ResolvedThemeWarning
 /** Идентификатор источника для вкладов самого приложения. */
 export const APP_THEME_SOURCE = '(app)'
 
+/**
+ * Что известно о файле темы провайдера: селектор первого блока и имена
+ * объявленных токенов (без `--`). Ядро файлов не читает — факты приносит
+ * подготовка приложения (`./node`).
+ */
+export interface ThemeFileFacts {
+  readonly selector: string
+  readonly tokens: readonly string[]
+}
+
+/** Провайдер → тема → факты о её файле. */
+export type ThemeFilesInput = Readonly<Record<string, Readonly<Record<string, ThemeFileFacts>>>>
+
 export interface ResolvedThemeItem {
   readonly providerId: string
   readonly themeName: string
   /** Файл темы: путь относительно базы провайдера или URL. */
   readonly cssRef?: string
+  /** Селектор и токены файла темы, если подготовка его прочитала. */
+  readonly file?: ThemeFileFacts
   readonly tokenDefinition?: GranumTokenSet
   readonly componentName?: string
   readonly appDefined?: true
@@ -121,6 +136,7 @@ export function resolveThemes(
   providers: readonly ProviderNode[],
   input: ResolveThemesInput = {},
   components: readonly ComponentNode[] = [],
+  themeFiles: ThemeFilesInput = {},
 ): ResolvedThemes {
   const define = input.define ?? {}
   const { names, namesSource } = resolveThemeNames(providers, input)
@@ -145,7 +161,8 @@ export function resolveThemes(
         mergeIntoRegistry(tokenRegistry, themeName, tokenDef)
       }
       else if (cssRef) {
-        items.push({ providerId: provider.id, themeName, cssRef })
+        const file = themeFiles[provider.id]?.[themeName]
+        items.push({ providerId: provider.id, themeName, cssRef, ...(file ? { file } : {}) })
       }
     }
   }
@@ -156,7 +173,10 @@ export function resolveThemes(
       if (!activeThemes.has(themeName))
         continue
       items.push({ providerId: component.providerId, componentName: component.name, themeName, tokenDefinition: tokenDef })
-      mergeIntoRegistry(tokenRegistry, themeName, tokenDef)
+      // Блок без селектора у темы-файла — под селектор файла: под `:root` он
+      // лёг бы в светлую тему и в слой `tokens`, раньше файла.
+      const fileSelector = tokenDef.selector === undefined ? themeFileSelector(items, themeName) : undefined
+      mergeIntoRegistry(tokenRegistry, themeName, fileSelector ? { ...tokenDef, selector: fileSelector } : tokenDef)
     }
   }
 
@@ -179,6 +199,11 @@ export function resolveThemes(
     warnings,
     meta: collectThemeMeta(names, define),
   }
+}
+
+/** Селектор файла темы — первого из поставивших её файлом, если файл прочитан. */
+export function themeFileSelector(items: readonly ResolvedThemeItem[], themeName: string): string | undefined {
+  return items.find(item => item.themeName === themeName && item.file)?.file?.selector
 }
 
 function flattenThemeTokens(entry: ResolvedThemeTokens | undefined): Record<string, string> {
@@ -215,13 +240,18 @@ function applyAppThemeDefinition(
 
   if (structural) {
     const selector = definition.selector
+      ?? themeFileSelector(items, themeName)
       ?? registry[themeName]?.blocks[0]?.selector
       ?? defaultAppThemeSelector(themeName)
     const tokens = { ...baseTokens, ...flattenThemeTokens(registry[themeName]), ...definition.tokens }
     registry[themeName] = { selector, tokens, blocks: [{ selector, tokens }] }
   }
   else if (items.some(item => item.themeName === themeName)) {
-    mergeIntoRegistry(registry, themeName, { tokens: definition.tokens! })
+    // Тему-файл блок приложения дополняет под селектором файла, даже если у
+    // компонентов есть блоки этой темы под атрибутом: селектор файла покрывает
+    // все её активации, и значение не зависит от селекции.
+    const selector = themeFileSelector(items, themeName)
+    mergeIntoRegistry(registry, themeName, { ...(selector ? { selector } : {}), tokens: definition.tokens! })
   }
   else {
     // Тему не поставляет никто — ни структурно, ни файлом: она целиком своя и

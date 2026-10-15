@@ -18,6 +18,14 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** Строковые значения записи — токены; ключ с `--` среди них — ошибка формы. */
+function rejectPrefixedTokens(tokens: Record<string, unknown>, path: string): void {
+  for (const [key, value] of Object.entries(tokens)) {
+    if (typeof value === 'string' && key.startsWith('--'))
+      throw new InvalidConfigError(path, `token key '${key}' must not start with '--' — the generator adds it`)
+  }
+}
+
 /**
  * Движок — обязательный инстанс (A-E1, A-E2). Проверяется форма, а не
  * реализация: имя словаря и его отпечаток нужны для решений, `extract` и
@@ -71,6 +79,24 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
       throw new InvalidConfigError('themes.define', 'expected an object')
     if (themes.tokenOverrides !== undefined && !isRecord(themes.tokenOverrides))
       throw new InvalidConfigError('themes.tokenOverrides', 'expected an object')
+    // Имена токенов пишутся без `--` — префикс добавляет генератор (INV-CON-7).
+    // Ключ с ним уехал бы в CSS как `----имя` и не действовал бы молча.
+    for (const [theme, definition] of Object.entries(themes.define ?? {})) {
+      if (!isRecord(definition))
+        throw new InvalidConfigError(`themes.define.${theme}`, 'expected an object')
+      if (isRecord(definition.tokens))
+        rejectPrefixedTokens(definition.tokens, `themes.define.${theme}.tokens`)
+    }
+    // Значение темы — объект токенов: строка разошлась бы на `--0`, `--1`, …
+    for (const [theme, overrides] of Object.entries(themes.tokenOverrides ?? {})) {
+      if (!isRecord(overrides))
+        throw new InvalidConfigError(`themes.tokenOverrides.${theme}`, 'expected an object of token values or selector blocks')
+      rejectPrefixedTokens(overrides, `themes.tokenOverrides.${theme}`)
+      for (const value of Object.values(overrides)) {
+        if (isRecord(value))
+          rejectPrefixedTokens(value, `themes.tokenOverrides.${theme}`)
+      }
+    }
   }
   const prune = config.pruneTokens
   if (prune !== undefined) {

@@ -7,7 +7,7 @@ import type { GranumProviderInput } from '../contract'
 import type { ProviderNode } from './providerNode'
 import type { ComponentRegistry } from './registry'
 import type { ComponentCssRef, ComponentSelection, ResolvedSelection } from './resolveSelection'
-import type { ResolvedThemes, ResolveThemesInput } from './resolveThemes'
+import type { ResolvedThemes, ResolveThemesInput, ThemeFilesInput } from './resolveThemes'
 import type { EffectiveThemeBlock, ThemeTokenOverrides } from './tokenLayers'
 import { createDebug } from './debug'
 import { expandProviders } from './expandProviders'
@@ -27,6 +27,12 @@ export interface GranumResolveInput {
   readonly providers: readonly GranumProviderInput[]
   readonly components?: ComponentSelection
   readonly themes?: GranumThemesInput
+  /**
+   * Селекторы и токены файлов тем провайдеров. Ядро файлов не читает — их
+   * читает подготовка приложения; без фактов блоки без своего селектора у
+   * темы-файла встают под `:root` (T-1).
+   */
+  readonly themeFiles?: ThemeFilesInput
 }
 
 export type ResolutionWarning
@@ -62,7 +68,7 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
   const providers = expandProviders(input.providers)
   const registry = buildRegistry(providers)
   const selection = resolveSelection(registry, input.components)
-  const themes = resolveThemes(providers, input.themes, selection.entries.map(e => e.component))
+  const themes = resolveThemes(providers, input.themes, selection.entries.map(e => e.component), input.themeFiles)
 
   const warnings: ResolutionWarning[] = [...themes.warnings]
   for (const provider of providers) {

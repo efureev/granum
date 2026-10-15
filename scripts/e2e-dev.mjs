@@ -19,6 +19,10 @@
  * его перезагружать — иначе обновление поднимается до входа приложения, и Vite
  * перезагружает страницу.
  *
+ * Третий сценарий — каскад тем (INV-THM-2): `tokenOverrides` к теме, которую
+ * провайдер поставил файлом (`@granum-fixtures/mini-ds`), обязан менять вычисленное
+ * значение токена под активной темой и не задевать соседнюю.
+ *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
  *
@@ -29,6 +33,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
+import { emitCss, prepareApp } from '@feugene/granum/node'
+import { windEngine } from '@feugene/granum-engine-wind'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 
@@ -205,8 +211,49 @@ finally {
   await server?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Каскад тем: override тёмной темы, поставленной файлом, побеждает файл.
+ * Страница — один CSS сборки, без dev-сервера: проверяется каскад, а не HMR.
+ */
+const OVERRIDE = '#4fd1e0'
+try {
+  const app = await prepareApp({
+    engine: windEngine(),
+    providers: ['@granum-fixtures/mini-ds'],
+    themes: { names: ['light', 'dark'], tokenOverrides: { dark: { 'xxx-bg': OVERRIDE } } },
+  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
+  const { css } = await emitCss(app)
+
+  browser = await chromium.launch()
+  const page = await browser.newPage()
+  await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body></body></html>`)
+  const bg = activate => page.evaluate((how) => {
+    const root = document.documentElement
+    root.removeAttribute('data-theme')
+    root.classList.remove('dark')
+    if (how === 'attribute')
+      root.setAttribute('data-theme', 'dark')
+    if (how === 'class')
+      root.classList.add('dark')
+    return getComputedStyle(root).getPropertyValue('--xxx-bg').trim()
+  }, activate)
+
+  const light = await bg('none')
+  const byAttribute = await bg('attribute')
+  const byClass = await bg('class')
+  check(byAttribute === OVERRIDE, `тёмная тема-файл: override действует под [data-theme=dark]: ${byAttribute}`)
+  check(byClass === OVERRIDE, `тёмная тема-файл: override действует под .dark: ${byClass}`)
+  check(light === '#ffffff', `светлая тема не задета override тёмной: ${light}`)
+}
+catch (error) {
+  failures.push(`каскад тем: прогон упал: ${error?.message ?? error}`)
+}
+finally {
+  await browser?.close()
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема-файл mini-ds)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ INV-CSS-6, AC-9 и A-16 подтверждены в браузере\n'
+  ? '✓ INV-CSS-6, AC-9, A-16 и INV-THM-2 подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1

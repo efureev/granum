@@ -117,6 +117,27 @@ export function wrapLayer(
 }
 
 /**
+ * Слой `themes` по темам в порядке `names`: файлы темы, затем её структурные
+ * блоки (A-10, INV-CSS-2). Так блоки компонентов, `define` и `tokenOverrides`
+ * идут после файла своей темы и выигрывают у него при равной специфичности
+ * (INV-THM-2), а блоки одной темы не оказываются после файла следующей.
+ * Файлы тем собраны по `items` активных тем (`resolveInlinedCssSources`), так
+ * что тема каждого файла есть в `names`.
+ */
+function themesLayer(
+  names: readonly string[],
+  files: readonly { readonly theme: string | undefined, readonly css: string }[],
+  blocks: ReadonlyMap<string, readonly string[]>,
+): string {
+  const parts: string[] = []
+  for (const name of names) {
+    parts.push(...files.filter(file => file.theme === name).map(file => file.css))
+    parts.push(...(blocks.get(name) ?? []))
+  }
+  return parts.join('\n')
+}
+
+/**
  * Утилиты движка: классы манифестов ∪ safelist ∪ приложение (INV-CSS-3).
  *
  * `reextractLost` — классы выбранных компонентов, которые были в манифесте и не
@@ -156,12 +177,16 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   // Блок `:root` — слой tokens, остальные — themes (A-10): `:root` и `.dark`
   // равны по специфичности, и в одном слое тему решал бы порядок `names`.
   const rootBlocks: string[] = []
-  const themeBlocks: string[] = []
+  const themeBlocks = new Map<string, string[]>()
   for (const themeName of resolution.themes.names) {
     for (const block of resolution.tokenLayers.get(themeName) ?? []) {
       const css = serializeThemeBlock(block)
-      if (css !== undefined)
-        (isRootSelector(block.selector) ? rootBlocks : themeBlocks).push(css)
+      if (css === undefined)
+        continue
+      if (isRootSelector(block.selector))
+        rootBlocks.push(css)
+      else
+        themeBlocks.set(themeName, [...(themeBlocks.get(themeName) ?? []), css])
     }
   }
 
@@ -185,7 +210,8 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const mode = config.pruneTokens?.mode ?? 'off'
   let prune: TokenPrunePlan | undefined
   let tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => s.css)
-  let themeFileSections = sections.filter(s => s.source.kind === 'theme').map(s => s.css)
+  const themeFileSections = sections.filter(s => s.source.kind === 'theme')
+  let themeFileText = (s: PrunableSection): string => s.css
   if (mode !== 'off') {
     prune = planTokenPrune({
       resolution,
@@ -199,7 +225,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     if (mode === 'on') {
       const cut = (s: PrunableSection): string => (s.source.kind === 'base' ? s.css : pruneCssDeclarations(s.css, prune!.isKept).css)
       tokensSections = sections.filter(s => s.source.kind === 'tokens').map(cut)
-      themeFileSections = sections.filter(s => s.source.kind === 'theme').map(cut)
+      themeFileText = cut
     }
   }
 
@@ -212,7 +238,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const layers: Record<LayerName, string> = {
     tokens: [...tokensSections, ...rootBlocks].join('\n'),
     base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
-    themes: [...themeBlocks, ...themeFileSections].join('\n'),
+    themes: themesLayer(resolution.themes.names, themeFileSections.map(s => ({ theme: s.source.theme, css: themeFileText(s) })), themeBlocks),
     components: componentCss.join('\n'),
     utilities: generated.css,
   }
