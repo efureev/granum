@@ -224,7 +224,9 @@ describe('buildReport (A-19, A-20)', () => {
     expect(report.themes).toEqual({ names: ['light', 'dark'], namesSource: 'provider-defaults' })
     expect(report.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@x/kit:Panel'] }])
     expect(report.classes.safelistRedundant).toEqual(['p-4'])
-    expect(report.tokens.undefined).toEqual(['--ghost'])
+    // `--ghost` потребляет разметка приложения, а не компонент: вердикт — тот же,
+    // что у доктора (T-5, INV-DIAG-4), и токены приложения в него не входят.
+    expect(report.tokens.undefined).toEqual([])
     expect(report.prune?.removable).toEqual(['dark-unused', 'unused'])
     expect(report.sizes.total.raw).toBe(Buffer.byteLength(css.css))
     expect(report.sizes.utilities.gzip).toBeGreaterThan(0)

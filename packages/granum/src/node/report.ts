@@ -12,7 +12,7 @@ import { sortedUnique } from '../core/dedupe'
 import { GRANUM_VERSION } from '../version'
 import { extractLayerBlocks } from './cssLayerBlocks'
 import { LAYER_NAMES } from './emit'
-import { resolveInlinedCssSources } from './inlinedCss'
+import { findUndefinedTokens } from './undefinedTokens'
 
 export interface LayerSize {
   readonly raw: number
@@ -163,41 +163,9 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
     return out
   }
 
-  // Объявленные токены: манифесты (темы и компоненты) + структурные слои + инлайнимые файлы по манифесту `declares`.
-  const declared = new Set<string>()
-  for (const provider of resolution.providers) {
-    for (const t of provider.theme.declares)
-      declared.add(t)
-    for (const set of Object.values(provider.theme.tokenDefinitions)) {
-      for (const t of Object.keys(set.tokens))
-        declared.add(`--${t}`)
-    }
-    for (const component of provider.components) {
-      for (const set of Object.values(component.tokenDefinitions)) {
-        for (const t of Object.keys(set.tokens))
-          declared.add(`--${t}`)
-      }
-    }
-  }
-  for (const blocks of resolution.tokenLayers.values()) {
-    for (const block of blocks) {
-      for (const chain of block.tokens.values())
-        declared.add(`--${chain.token}`)
-    }
-  }
-  // Тот же вердикт, что у доктора: «нужен извне», а не «упомянут» (T-5).
-  // Потребление с фолбэком и токен, который компонент присваивает сам, сюда не
-  // попадают — иначе отчёт и доктор говорили бы разное об одном и том же.
-  const consumed = new Set<string>()
-  for (const { component } of resolution.selection.entries) {
-    for (const t of component.requiresTokens)
-      consumed.add(t)
-  }
-  for (const t of app.appScan.consumes)
-    consumed.add(t)
-  // Объектная форма провайдера не несёт `declares`: без манифестов вердикт неполон и не выносится.
-  const hasManifests = resolution.providers.some(p => p.form === 'manifest') && resolveInlinedCssSources(resolution).length >= 0
-  const tokenUndefined = hasManifests ? [...consumed].filter(t => !declared.has(t) && !t.startsWith('--un-')).sort() : []
+  // Тот же вердикт, что у доктора, той же функцией (T-5, INV-DIAG-4): только то,
+  // что требуют выбранные компоненты; разметка приложения — его собственное дело.
+  const tokenUndefined = sortedUnique(findUndefinedTokens(resolution).map(u => u.token))
 
   // Считать ли brotli — решает конфиг приложения: по умолчанию нет (N-4).
   const brotli = app.config.report?.brotli === true

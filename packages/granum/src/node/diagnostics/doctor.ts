@@ -10,10 +10,9 @@ import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
 import { isLoadedManifest } from '../../contract/manifest'
 import { sortedUnique } from '../../core/dedupe'
-import { scanCssDeclarations } from '../cssDeclarations'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
-import { patternMatcher } from '../tokenPrune'
+import { findUndefinedTokens } from '../undefinedTokens'
 
 export interface DoctorProviderInfo {
   readonly id: string
@@ -228,12 +227,9 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
 
   // Конфликты — по тем же слоям, из которых эмитится CSS (INV-DIAG-1).
   const tokenConflicts: DoctorTokenConflict[] = []
-  const definedTokens = new Set<string>()
   for (const layerBlocks of resolution.tokenLayers.values()) {
     for (const block of layerBlocks) {
       for (const chain of block.tokens.values()) {
-        if (chain.effective !== undefined)
-          definedTokens.add(`--${chain.token}`)
         const emitted = chain.layers.filter(l => l.skipped === undefined)
         if (emitted.length >= 2)
           tokenConflicts.push({ theme: chain.theme, selector: chain.selector, token: chain.token, sources: emitted.map(l => l.source), finalValue: chain.effective! })
@@ -253,27 +249,8 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     }
     return readFileSync(path, 'utf8')
   }
-  for (const source of resolveInlinedCssSources(resolution)) {
-    const css = readIfExists(source.path, `${source.providerId} (${source.kind}${source.theme ? ` ${source.theme}` : ''})`)
-    if (css === undefined)
-      continue
-    for (const decl of scanCssDeclarations(css))
-      definedTokens.add(`--${decl.token}`)
-  }
-  for (const provider of resolution.providers) {
-    for (const t of provider.theme.declares)
-      definedTokens.add(t)
-    for (const set of Object.values(provider.theme.tokenDefinitions)) {
-      for (const t of Object.keys(set.tokens))
-        definedTokens.add(`--${t}`)
-    }
-    for (const component of provider.components) {
-      for (const set of Object.values(component.tokenDefinitions)) {
-        for (const t of Object.keys(set.tokens))
-          definedTokens.add(`--${t}`)
-      }
-    }
-  }
+  for (const source of resolveInlinedCssSources(resolution))
+    readIfExists(source.path, `${source.providerId} (${source.kind}${source.theme ? ` ${source.theme}` : ''})`)
   for (const { provider, component } of resolution.selection.entries) {
     const key = `${provider.id}:${component.name}`
     for (const path of component.css) {
@@ -337,21 +314,10 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
    * До этого проверялся весь `consumes`, и на дизайн-системе из 84 компонентов
    * находок было 279 при одной настоящей: `--strict` от такого шума непригоден.
    */
-  const undefinedTokens: { token: string, component: string }[] = []
-  for (const { provider, component } of resolution.selection.entries) {
-    // Полный ответ «что нужно извне» считается на сборке пакета и лежит в
-    // манифесте: код компонента, его CSS и классы safelist минус то, что он
-    // присваивает сам. Доктору считать тут нечего.
-    const consumed = new Set(component.requiresTokens)
-    const dynamic = component.dynamicTokens.map(patternMatcher)
-    for (const token of [...consumed].sort()) {
-      if (definedTokens.has(token) || token.startsWith('--un-') || dynamic.some(match => match(token)))
-        continue
-      const key = `${provider.id}:${component.name}`
-      undefinedTokens.push({ token, component: key })
-      warn('token-undefined', `${key}:${token}`, `token '${token}' is consumed by ${key} but no granum layer defines it for any active theme — it may still come from the application CSS or an engine rule`)
-    }
-  }
+  // Вердикт — той же функцией, что у отчёта сборки (INV-DIAG-4).
+  const undefinedTokens = findUndefinedTokens(resolution)
+  for (const { token, component: key } of undefinedTokens)
+    warn('token-undefined', `${key}:${token}`, `token '${token}' is consumed by ${key} but no granum layer defines it for any active theme — it may still come from the application CSS or an engine rule`)
 
   // Safelist без правила у движка — мёртвая запись (INV-DIAG-2).
   const safelistAll = sortedUnique(resolution.selection.entries.flatMap(e => e.component.safelist))

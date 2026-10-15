@@ -80,10 +80,15 @@ application theme's `tokensRef` is read the same way.
 ## Consumption and the report
 
 The provider build records in the manifest which tokens a component
-**consumes**: `var(--x)` in CSS and JS, `'--x'` literals in JS,
-`dynamicTokens`. The application merges that with consumption in
-`appSources`. A token that is consumed and declared by no layer for any
-active theme is `token-undefined` in the report and in `doctor`.
+**consumes** (`var(--x)` in CSS and JS, `'--x'` literals in JS,
+`dynamicTokens`) and which of them it **requires from outside**: uses without
+a fallback minus what the component assigns itself (`--x:` in its CSS,
+`v-bind()` variables from `<style>`). The application merges consumption with
+`appSources` — those are the pruning roots. `token-undefined` in the report and
+in `doctor` is one set: a token a selected component requires from outside
+(except `dynamicTokens`) that no layer declares for any active theme. Tokens of
+the application's own markup are not part of it — the application's CSS
+usually declares them.
 
 ## Token pruning
 

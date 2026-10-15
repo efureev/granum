@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
+import { emitCss } from '../node/emit'
+import { buildReport } from '../node/report'
 import { makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
 import { testEngine } from './testEngine'
 
@@ -276,6 +278,22 @@ describe('granum tokens', () => {
     const report = granumTokens(await app(fixture()), 'Nope')
     expect(report.unresolved).toBe('unknown')
     expect(formatTokensReport(report)).toContain('No provider declares such a component')
+  })
+})
+
+describe('token-undefined: доктор и отчёт сборки (T-5, INV-DIAG-4)', () => {
+  it('одно множество: только то, что требуют компоненты, без dynamicTokens и без разметки приложения', async () => {
+    const f = fixture()
+    // `--dyn-x` объявлен компонентом как собираемый в рантайме; `--app-only`
+    // потребляет разметка приложения (`App.vue` фикстуры) — его дело.
+    const card = f.manifest.manifest.components.Card as unknown as { tokens: { consumes: string[], dynamic: string[] } }
+    card.tokens = { ...card.tokens, consumes: [...card.tokens.consumes, '--dyn-x'], dynamic: ['--dyn-*'] }
+    const a = await app(f)
+    const doctor = await granumDoctor(a)
+    const report = buildReport(a, await emitCss(a))
+
+    expect(report.tokens.undefined).toEqual([...new Set(doctor.undefinedTokens.map(u => u.token))].sort())
+    expect(report.tokens.undefined).toEqual(['--nowhere'])
   })
 })
 
