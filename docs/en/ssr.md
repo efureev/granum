@@ -68,9 +68,10 @@ activation is active until another one is activated, and it has nothing to write
 to the root.
 
 The theme name from the request must be validated against the manifest. The CSS
-only contains the themes listed in `themes.names` of the config; a name outside
-that list means no token block was emitted for it, so there is nothing to
-activate. Fall back to the default theme rather than serving a page without
+only contains the active set: `themes.names` of the config, without it the keys of
+`themes.define`, without those the providers' `defaultThemes` (INV-THM-1); the
+manifest lists exactly that set. A name outside it means no token block was
+emitted for it, so there is nothing to activate. Fall back to the default theme rather than serving a page without
 tokens.
 
 ## The client reads the theme instead of picking it

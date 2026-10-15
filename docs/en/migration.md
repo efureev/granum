@@ -3,8 +3,8 @@
 > 🇷🇺 Русская версия: [`../ru/migration.md`](../ru/migration.md).
 
 granum is the successor of the v1 preset with the same provider contract in
-spirit but a different orchestrator: instead of `uno.config.ts` and
-`node_modules` scanning — a provider manifest and its own Vite plugin. The
+spirit but a different orchestrator: instead of `uno.config.ts` and a
+glob over `node_modules` — a provider manifest and its own Vite plugin. The
 v1 preset keeps working and is not changed; migrate one package at a time.
 
 ## What stays
@@ -30,7 +30,7 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 | `undeclared-dependency` by text, `warn` | by the bundler module graph, `error` | precision |
 | `layer: 'granular'` with order −50 | `granum.*` cascade layers | the order is explained by names |
 | a token key with `--` → `----x` | `InvalidTokenKeyError` | no silent breakage |
-| `scan.*`, `content.filesystem` | none: `node_modules` is not scanned | the manifest |
+| `scan.*`, `content.filesystem` | none: no glob over `node_modules`; package files are read only when its vocabulary differs from the application engine, and only those the manifest names | the manifest |
 
 ## Provider
 

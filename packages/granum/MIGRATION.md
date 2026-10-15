@@ -2,7 +2,7 @@
 
 granum is the successor of the v1 preset: the same provider contract in
 spirit, a different orchestrator — a provider manifest and its own Vite plugin
-instead of `uno.config.ts` and `node_modules` scanning. The v1 preset keeps
+instead of `uno.config.ts` and a glob over `node_modules`. The v1 preset keeps
 working; migrate one package at a time.
 
 Step-by-step guides, mirrored in two languages:
