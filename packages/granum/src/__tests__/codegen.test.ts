@@ -197,6 +197,28 @@ describe('runRegistryCodegen', () => {
       .toMatchObject({ reason: 'missing-components-dir' })
   })
 
+  it('префикс не подошёл ни к одному компоненту — ошибка, а не пустые реестры', async () => {
+    // Опечатка в `--prefix` превращала каждый компонент в «группу» без
+    // содержимого: ноль компонентов, и генератор вычищал barrel, реестр и
+    // `exports` с кодом 0.
+    await component('GrAlert')
+    await component('GrTabs')
+
+    await expect(runRegistryCodegen({ packageDir: pkgDir, targets: standardTargets(), prefix: 'Xx' }))
+      .rejects
+      .toMatchObject({ reason: 'no-components-with-prefix' })
+    expect(await read('src/index.ts')).toBe(BARREL)
+    expect(await read('package.json')).toBe(PACKAGE_JSON)
+  })
+
+  it('то же, когда компоненты лежат в группе', async () => {
+    await component('forms/GrInput')
+
+    await expect(runRegistryCodegen({ packageDir: pkgDir, targets: standardTargets(), prefix: 'Xx' }))
+      .rejects
+      .toMatchObject({ reason: 'no-components-with-prefix' })
+  })
+
   it('check ничего не пишет и называет разошедшиеся файлы', async () => {
     await component('GrAlert')
 

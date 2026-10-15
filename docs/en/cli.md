@@ -247,7 +247,10 @@ granum codegen --targets=barrel,exports --prefix=Xh
 ```
 
 `--prefix` is the component name prefix (`Gr` by default), from which the
-config export name is derived (`grAlertConfig`). `--components-dir`,
+config export name is derived (`grAlertConfig`). If the directory holds
+component directories but none starts with the prefix, the generator fails
+with `no-components-with-prefix` and writes nothing: otherwise a typo in the
+prefix would strip every registry. `--components-dir`,
 `--barrel`, `--registry` override the paths; `--subcomponents` adds `exports`
 aliases for parts of compound components; `--exports=import` writes string
 subpaths without `types` (a package without declarations). Custom targets (`markedBlock`) go

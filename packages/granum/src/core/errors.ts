@@ -413,6 +413,7 @@ export type GranumCodegenReason
     | 'missing-package-exports'
     | 'no-component-exports'
     | 'missing-components-dir'
+    | 'no-components-with-prefix'
     | 'duplicate-component-name'
     | 'subcomponent-name-clash'
 

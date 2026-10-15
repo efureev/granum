@@ -243,7 +243,10 @@ granum codegen --targets=barrel,exports --prefix=Xh
 ```
 
 `--prefix` — префикс имён компонентов (по умолчанию `Gr`), от него строится
-имя экспорта конфига (`grAlertConfig`). `--components-dir`, `--barrel`,
+имя экспорта конфига (`grAlertConfig`). Если в директории есть каталоги
+компонентов, но ни один не начинается с префикса, генератор падает с
+`no-components-with-prefix` и ничего не пишет: опечатка в префиксе иначе
+вычистила бы все реестры. `--components-dir`, `--barrel`,
 `--registry` переопределяют пути; `--subcomponents` добавляет алиасы
 `exports` на части составных компонентов; `--exports=import` пишет строковые
 subpath без `types` (пакет без деклараций). Нестандартные цели (`markedBlock`)

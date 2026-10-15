@@ -98,6 +98,8 @@ export async function collectGranumComponentEntries(
   )
 
   const found: GranumComponentEntry[] = []
+  /** Каталоги с парой `index.ts` + `config.ts`, имя которых не подошло под префикс. */
+  const lookalikes: string[] = []
 
   for (const entry of entries) {
     if (!entry.isDirectory())
@@ -108,6 +110,8 @@ export async function collectGranumComponentEntries(
         found.push({ name: entry.name, dir: entry.name })
       continue
     }
+    if (isComponentDir(entry.name))
+      lookalikes.push(entry.name)
 
     // Директория без префикса — группа: заглядываем на уровень вглубь. Глубже
     // не идём намеренно, канон описывает ровно один уровень группировки, а
@@ -115,13 +119,32 @@ export async function collectGranumComponentEntries(
     const nested = await readdir(resolve(componentsDir, entry.name), { withFileTypes: true }).catch(() => [])
 
     for (const child of nested) {
-      if (!child.isDirectory() || !child.name.startsWith(prefix))
+      if (!child.isDirectory())
         continue
 
       const dir = `${entry.name}/${child.name}`
+      if (!child.name.startsWith(prefix)) {
+        if (isComponentDir(dir))
+          lookalikes.push(dir)
+        continue
+      }
       if (isComponentDir(dir))
         found.push({ name: child.name, dir })
     }
+  }
+
+  // Ноль компонентов при каталогах, которые выглядят как компоненты, — почти
+  // наверняка опечатка в префиксе: молча прочитанный ноль вычистил бы каждый
+  // реестр, как и отсутствующая директория. Пустая директория свежего пакета
+  // сюда не попадает: в ней ничего не похоже на компонент.
+  if (found.length === 0 && lookalikes.length > 0) {
+    throw new GranumCodegenError(
+      'no-components-with-prefix',
+      `No component directory in ${componentsDir} starts with the prefix '${prefix}', `
+      + `but ${lookalikes.length} look like components (index.ts + config.ts): ${lookalikes.sort().join(', ')}. `
+      + 'Check --prefix: generating with zero components would strip every registry.',
+      componentsDir,
+    )
   }
 
   const components = found.sort((left, right) => compareComponentNames(left.name, right.name))
