@@ -34,6 +34,11 @@ export interface EmittedCss {
 }
 
 /** Один блок токенов темы в CSS — единственное место, где к имени дописывается `--`. */
+function isRootSelector(selector: string): boolean {
+  const s = selector.trim()
+  return s === '' || s === ':root'
+}
+
 export function serializeThemeBlock(block: EffectiveThemeBlock): string | undefined {
   const lines = [...block.tokens.values()]
     .filter(chain => chain.effective !== undefined)
@@ -148,12 +153,15 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   }))
 
   // 2. Структурные блоки токенов тем — из общей раскладки слоёв (R-5).
+  // Блок `:root` — слой tokens, остальные — themes (A-10): `:root` и `.dark`
+  // равны по специфичности, и в одном слое тему решал бы порядок `names`.
+  const rootBlocks: string[] = []
   const themeBlocks: string[] = []
   for (const themeName of resolution.themes.names) {
     for (const block of resolution.tokenLayers.get(themeName) ?? []) {
       const css = serializeThemeBlock(block)
       if (css !== undefined)
-        themeBlocks.push(css)
+        (isRootSelector(block.selector) ? rootBlocks : themeBlocks).push(css)
     }
   }
 
@@ -202,7 +210,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const baseSections = sections.filter(s => s.source.kind === 'base').map(s => s.css)
 
   const layers: Record<LayerName, string> = {
-    tokens: tokensSections.join('\n'),
+    tokens: [...tokensSections, ...rootBlocks].join('\n'),
     base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
     themes: [...themeBlocks, ...themeFileSections].join('\n'),
     components: componentCss.join('\n'),

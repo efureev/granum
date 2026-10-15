@@ -47,12 +47,35 @@ describe('emitCss: слои и порядок (INV-CSS-1, INV-CSS-2; utilities �
     expect(order.every((pos, i) => pos > 0 && (i === 0 || pos > order[i - 1]!))).toBe(true)
     expect(css.layers.tokens).toContain('--space: 8px')
     expect(css.layers.base).toContain('body { margin')
-    expect(css.layers.themes).toContain(':root {\n  --accent: red;\n}')
+    // Структурный `:root` — в слое tokens после файлов токенов (A-10), блоки остальных тем — в themes.
+    expect(css.layers.tokens).toContain(':root {\n  --accent: red;\n}')
+    expect(css.layers.tokens.indexOf('--space: 8px')).toBeLessThan(css.layers.tokens.indexOf('--accent: red'))
+    expect(css.layers.themes).not.toContain(':root')
     expect(css.layers.themes).toContain('.dark {')
     // Компоненты — в порядке селекции: зависимость раньше зависящего.
     expect(css.layers.components.indexOf('.card')).toBeLessThan(css.layers.components.indexOf('.panel'))
     expect(css.layers.utilities).toContain('.p-4{padding:1rem;}')
     expect(css.layers.utilities).toContain('.gap-2{gap:0.5rem;}')
+  })
+
+  it('тема `:root` не перекрывает тему с селектором при любом порядке names (A-10, INV-CSS-2)', async () => {
+    // `:root` и `.dark` равны по специфичности: в одном слое победил бы стоящий
+    // позже, и при `names: ['dark', 'light']` тёмная тема не включалась бы никогда.
+    const loaded = makeManifest('@x/kit', { Card: {} }, {
+      theme: {
+        themes: {},
+        defaultThemes: ['light', 'dark'],
+        tokenDefinitions: { light: { tokens: { bg: 'white' } }, dark: { selector: '.dark', tokens: { bg: 'black' } } },
+        declares: ['--bg'],
+      },
+    })
+    const root = mkdtempSync(join(tmpdir(), 'granum-emit-'))
+    const app = await prepareTestApp({ providers: [loaded], components: ['@x/kit:Card'], themes: { names: ['dark', 'light'] } }, root)
+    const css = await emitCss(app)
+
+    expect(css.layers.tokens).toContain(':root {\n  --bg: white;\n}')
+    expect(css.layers.themes).toContain('.dark {\n  --bg: black;\n}')
+    expect(css.layers.themes).not.toContain(':root')
   })
 
   it('конкатенация срезов по слоям равна целому (INV-CSS-4); плоский режим без @layer', async () => {
