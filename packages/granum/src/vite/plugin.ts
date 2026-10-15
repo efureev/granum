@@ -470,6 +470,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           log(`provider '${w.providerId}' has no manifest: classes and tokens scanned from its dist (slow path)`)
         else if (w.kind === 'imports-without-app-sources')
           log(`warning: components: 'imports' needs appSources.dirs — the selection is empty`)
+        else if (w.kind === 'app-sources-unset')
+          log(`warning: appSources is not set — classes in the application markup are not scanned and get no CSS; set appSources: { dirs: ['src'] }, or dirs: [] if the markup has no classes of its own`)
       }
       writeComponentTypes(app)
 

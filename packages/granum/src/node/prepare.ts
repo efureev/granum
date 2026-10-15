@@ -62,6 +62,8 @@ export type PreparedWarning
     /** Объектный провайдер просканирован по `dist` (R-6): классы и токены известны, но без графа бандлера. */
     | { readonly kind: 'provider-scanned', readonly providerId: string }
     | { readonly kind: 'imports-without-app-sources' }
+    /** `appSources` не задан: разметку приложения никто не сканирует, её классы CSS не получат. */
+    | { readonly kind: 'app-sources-unset' }
 
 /**
  * Провайдер по имени пакета — манифест через `exports` (A-2); объект —
@@ -258,6 +260,10 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     components = [...importSelection(appScan.componentImports, inputs.map(toProviderNode)), ...tagSelection(appScan.componentTags, inputs)]
   }
   else {
+    // Приложению без своих классов скан не нужен, но молчать нельзя: иначе
+    // утилиты разметки пропадают без единого слова. Явный `dirs: []` — отказ.
+    if (!config.appSources)
+      warnings.push({ kind: 'app-sources-unset' })
     components = config.components
   }
 

@@ -444,7 +444,7 @@ export default defineGranumConfig({
 |---|---|
 | A-9 | Виртуальный модуль `virtual:granum.css` MUST содержать весь CSS granum в порядке слоёв: `@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;` затем блоки слоёв в том же порядке (INV-CSS-1, ADR-4). |
 | A-10 | Содержимое слоёв: `tokens` — `theme.tokensCss` всех провайдеров графа по порядку графа, затем структурные токены `:root`; `base` — `preflight` движка (первым), затем `theme.baseCss` провайдеров; `themes` — по каждой активной теме в порядке `names`: её файлы (тема без структурного определения у провайдера, дедуп по пути), затем её структурные блоки не под `:root` — компонентов, `define`, `tokenOverrides`; так приоритет INV-THM-2 держится каскадом, а блоки одной темы не оказываются после файла следующей; `components` — `cssFiles` и `styles.css` компонентов селекции в порядке селекции; `utilities` — утилиты движка (INV-CSS-2, INV-CSS-8). |
-| A-11 | Вход движка MUST быть объединением: статических классов компонентов селекции из манифестов, их safelist, классов, извлечённых из исходников приложения (`appSources`). Классы приложения извлекаются тем же экстрактором (INV-CSS-3). |
+| A-11 | Вход движка MUST быть объединением: статических классов компонентов селекции из манифестов, их safelist, классов, извлечённых из исходников приложения (`appSources`). Классы приложения извлекаются тем же экстрактором (INV-CSS-3). Если `appSources` не задан, разметка приложения не сканируется, и плагин MUST сказать об этом строкой сборки и предупреждением `app-sources-unset` в отчёте; `appSources: { dirs: [] }` — явный отказ без предупреждения. |
 | A-12 | Модули `virtual:granum/layers/<layer>.css` MUST отдавать один слой **в его обёртке `@layer`** — иначе срез отдавал бы нелейерный CSS, то есть ровно наоборот тому, что обещает слой. Объявление порядка несёт срез первого непустого слоя, поэтому конкатенация срезов в порядке слоёв MUST быть побайтно равна `virtual:granum.css` (INV-CSS-4). Пустой слой MUST давать пустой модуль. |
 | A-13 | CSS компонентов MUST проходить в вывод побайтно, кроме обрезки токенов при `pruneTokens.mode: 'on'` (INV-CSS-5). `@apply` раскрывает только сборка провайдера (B-11, ADR-3): приложение директивы не раскрывает, остаток ловит `doctor` (`apply-not-expanded`). |
 | A-14 | При `css.layers: false` плагин MUST эмитировать тот же порядок без обёрток `@layer` (плоский режим для приложений с нелейерным CSS). |
@@ -570,7 +570,8 @@ export default defineGranumConfig({
 - **резолюция** (`warnings`, читает отчёт и `doctor`): `provider-without-manifest`,
   `provider-scanned`, `override-skipped`, и предупреждения тем —
   `default-theme-without-source`, `partial-theme`, `multiple-default-themes`,
-  `theme-extends-unresolved`, `theme-extends-partial`, `theme-extends-cycle`;
+  `theme-extends-unresolved`, `theme-extends-partial`, `theme-extends-cycle`; подготовка
+  приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
   `token-undefined`, `token-conflict`, `unused-provider`, `provider-dialect-mismatch`,

@@ -12,6 +12,7 @@ import { windEngine } from '@feugene/granum-engine-wind'
 export default defineGranumConfig({
   providers: ['@acme/ui'],
   engine: windEngine(),
+  appSources: { dirs: ['src'] },
 })
 ```
 

@@ -60,7 +60,7 @@ describe('scanObjectProvider (R-6)', () => {
   it('baseUrl не каталог — undefined; в prepareApp остаётся provider-without-manifest', async () => {
     const fake = makeProvider('@x/fake', { components: [{ name: 'A' }] })
     expect(await scanObjectProvider(fake, testEngine())).toBeUndefined()
-    const app = await prepareTestApp({ providers: [fake], components: ['@x/fake:A'] }, tmpdir())
+    const app = await prepareTestApp({ providers: [fake], components: ['@x/fake:A'], appSources: { dirs: [] } }, tmpdir())
     expect(app.warnings.map(w => w.kind)).toEqual(['provider-without-manifest'])
   })
 
@@ -75,7 +75,7 @@ describe('scanObjectProvider (R-6)', () => {
       dependencies: [donor],
     })
     expect([...collectProviderInstances(provider).keys()]).toEqual(['@x/base'])
-    const app = await prepareTestApp({ providers: [provider], components: ['@x/kit:Card'] }, root)
+    const app = await prepareTestApp({ providers: [provider], components: ['@x/kit:Card'], appSources: { dirs: [] } }, root)
     expect(app.warnings.map(w => `${w.kind}:${'providerId' in w ? w.providerId : ''}`).sort()).toEqual(['provider-scanned:@x/base', 'provider-scanned:@x/kit'])
     expect(app.resolution.selection.order).toEqual(['@x/base:Table', '@x/kit:Card'])
     expect(app.resolution.providers.every(p => p.form === 'manifest')).toBe(true)

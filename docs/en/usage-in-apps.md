@@ -34,7 +34,7 @@ export default defineGranumConfig({
 | `themes.define` | — | application themes: `{ extends, tokens, tokensRef, label, colorScheme }` |
 | `themes.tokenOverrides` | — | values on top of every provider layer |
 | `themes.strictTokens` | `false` | an override of a token no layer declares is dropped |
-| `appSources` | — | directories to extract application classes and token consumption from |
+| `appSources` | — | directories to extract application classes and token consumption from. Without it the classes of the application markup get no CSS and the build warns; `{ dirs: [] }` says explicitly "no classes of its own" |
 | `css.layers` | `true` | `@layer` wrappers; `false` — flat concatenation in the same order |
 | `js.guard` | `'error'` | importing a component outside the selection: error, warning or nothing |
 | `js.dts` | — | where to write the declarations for `virtual:granum/components`, e.g. `src/granum.d.ts` |

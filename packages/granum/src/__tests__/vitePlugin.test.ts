@@ -87,7 +87,7 @@ async function buildDashProvider(): Promise<string> {
   return root
 }
 
-async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string, vite: Pick<InlineConfig, 'build' | 'css'> = {}) {
+async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine' | 'appSources'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'], appSources?: GranumConfig['appSources'] | undefined }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string, vite: Pick<InlineConfig, 'build' | 'css'> = {}) {
   // `reuseRoot` — для второй сборки ТОГО ЖЕ приложения: без него не проверить,
   // что плагин не переписывает файлы, которые не менялись.
   const root = reuseRoot ?? mkdtempSync(join(tmpdir(), 'granum-app-'))
@@ -101,12 +101,15 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
   write(root, 'index.html', `<!doctype html><div id="app"></div><script type="module" src="/src/main.ts"></script>`)
   write(root, 'src/main.ts', `${entry}\nimport { createApp } from 'vue'\nimport App from './App.vue'\ncreateApp(App).mount('#app')\n`)
   write(root, 'src/App.vue', appCode)
+  // По умолчанию скан `src`; `appSources: undefined` — сборка без него.
+  const { appSources, ...rest } = config
+  const sources = 'appSources' in config ? appSources : { dirs: ['src'] }
   const logs: string[] = []
   await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, ...config }, { log: l => logs.push(l) })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
     build: { minify: false, ...vite.build },
     ...(vite.css ? { css: vite.css } : {}),
   })
@@ -345,6 +348,27 @@ describe('granum() с настоящим Vite', async () => {
       expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])
       expect(app.css).toContain('@layer granum.tokens {')
       expect(app.css).toContain('@layer granum.components {')
+    })
+  })
+
+  describe('appSources не задан — сборка предупреждает', () => {
+    const markup = `<template><div class="uppercase">x</div></template>\n`
+
+    it('без appSources разметка не сканируется, и строка сборки говорит об этом один раз', async () => {
+      const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], appSources: undefined }, markup)
+      expect(app.css).not.toContain('.uppercase')
+      expect(app.logs.filter(l => l.includes('appSources is not set'))).toHaveLength(1)
+      expect(app.report.warnings).toContain('app-sources-unset')
+    })
+
+    it('appSources со списком каталогов и явный отказ dirs: [] — без предупреждения', async () => {
+      const scanned = await buildApp(providerRoot, { components: ['@t/kit:Card'] }, markup)
+      expect(scanned.css).toContain('.uppercase')
+      const optedOut = await buildApp(providerRoot, { components: ['@t/kit:Card'], appSources: { dirs: [] } }, markup)
+      for (const app of [scanned, optedOut]) {
+        expect(app.logs.some(l => l.includes('appSources'))).toBe(false)
+        expect(app.report.warnings).not.toContain('app-sources-unset')
+      }
     })
   })
 

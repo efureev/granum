@@ -311,7 +311,8 @@ interface EngineOutput {
 - **резолюция** (`warnings`, читает отчёт и `doctor`): `provider-without-manifest`,
   `provider-scanned`, `override-skipped`, и предупреждения тем —
   `default-theme-without-source`, `partial-theme`, `multiple-default-themes`,
-  `theme-extends-unresolved`, `theme-extends-partial`, `theme-extends-cycle`;
+  `theme-extends-unresolved`, `theme-extends-partial`, `theme-extends-cycle`; подготовка
+  приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
   `token-undefined`, `token-conflict`, `unused-provider`, `provider-dialect-mismatch`,
