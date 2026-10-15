@@ -39,9 +39,12 @@ function makeFixture(options: {
   fileInput?: boolean
   /** `<style>` в SFC Panel рядом с объявленным `cssFiles: ['./styles.css']` — раскладка из руководства. */
   panelStyle?: boolean
+  /** Пути темы с `./` — так их пишут руками; в манифест они обязаны уехать нормализованными. */
+  dotPaths?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false } = options
+  const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
   write(root, 'package.json', JSON.stringify({
@@ -77,7 +80,7 @@ function makeFixture(options: {
     id: '@t/kit',
     contractVersion: 1,
     components: [card, panel],
-    theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light'] },
+    theme: { tokensCss: `${at}theme/tokens.css`, themes: { dark: `${at}theme/dark.css` }, defaultThemes: ['light'] },
     ...(engineRules ? { engine: { dialect: TEST_DIALECT, rules: [['kit-reset', { appearance: 'none' }] as const] } } : {}),
   })
   return { root, provider }
@@ -304,6 +307,22 @@ describe('granumProvider с настоящим Vite', () => {
     expect(css.indexOf('.t-panel{')).toBeLessThan(css.indexOf('.t-panel-sfc{'))
     expect(panel.css).toEqual(['components/Panel/styles.css'])
     expect(panel.tokens.consumes).toEqual(expect.arrayContaining(['--t-fg', '--t-gap']))
+  })
+
+  it('пути темы и engineModule с `./` уезжают в манифест нормализованными (C-16, INV-MAN-2)', async () => {
+    // Манифест читается штатным читателем: путь с `./` он отверг бы, и упало бы
+    // каждое приложение-потребитель, а не сборка провайдера.
+    const { manifest } = await run(makeFixture({ dotPaths: true, engineRules: true }), { engineModule: './engine.js' })
+    expect(manifest.theme.tokensCss).toBe('theme/tokens.css')
+    expect(manifest.theme.themes).toEqual({ dark: 'theme/dark.css' })
+    expect(manifest.engine.module).toBe('engine.js')
+  })
+
+  it('путь темы за пределами пакета — ошибка при создании плагина', () => {
+    const { provider } = makeFixture()
+    const escaping = { ...provider, theme: { ...provider.theme!, tokensCss: '../outside.css' } }
+    expect(() => granumProvider({ provider: escaping, engine: testEngine() })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+    expect(() => granumProvider({ provider, engine: testEngine(), engineModule: '/abs/engine.js' })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
   })
 
   it('без такого плагина предупреждения нет', async () => {

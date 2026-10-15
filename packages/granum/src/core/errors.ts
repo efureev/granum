@@ -173,6 +173,7 @@ export type InvalidProviderReason
     | 'invalid-components'
     | 'invalid-dependency'
     | 'css-file-escapes-component'
+    | 'path-escapes-package'
     | 'missing-source-url'
     | 'missing-component-entry'
     | 'invalid-dialect'

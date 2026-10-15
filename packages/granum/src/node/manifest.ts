@@ -361,6 +361,30 @@ function validateDialectScope(manifest: GranumManifest, file?: string): void {
 }
 
 /** Путь относителен к манифесту, POSIX, без `..` и без выхода за пакет (INV-MAN-2). */
+/**
+ * Путь внутри пакета в форме, которую принимает `isPackageRelativePath`: без
+ * `./`, пустых сегментов и `..`. Писатель манифеста нормализует им пути автора
+ * (`./theme/tokens.css` → `theme/tokens.css`). `undefined` — путь абсолютный,
+ * URL, с `\` или выходит за корень пакета.
+ */
+export function normalizePackagePath(path: string): string | undefined {
+  if (path.length === 0 || path.startsWith('/') || path.includes('\\') || /^[a-z]+:/i.test(path))
+    return undefined
+  const segments: string[] = []
+  for (const segment of path.split('/')) {
+    if (segment === '' || segment === '.')
+      continue
+    if (segment === '..') {
+      if (segments.length === 0)
+        return undefined
+      segments.pop()
+      continue
+    }
+    segments.push(segment)
+  }
+  return segments.length > 0 ? segments.join('/') : undefined
+}
+
 export function isPackageRelativePath(path: string): boolean {
   if (path.length === 0 || path.startsWith('/') || path.includes('\\') || /^[a-z]+:/i.test(path))
     return false

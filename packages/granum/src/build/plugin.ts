@@ -21,7 +21,7 @@ import { sortedUnique } from '../core/dedupe'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { collectImportSpecifiers } from '../node/imports'
-import { MANIFEST_FILE_NAME, writeManifestSync } from '../node/manifest'
+import { MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
 import { materializeProviderRefs } from '../node/materializeRefs'
 import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
@@ -102,6 +102,24 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   const declaredDialect = provider.engine?.dialect
   if (declaredDialect !== undefined && declaredDialect !== engine.dialect)
     throw new EngineDialectMismatchError(provider.id, declaredDialect, engine.dialect, engine.name)
+  /*
+   * Пути темы и модуля правил уезжают в манифест, а читатель принимает только
+   * относительный путь внутри пакета без `./` и `..` (C-16, INV-MAN-2). Автор
+   * пишет `./theme/tokens.css` — путь нормализуется здесь, один раз. Путь вне
+   * пакета — ошибка сейчас, а не у каждого приложения-потребителя (INV-ERR-1).
+   */
+  const packagePath = (path: string, at: string): string => {
+    const normalized = normalizePackagePath(path)
+    if (normalized === undefined)
+      throw new InvalidProviderError(provider.id, 'path-escapes-package', `${at} '${path}' must be a relative path inside the package.`)
+    return normalized
+  }
+  const themePaths = {
+    tokensCss: provider.theme?.tokensCss !== undefined ? packagePath(provider.theme.tokensCss, 'theme.tokensCss') : undefined,
+    baseCss: provider.theme?.baseCss !== undefined ? packagePath(provider.theme.baseCss, 'theme.baseCss') : undefined,
+    themes: Object.fromEntries(Object.entries(provider.theme?.themes ?? {}).map(([name, path]) => [name, packagePath(path, `theme.themes.${name}`)])),
+  }
+  const engineModule = options.engineModule ? packagePath(options.engineModule, 'engineModule') : null
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
   const manifestFile = options.manifestFile ?? MANIFEST_FILE_NAME
 
@@ -321,9 +339,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         writeOut(outDir, path, css)
         themeCss.set(path, css)
       }
-      copyTheme(theme?.tokensCss, 'tokens', 'tokens')
-      copyTheme(theme?.baseCss, 'base', 'base')
-      for (const [name, path] of Object.entries(theme?.themes ?? {}))
+      copyTheme(themePaths.tokensCss, 'tokens', 'tokens')
+      copyTheme(themePaths.baseCss, 'base', 'base')
+      for (const [name, path] of Object.entries(themePaths.themes))
         copyTheme(path, 'theme', name)
 
       // 3. Ссылки на токены материализуются здесь, один раз (C-13).
@@ -458,14 +476,14 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         generatedBy: `@feugene/granum@${GRANUM_VERSION}`,
         dependencies: dependencyIds,
         theme: {
-          ...(theme?.tokensCss !== undefined ? { tokensCss: theme.tokensCss } : {}),
-          ...(theme?.baseCss !== undefined ? { baseCss: theme.baseCss } : {}),
-          themes: theme?.themes ?? {},
+          ...(themePaths.tokensCss !== undefined ? { tokensCss: themePaths.tokensCss } : {}),
+          ...(themePaths.baseCss !== undefined ? { baseCss: themePaths.baseCss } : {}),
+          themes: themePaths.themes,
           defaultThemes: theme?.defaultThemes ?? [],
           tokenDefinitions: materialized.theme?.tokenDefinitions ?? {},
           declares: sortedUnique(declaredByTheme),
         },
-        engine: engineBlock(engine, options.engineModule ?? null, components),
+        engine: engineBlock(engine, engineModule, components),
         components,
         warnings: warnings.sort((a, b) => `${a.code}\0${a.component ?? ''}`.localeCompare(`${b.code}\0${b.component ?? ''}`, 'en')),
       })

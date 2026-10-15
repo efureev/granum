@@ -217,7 +217,7 @@ interface GranumComponentDescriptor {
 
 | ID | Требование |
 |---|---|
-| C-16 | `theme.tokensCss`, `theme.baseCss`, `theme.themes[name]` — относительные пути; в манифест попадают относительно манифеста. |
+| C-16 | `theme.tokensCss`, `theme.baseCss`, `theme.themes[name]` — относительные пути; в манифест попадают относительно манифеста, нормализованными: без `./` и пустых сегментов (`./theme/tokens.css` → `theme/tokens.css`). Так же нормализуется `engineModule` плагина сборки. Путь абсолютный или выходящий за пакет — `InvalidProviderError` (`path-escapes-package`) при создании плагина. |
 | C-17 | Тема, объявленная в `defaultThemes`, SHOULD иметь источник: файл `themes[name]`, структурные `tokenDefinitions[name]` или `tokenDefinitionsRef[name]` — на уровне провайдера либо любого его компонента. Иначе резолвер приложения выдаёт предупреждение `default-theme-without-source`. |
 
 ### 5.4 Хелперы
@@ -534,6 +534,7 @@ export default defineGranumConfig({
 | `baseUrl` не URL / без `/` | `InvalidProviderError` (`invalid-base-url`, `base-url-not-a-directory`) | регистрация |
 | запись `dependencies` не инстанс и не непустая строка | `InvalidProviderError` (`invalid-dependency`) | регистрация |
 | `cssFiles` дескриптора вне `components/<Name>/` | `InvalidProviderError` (`css-file-escapes-component`) | регистрация |
+| путь темы или `engineModule` вне пакета | `InvalidProviderError` (`path-escapes-package`) | создание плагина сборки |
 | `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
 | правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |
 | объявленный диалект ≠ диалект движка сборки | `EngineDialectMismatchError` | сборка провайдера |
