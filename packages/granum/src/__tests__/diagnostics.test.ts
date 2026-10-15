@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
+import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatThemeWarning, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
 import { makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
@@ -185,6 +185,13 @@ describe('granum doctor (D-2)', () => {
       expect.stringContaining(`depends on provider '@x/base'`),
       expect.stringContaining(`imports '@feugene/granum' at runtime`),
     ])
+  })
+
+  it('тексты предупреждений extends от темы-файла', () => {
+    expect(formatThemeWarning({ kind: 'theme-extends-partial', theme: 'ocean', base: 'dark', providers: ['@p/ds'] }))
+      .toBe('theme "ocean" extends "dark" only in part: the theme file of @p/ds has blocks with another selector, nested or under an at-rule — their values are not inherited')
+    expect(formatThemeWarning({ kind: 'theme-extends-unresolved', theme: 'ocean', base: 'dark', reason: 'opaque' }))
+      .toBe('theme "ocean" extends "dark", but there is nothing to inherit: the theme file has no readable flat block of tokens')
   })
 
   it('предупреждение манифеста о невыбранном компоненте не показывается', async () => {

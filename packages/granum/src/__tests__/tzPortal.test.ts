@@ -24,18 +24,6 @@ import { TEST_DIALECT, testEngine } from './testEngine'
  * критерию готовности ТЗ), а пункт уходит из ТЗ и из roadmap.
  */
 
-describe('пункт ТЗ-2: тема приложения поверх темы-файла', () => {
-  const ocean = { names: ['light', 'dark', 'ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { 'p-primary': '#4fd1e0' } } } }
-
-  it('2.1: `theme-extends-unresolved` пропадает, когда компонент селекции добавил базе структурный блок', async () => {
-    const { root, provider } = fileThemeProvider()
-    const bare = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: ocean }, root)
-    expect(bare.resolution.warnings).toContainEqual(expect.objectContaining({ kind: 'theme-extends-unresolved', theme: 'ocean' }))
-    const tinted = await prepareTestApp({ providers: [provider], components: ['@p/ds:Tinted'], themes: ocean }, root)
-    expect(tinted.resolution.warnings).toEqual([])
-  })
-})
-
 describe('пункты ТЗ-8 и ТЗ-9: классы разметки приложения', () => {
   function appWithMarkup(): { root: string, provider: GranumLoadedManifest } {
     const setup = fileThemeProvider()

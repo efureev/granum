@@ -75,8 +75,11 @@ manifest is produced only by the build.
 - A theme selector more complex than one class, attribute or `:root` (a combinator,
   `:not(…)`): the runtime cannot derive the activation — set
   `granum(config, { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } })`.
-- `theme-extends-unresolved`: `extends` points at a file theme — it is
-  opaque; only structural values can be inherited.
+- `theme-extends-unresolved`: there is nothing to inherit — no theme with that name,
+  or its file has no readable flat block of tokens.
+- `theme-extends-partial`: the base theme file has blocks with another selector,
+  nested or under `@media`; their values did not pass to the application theme —
+  set them in the theme's `tokens` or build the theme from your CSS via `tokensRef`.
 
 ## A token override does not work
 

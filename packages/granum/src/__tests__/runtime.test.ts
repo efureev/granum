@@ -86,7 +86,7 @@ describe('getThemeManifest — из той же резолюции, что и CS
   describe('тема-файл: активация из селектора файла, а не из селекции', () => {
     const fileThemed = makeProvider('file', { theme: { defaultThemes: ['light', 'dark'], themes: { light: 'theme/light.css', dark: 'theme/dark.css' } } })
     const facts = (light: string, dark: string): NonNullable<Parameters<typeof resolveGranum>[0]['themeFiles']> => ({
-      file: { light: { selector: light, tokens: ['bg'] }, dark: { selector: dark, tokens: ['bg'] } },
+      file: { light: { selector: light, tokens: ['bg'], values: { bg: '#fff' }, partial: false }, dark: { selector: dark, tokens: ['bg'], values: { bg: '#000' }, partial: false } },
     })
 
     it('`:root` — корень, атрибут с классом — атрибут; селектор файла в `selectors`', () => {

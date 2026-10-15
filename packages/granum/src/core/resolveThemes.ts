@@ -49,6 +49,7 @@ export type ResolvedThemeWarning
     | { readonly kind: 'partial-theme', readonly theme: string, readonly providersWithout: readonly string[] }
     | { readonly kind: 'multiple-default-themes', readonly themes: readonly string[] }
     | { readonly kind: 'theme-extends-unresolved', readonly theme: string, readonly base: string, readonly reason: 'unknown' | 'opaque' }
+    | { readonly kind: 'theme-extends-partial', readonly theme: string, readonly base: string, readonly providers: readonly string[] }
     | { readonly kind: 'theme-extends-cycle', readonly chain: readonly string[] }
 
 /** Идентификатор источника для вкладов самого приложения. */
@@ -61,7 +62,12 @@ export const APP_THEME_SOURCE = '(app)'
  */
 export interface ThemeFileFacts {
   readonly selector: string
+  /** Имена всех токенов файла — пакетный слой для `strictTokens`. */
   readonly tokens: readonly string[]
+  /** Значения блока под селектором темы — их наследует `extends`. */
+  readonly values: Readonly<Record<string, string>>
+  /** В файле есть токены, которые не наследуются: блок с другим селектором, вложенный или под at-rule. */
+  readonly partial: boolean
 }
 
 /** Провайдер → тема → факты о её файле. */
@@ -224,7 +230,13 @@ function applyAppThemeDefinition(
 
   let baseTokens: Record<string, string> = {}
   if (definition.extends !== undefined) {
-    baseTokens = flattenThemeTokens(registry[definition.extends])
+    // Значения файлов базы — нижний слой: блоки компонентов и структурное
+    // определение базы перекрывают их, как и в её собственном CSS.
+    const baseFiles = items.filter(item => item.themeName === definition.extends && item.file)
+    baseTokens = { ...Object.assign({}, ...baseFiles.map(item => item.file!.values)), ...flattenThemeTokens(registry[definition.extends]) }
+    const partial = baseFiles.filter(item => item.file!.partial).map(item => item.providerId)
+    if (partial.length > 0)
+      warnings.push({ kind: 'theme-extends-partial', theme: themeName, base: definition.extends, providers: partial })
     if (Object.keys(baseTokens).length === 0) {
       warnings.push({
         kind: 'theme-extends-unresolved',

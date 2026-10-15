@@ -212,3 +212,28 @@ describe('манифест тем для темы-файла', () => {
     expect(attributes.get('data-theme')).toBe('light')
   })
 })
+
+describe('extends от темы-файла на подготовке приложения', () => {
+  const ocean = { names: ['light', 'ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { 'p-primary': '#4fd1e0' } } } }
+
+  it('пример портала: ocean несёт значения dark.css и свои — при любой селекции', async () => {
+    const { root, provider } = fileThemeProvider()
+    for (const components of [['@p/ds:Plain'], ['@p/ds:Tinted']]) {
+      const app = await prepareTestApp({ providers: [provider], components, themes: ocean }, root)
+      const { css } = await themesLayer(app)
+      expect(blockOf(css, '--p-bg: #0f172a'), JSON.stringify(components)).toBe('[data-theme="ocean"] {')
+      expect(blockOf(css, '--p-primary: #4fd1e0'), JSON.stringify(components)).toMatch(/^\[data-theme="ocean"\] \{/)
+      expect(app.resolution.warnings, JSON.stringify(components)).toEqual([])
+    }
+  })
+
+  it.each([
+    ['блок с другим селектором', `[data-theme='dark'], .dark {\n  --p-bg: #0f172a;\n}\n.dark-contrast {\n  --p-ring: #f8fafc;\n}\n`],
+    ['блок под @media', `[data-theme='dark'], .dark {\n  --p-bg: #0f172a;\n}\n@media (prefers-contrast: more) {\n  [data-theme='dark'] {\n    --p-bg: #000000;\n  }\n}\n`],
+  ])('%s в файле базы — theme-extends-partial, плоский блок всё равно наследуется', async (_, dark) => {
+    const { root, provider } = fileThemeProvider({ dark })
+    const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: ocean }, root)
+    expect(app.resolution.warnings).toEqual([{ kind: 'theme-extends-partial', theme: 'ocean', base: 'dark', providers: ['@p/ds'] }])
+    expect(blockOf((await themesLayer(app)).css, '--p-bg: #0f172a')).toBe('[data-theme="ocean"] {')
+  })
+})

@@ -279,6 +279,20 @@ try {
   check(byAttribute === OVERRIDE, `тёмная тема-файл: override действует под [data-theme=dark]: ${byAttribute}`)
   check(byClass === OVERRIDE, `тёмная тема-файл: override действует под .dark: ${byClass}`)
   check(light === '#ffffff', `светлая тема не задета override тёмной: ${light}`)
+
+  // Тема приложения поверх темы-файла: `extends` наследует значения файла.
+  const OCEAN_FG = '#4fd1e0'
+  const oceanApp = await prepareApp({
+    engine: windEngine(),
+    providers: ['@granum-fixtures/mini-ds'],
+    themes: { names: ['light', 'ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { 'xxx-fg': OCEAN_FG } } } },
+  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
+  check(oceanApp.resolution.warnings.length === 0, `ocean extends dark: предупреждения ${JSON.stringify(oceanApp.resolution.warnings)}`)
+  const oceanPage = await browser.newPage()
+  await oceanPage.setContent(`<!doctype html><html data-theme="ocean"><head><style>${(await emitCss(oceanApp)).css}</style></head><body></body></html>`)
+  const [oceanBg, oceanFg] = await oceanPage.evaluate(() => ['--xxx-bg', '--xxx-fg'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim()))
+  check(oceanBg === '#0b1120', `тема приложения ocean унаследовала --xxx-bg из dark.css: ${oceanBg}`)
+  check(oceanFg === OCEAN_FG, `тема приложения ocean перекрыла --xxx-fg своим значением: ${oceanFg}`)
 }
 catch (error) {
   failures.push(`каскад тем: прогон упал: ${error?.message ?? error}`)

@@ -2,7 +2,7 @@ import type { GranumProvider } from '../contract'
 import { describe, expect, it } from 'vitest'
 import { toProviderNode } from '../core/providerNode'
 import { defaultAppThemeSelector, GRANUM_DEFAULT_THEME_NAMES, resolveNeededThemeNames, resolveThemes } from '../core/resolveThemes'
-import { makeManifest, makeProvider } from './helpers'
+import { component, makeManifest, makeProvider } from './helpers'
 
 const nodes = (...ps: Parameters<typeof toProviderNode>[0][]): ReturnType<typeof toProviderNode>[] => ps.map(toProviderNode)
 const comps = (p: GranumProvider): ReturnType<typeof toProviderNode>['components'] => toProviderNode(p).components
@@ -228,5 +228,46 @@ describe('themes.define — набор тем принадлежит прило�
       define: { emerald: { extends: 'light', label: 'Изумруд', colorScheme: 'dark' }, sand: { label: 'Песок' } },
     })
     expect(r.meta).toEqual({ emerald: { label: 'Изумруд', colorScheme: 'dark' } })
+  })
+})
+
+describe('extends от темы-файла: значения файла наследуются', () => {
+  const DARK = `[data-theme='dark'], .dark`
+  const fileDark = (id: string, patch: Parameters<typeof makeProvider>[1] = {}): GranumProvider =>
+    makeProvider(id, { theme: { themes: { light: 'theme/light.css', dark: 'theme/dark.css' } }, ...patch })
+  const facts = (values: Record<string, string>, partial = false): { selector: string, tokens: string[], values: Record<string, string>, partial: boolean } =>
+    ({ selector: DARK, tokens: Object.keys(values), values, partial })
+  const ocean = { names: ['ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { primary: '#4fd1e0' } } } }
+
+  it('тема приложения получает значения файла базы и свои поверх', () => {
+    const p = fileDark('f')
+    const r = resolveThemes(nodes(p), ocean, [], { f: { dark: facts({ bg: '#0f172a', primary: '#60a5fa' }) } })
+    expect(r.tokenRegistry.ocean!.blocks).toEqual([{ selector: '[data-theme="ocean"]', tokens: { bg: '#0f172a', primary: '#4fd1e0' } }])
+    expect(r.warnings).toEqual([])
+  })
+
+  it('порядок: файл < блоки компонентов базы < tokens приложения; провайдеры — в порядке графа', () => {
+    const tinted = fileDark('f', { components: [component('Tinted', { tokenDefinitions: { dark: { selector: '[data-theme="dark"]', tokens: { bg: '#101010', tint: '#334155' } } } })] })
+    const second = fileDark('g')
+    const r = resolveThemes(nodes(tinted, second), ocean, comps(tinted), {
+      f: { dark: facts({ bg: '#0f172a', primary: '#60a5fa', ring: '#1' }) },
+      g: { dark: facts({ ring: '#2', muted: '#3' }) },
+    })
+    expect(r.tokenRegistry.ocean!.tokens).toEqual({ bg: '#101010', tint: '#334155', primary: '#4fd1e0', ring: '#2', muted: '#3' })
+  })
+
+  it('цепочка: наследник темы-файла передаёт её значения дальше', () => {
+    const p = fileDark('f')
+    const r = resolveThemes(nodes(p), { names: ['deep'], define: { ocean: { extends: 'dark', tokens: { primary: '#4fd1e0' } }, deep: { extends: 'ocean', tokens: { bg: '#000' } } } }, [], { f: { dark: facts({ bg: '#0f172a', fg: '#e2e8f0' }) } })
+    expect(r.tokenRegistry.deep!.tokens).toEqual({ bg: '#000', fg: '#e2e8f0', primary: '#4fd1e0' })
+  })
+
+  it('часть файла не наследуется — theme-extends-partial; наследовать нечего — opaque', () => {
+    const p = fileDark('f')
+    const partial = resolveThemes(nodes(p), ocean, [], { f: { dark: facts({ bg: '#0f172a' }, true) } })
+    expect(partial.warnings).toEqual([{ kind: 'theme-extends-partial', theme: 'ocean', base: 'dark', providers: ['f'] }])
+    expect(partial.tokenRegistry.ocean!.tokens).toEqual({ bg: '#0f172a', primary: '#4fd1e0' })
+    const unread = resolveThemes(nodes(p), ocean, [])
+    expect(unread.warnings).toEqual([{ kind: 'theme-extends-unresolved', theme: 'ocean', base: 'dark', reason: 'opaque' }])
   })
 })

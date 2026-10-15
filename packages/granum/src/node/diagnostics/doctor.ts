@@ -125,7 +125,9 @@ function themeWarningSubject(w: ResolvedThemeWarning): string {
 export function formatThemeWarning(w: ResolvedThemeWarning): string {
   switch (w.kind) {
     case 'theme-extends-unresolved':
-      return `theme "${w.theme}" extends "${w.base}", but there is nothing to inherit: ${w.reason === 'unknown' ? 'no provider supplies a theme with that name' : 'the theme comes as a ready-made CSS file, its values are opaque'}`
+      return `theme "${w.theme}" extends "${w.base}", but there is nothing to inherit: ${w.reason === 'unknown' ? 'no provider supplies a theme with that name' : 'the theme file has no readable flat block of tokens'}`
+    case 'theme-extends-partial':
+      return `theme "${w.theme}" extends "${w.base}" only in part: the theme file of ${w.providers.join(', ')} has blocks with another selector, nested or under an at-rule — their values are not inherited`
     case 'theme-extends-cycle':
       return `cycle in themes.define[].extends: ${w.chain.join(' → ')} — the chain is cut`
     case 'default-theme-without-source':

@@ -305,17 +305,22 @@ function readThemeFiles(inputs: readonly GranumProviderInput[]): ThemeFilesInput
     const files = isLoadedManifest(input) ? input.manifest.theme.themes : input.theme?.themes
     const baseUrl = input.baseUrl
     for (const [theme, ref] of Object.entries(files ?? {})) {
-      let blocks
+      let parsed
       try {
-        blocks = parseCssTokenBlocksFromText(readCssSync(resolveProviderPath(ref, baseUrl))).blocks
+        parsed = parseCssTokenBlocksFromText(readCssSync(resolveProviderPath(ref, baseUrl)))
       }
       catch {
         continue
       }
-      if (blocks.length === 0)
+      const [first, ...others] = parsed.blocks
+      if (!first)
         continue
-      const tokens = [...new Set(blocks.flatMap(block => Object.keys(block.tokens)))]
-      ;(out[id] ??= {})[theme] = { selector: blocks[0]!.selector, tokens }
+      const tokens = [...new Set(parsed.blocks.flatMap(block => Object.keys(block.tokens)))]
+      // Разбор сливает блоки одного селектора, так что первый блок — вся тема
+      // под её селектором; прочие блоки и пропущенные разбором — то, что
+      // `extends` унаследовать не может.
+      const partial = others.length > 0 || parsed.skipped.length > 0
+      ;(out[id] ??= {})[theme] = { selector: first.selector, tokens, values: first.tokens, partial }
     }
   }
   return out

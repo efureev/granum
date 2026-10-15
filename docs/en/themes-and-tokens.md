@@ -52,8 +52,10 @@ themes: {
 }
 ```
 
-`extends` inherits the values of a provider theme (structural ones only: a
-file theme is opaque, and the report says `theme-extends-unresolved`).
+`extends` inherits the values of a provider theme: from its file, the block
+under the theme selector; on top, component blocks and the structural
+definition. File blocks with another selector, nested or under `@media` are not
+inherited — the report says `theme-extends-partial`.
 `tokensRef` is an application CSS file whose tokens are materialised at build
 time. `label` and `colorScheme` go to the theme manifest for the runtime.
 
