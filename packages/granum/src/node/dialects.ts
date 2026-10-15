@@ -52,8 +52,11 @@ export interface ReconciledProviders {
   readonly decisions: readonly ProviderEngineDecision[]
   /** Правила, варианты и preflights провайдеров, чьи словари совпали с движком приложения. */
   readonly contribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
-  /** Классы, потерянные пересчётом: подаются движку, чтобы остаться в `unmatched`. */
-  readonly lost: readonly string[]
+  /**
+   * Классы, потерянные пересчётом, по ключу компонента. Движку подаются только
+   * классы выбранных — а селекцию сверка ещё не знает (A-E7).
+   */
+  readonly lostByComponent: ReadonlyMap<string, readonly string[]>
 }
 
 interface EngineModuleShape {
@@ -117,7 +120,7 @@ export async function reconcileProviderEngines(
 
   const decisions: ProviderEngineDecision[] = []
   const resolverInputs: GranumProviderInput[] = []
-  const lost = new Set<string>()
+  const lostByComponent = new Map<string, readonly string[]>()
 
   for (const input of inputs) {
     if (!isLoadedManifest(input)) {
@@ -194,8 +197,11 @@ export async function reconcileProviderEngines(
     const after = new Set([...reextracted.values()].flat())
     const providerLost = [...before].filter(c => !after.has(c)).sort()
     const providerGained = [...after].filter(c => !before.has(c)).sort()
-    for (const className of providerLost)
-      lost.add(className)
+    for (const [name, component] of Object.entries(manifest.components)) {
+      const missing = component.classes.filter(c => !after.has(c))
+      if (missing.length > 0)
+        lostByComponent.set(`${manifest.id}:${name}`, sortedUnique(missing))
+    }
 
     decisions.push({
       providerId: manifest.id,
@@ -216,7 +222,7 @@ export async function reconcileProviderEngines(
     inputs: resolverInputs,
     decisions,
     contribution: { rules, variants, preflights, sources },
-    lost: [...lost].sort(),
+    lostByComponent,
   }
 }
 

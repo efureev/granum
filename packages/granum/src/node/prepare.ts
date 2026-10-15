@@ -16,6 +16,7 @@ import { resolve as resolvePath } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
+import { sortedUnique } from '../core/dedupe'
 import { DuplicateProviderIdError, TokenRefError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
@@ -45,7 +46,11 @@ export interface PreparedApp {
   readonly engineContribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
   /** Решение по каждому провайдеру: диалект, отпечаток, откуда взяты классы (A-E3). */
   readonly engineDecisions: readonly ProviderEngineDecision[]
-  /** Классы, потерянные пересчётом: подаются движку, чтобы остаться в `unmatched` (A-E7). */
+  /**
+   * Классы выбранных компонентов, потерянные пересчётом: подаются движку, чтобы
+   * остаться в `unmatched` (A-E7). Потерянное у невыбранных во вход не идёт — их
+   * классов там не было и до пересчёта; пакет целиком описывает `lost` решения.
+   */
   readonly reextractLost: readonly string[]
   readonly warnings: readonly PreparedWarning[]
 }
@@ -279,7 +284,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     selectionInput: components,
     engineContribution: reconciled.contribution,
     engineDecisions: reconciled.decisions,
-    reextractLost: reconciled.lost,
+    reextractLost: sortedUnique(resolution.selection.order.flatMap(key => reconciled.lostByComponent.get(key) ?? [])),
     warnings,
   }
 }

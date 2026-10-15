@@ -10,7 +10,7 @@ import type { GranumLoadedManifest } from '../contract'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearReextractCache } from '../node/dialects'
 import { emitCss } from '../node/emit'
@@ -102,6 +102,33 @@ describe('сверка диалектов и отпечатков (A-E3, таб�
     expect(css.engine.unmatched).toContain(LOST)
     const report = buildReport(app, css)
     expect(report.classes.unmatched.find(e => e.className === LOST)?.sources).toEqual(['@x/kit'])
+  })
+
+  /**
+   * Пересчёт идёт по пакету целиком, и `lost` в решении — сведение о пакете. Но
+   * движку подаются потерянные классы только выбранных компонентов: классов
+   * невыбранного во входе не было и до пересчёта, а в `unmatched` они вменили бы
+   * приложению имена, которых оно не выбирало.
+   */
+  it('во вход движка идут потерянные классы только выбранных компонентов (A-E7)', async () => {
+    const f = fixture({ classes: ['flex', 'p-4', LOST], vocabulary: 'fnv64-otherpackager0' })
+    const dist = fileURLToPath(f.manifest.baseUrl)
+    mkdirSync(join(dist, 'components/Badge'), { recursive: true })
+    writeFileSync(join(dist, 'components/Badge/index.js'), `export const Badge = { cls: "flex" }\n`)
+    const withBadge = makeManifest('@x/kit', {
+      Card: { classes: ['flex', 'p-4', LOST], files: ['components/Card/index.js'] },
+      Badge: { classes: ['flex', 'zz-dead'], files: ['components/Badge/index.js'] },
+    }, { engine: f.manifest.manifest.engine })
+
+    const app = await prepareTestApp({ providers: [{ manifest: withBadge.manifest, baseUrl: f.manifest.baseUrl }], components: ['@x/kit:Card'] }, f.root)
+    expect(app.engineDecisions[0]).toMatchObject({ classes: 're-extracted', lost: ['zz-dead', LOST] })
+    expect(app.reextractLost).toEqual([LOST])
+
+    const css = await emitCss(app)
+    expect(css.engineInput).toContain(LOST)
+    expect(css.engineInput).not.toContain('zz-dead')
+    const report = buildReport(app, css)
+    expect(report.classes.unmatched.map(e => e.className)).toEqual([LOST])
   })
 
   it('чужой диалект — правила пакета не грузятся, и это видно (INV-ENG-8, AC-E5)', async () => {

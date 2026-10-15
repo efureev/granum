@@ -51,9 +51,14 @@ export default {
       provider?.lost.join(',') === 'atom-bg-[var(--at-bg)],atom-frame,atom-gap-2,atom-inline,atom-pad-1,atom-round,atom-stack',
       `lost: ${provider?.lost}`,
     )
-    for (const className of provider?.lost ?? []) {
+    // Движку подаются потерянные классы только выбранного `AtBox`: классов
+    // `AtChip` во входе не было и до пересчёта, и в `unmatched` они вменили бы
+    // приложению имена, которых оно не выбирало (A-E7).
+    for (const className of ['atom-bg-[var(--at-bg)]', 'atom-frame', 'atom-gap-2', 'atom-stack']) {
       const entry = report.classes.unmatched.find(e => e.className === className)
       check(entry?.sources.join(',') === '@granum-fixtures/atoms', `unmatched ${className}: ${JSON.stringify(entry)}`)
     }
+    for (const className of ['atom-inline', 'atom-pad-1', 'atom-round'])
+      check(!report.classes.unmatched.some(e => e.className === className), `класс невыбранного AtChip в unmatched: ${className}`)
   },
 }

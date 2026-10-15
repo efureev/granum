@@ -122,8 +122,9 @@ compared with the manifest list. The difference is named:
   know those names while the application engine does: they come back into the
   build;
 - **`lost`** — classes from the manifest the application engine has no rule
-  for: they stay in the engine input and show up in the report's `unmatched`.
-  Re-extraction may not make a loss quieter than it already was.
+  for. The list covers the whole package, and the classes of selected
+  components also stay in the engine input and show up in the report's
+  `unmatched`: re-extraction may not make a loss quieter than it already was.
 
 The `safelist` is never re-extracted: it is an authored declaration, not a
 derivative; an entry without a rule lands in `safelist-dead` as before. The
@@ -139,8 +140,8 @@ The package was built by an engine of another vocabulary. The consequences:
 1. the package rule module is not loaded (`engine-rules-skipped`): a rule of a
    foreign vocabulary may not be executed;
 2. the package classes are re-extracted — without its rules;
-3. names the application vocabulary does not know are listed in `lost` and show
-   up in `unmatched`.
+3. names the application vocabulary does not know are listed in `lost`, and the
+   names of selected components also show up in `unmatched`.
 
 What to do: either run an engine of the package dialect, or add the rules you
 need to your own factory (`windEngine({ rules: […] })`). Two vocabularies
