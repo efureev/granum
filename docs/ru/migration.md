@@ -48,6 +48,10 @@ granum — преемник пресета v1 с тем же контракто�
    `package.json#exports` содержал `./granum.manifest.json`.
 5. `vite build`, затем `granum doctor --strict` в приложении-потребителе.
 
+granum провайдеру нужен на сборке, в `devDependencies`: хелперы контракта сборка
+встраивает в `dist`, и дескриптор можно реэкспортировать из entry компонента без
+рантайм-зависимости от granum.
+
 ```diff
 - import { defineGranularComponent } from '@feugene/unocss-preset-granular/contract'
 + import { defineGranumComponent } from '@feugene/granum/contract'

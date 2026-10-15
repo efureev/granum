@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
-import { build } from 'vite'
+import { build, parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
-import { collectImportSpecifiers } from '../node/imports'
 import { readManifestSync } from '../node/manifest'
+import { granum } from '../vite/plugin'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
@@ -50,14 +50,16 @@ function makeFixture(options: {
   runtimeImport?: boolean
   /** Поля `package.json` поверх стандартных (`peerDependencies` и т.п.). */
   packageJson?: Record<string, unknown>
+  /** Имя пакета и id провайдера; по умолчанию `@t/kit`. */
+  name?: string
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {} } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {}, name = '@t/kit' } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
   write(root, 'package.json', JSON.stringify({
-    name: '@t/kit',
+    name,
     version: '1.2.3',
     type: 'module',
     exports: exportsOk
@@ -91,7 +93,7 @@ function makeFixture(options: {
     dynamicTokens: ['t-z'],
   })
   const provider = defineGranumProvider({
-    id: '@t/kit',
+    id: name,
     contractVersion: 1,
     components: [card, panel],
     theme: { tokensCss: `${at}theme/tokens.css`, themes: { dark: `${at}theme/dark.css` }, defaultThemes: ['light'] },
@@ -143,6 +145,30 @@ async function run(
   return { manifest: readManifestSync(join(dist, 'granum.manifest.json')).manifest, dist, logs }
 }
 
+/**
+ * Импорты модуля по AST: `import`, `export … from` и `import()` со строкой.
+ * Не текстом — в сообщениях контракта есть «from '@feugene/granum/contract'»
+ * внутри шаблонной строки, и текстовый поиск принял бы его за импорт.
+ */
+function importsOf(code: string): string[] {
+  const out: string[] = []
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object')
+      return
+    if (Array.isArray(node)) {
+      node.forEach(visit)
+      return
+    }
+    const n = node as { type?: string, source?: { type?: string, value?: unknown } }
+    if ((n.type === 'ImportDeclaration' || n.type === 'ExportNamedDeclaration' || n.type === 'ExportAllDeclaration' || n.type === 'ImportExpression')
+      && n.source?.type === 'Literal' && typeof n.source.value === 'string') {
+      out.push(n.source.value)
+    }
+    Object.values(node).forEach(visit)
+  }
+  visit(parseAst(code))
+  return out
+}
 describe('granumProvider с настоящим Vite', () => {
   it('правила движка без engineModule — предупреждение, а не тихая потеря (M-7)', async () => {
     // Правила известны сборке (классы провайдера ими извлекаются), но манифест
@@ -368,7 +394,7 @@ describe('granumProvider с настоящим Vite', () => {
     const baseline = await run(makeFixture())
     const { dist, manifest } = await run(makeFixture({ runtimeConfig: true }))
     const files = readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.js'))
-    const granumImports = files.flatMap(f => collectImportSpecifiers(readFileSync(join(dist, f), 'utf8'))).filter(s => s.startsWith('@feugene/granum'))
+    const granumImports = files.flatMap(f => importsOf(readFileSync(join(dist, f), 'utf8'))).filter(s => s.startsWith('@feugene/granum'))
     expect(granumImports).toEqual([])
     expect(existsSync(join(dist, 'granum/contract.js'))).toBe(true)
     expect(manifest.warnings).toEqual([])
@@ -439,5 +465,176 @@ describe('granumProvider с настоящим Vite', () => {
   it('без такого плагина предупреждения нет', async () => {
     const { manifest } = await run(makeFixture())
     expect(manifest.warnings.filter(w => w.code === 'css-double-delivery')).toEqual([])
+  })
+})
+
+/**
+ * Встроенный контракт granum в `dist` провайдера. Переработка трогает раскладку,
+ * граф, извлечение классов и границу кода, поэтому каждый инвариант, который она
+ * могла задеть, проверяется здесь отдельно — на настоящей сборке Vite.
+ */
+describe('встроенный контракт в dist провайдера', () => {
+  const CONTRACT = 'granum/contract.js'
+  /** Строка из сообщения встроенного хелпера: её наличие — код контракта в файле. */
+  const CONTRACT_CODE = 'importMetaUrl must be a non-empty string'
+
+  function jsFiles(dist: string): string[] {
+    return readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter(f => f.endsWith('.js')).sort()
+  }
+  /** Импорты granum в `dist` вида `<файл> → <спецификатор>`: провал называет файл. */
+  function granumImports(dist: string): string[] {
+    return jsFiles(dist).flatMap(f => importsOf(readFileSync(join(dist, f), 'utf8')).filter(s => s.startsWith('@feugene/granum')).map(s => `${f} → ${s}`))
+  }
+
+  it('провайдер без контракта в коде — чанка контракта нет', async () => {
+    const { dist } = await run(makeFixture())
+    expect(existsSync(join(dist, CONTRACT))).toBe(false)
+    expect(granumImports(dist)).toEqual([])
+  })
+
+  it('импорт только типов из контракта ничего не встраивает и не предупреждает', async () => {
+    const fixture = makeFixture()
+    write(fixture.root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport type { GranumComponentDescriptor } from '@feugene/granum/contract'\n`)
+    const { dist, manifest } = await run(fixture)
+    expect(existsSync(join(dist, CONTRACT))).toBe(false)
+    expect(granumImports(dist)).toEqual([])
+    expect(manifest.warnings).toEqual([])
+  })
+
+  it('код контракта — только в своём чанке: самодостаточен, без node:, data: и granum', async () => {
+    const { dist } = await run(makeFixture({ runtimeConfig: true }))
+    const contract = readFileSync(join(dist, CONTRACT), 'utf8')
+    expect(contract).toContain(CONTRACT_CODE)
+    // Чанк ничего не импортирует: ни node:, ни granum, ни код провайдера.
+    expect(importsOf(contract)).toEqual([])
+    expect(contract).not.toContain('data:')
+    // Аннотация чистоты доехала: бандлер приложения вправе выбросить неиспользуемый вызов.
+    expect(contract).toContain('__NO_SIDE_EFFECTS__')
+    for (const file of jsFiles(dist).filter(f => f !== CONTRACT))
+      expect(readFileSync(join(dist, file), 'utf8'), file).not.toContain(CONTRACT_CODE)
+  })
+
+  it('манифест: файлы, классы и токены компонентов — без чанка контракта', async () => {
+    const baseline = await run(makeFixture())
+    const { manifest } = await run(makeFixture({ runtimeConfig: true }))
+    for (const name of ['Card', 'Panel']) {
+      const component = manifest.components[name]!
+      const before = baseline.manifest.components[name]!
+      // По \`files\` приложение пересчитывает классы при чужом словаре: контракта там быть не должно.
+      expect(component.files.some(f => f.startsWith('granum/')), name).toBe(false)
+      expect(component.classes, name).toEqual(before.classes)
+      expect(component.tokens, name).toEqual(before.tokens)
+      expect(component.dependencies, name).toEqual(before.dependencies)
+    }
+  })
+
+  it('незаявленная зависимость компонента ловится и с контрактом', async () => {
+    await expect(run(makeFixture({ runtimeConfig: true, declareDependency: false }))).rejects.toBeInstanceOf(UndeclaredDependencyError)
+  })
+
+  it('node:-импорт в коде компонента ловится и с контрактом', async () => {
+    await expect(run(makeFixture({ runtimeConfig: true, nodeImport: true }))).rejects.toBeInstanceOf(BoundaryViolationError)
+  })
+
+  it('динамический импорт контракта встраивается в тот же чанк', async () => {
+    const fixture = makeFixture()
+    write(fixture.root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport const loadCardConfig = () => import('@feugene/granum/contract').then(m => m.defineGranumComponent(import.meta.url, { name: 'Card' }))\n`)
+    const { dist, manifest } = await run(fixture)
+    expect(granumImports(dist)).toEqual([])
+    expect(existsSync(join(dist, CONTRACT))).toBe(true)
+    expect(manifest.warnings).toEqual([])
+  })
+
+  it('импорт хелпера из корня @feugene/granum не встраивается — peer-missing', async () => {
+    const fixture = makeFixture()
+    write(fixture.root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport { cardConfig } from './config.ts'\n`)
+    write(fixture.root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card' })\n`)
+    const { dist, manifest } = await run(fixture)
+    expect(granumImports(dist)).toContainEqual(expect.stringMatching(/ → @feugene\/granum$/))
+    expect(manifest.warnings).toContainEqual({ code: 'peer-missing', provider: '@feugene/granum' })
+  })
+
+  it('external пользователя, забравший контракт, оставляет его внешним — и сборка об этом говорит', async () => {
+    const fixture = makeFixture({ runtimeConfig: true })
+    await build({
+      root: fixture.root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: () => {} })],
+      build: { minify: false, rolldownOptions: { external: ['vue', /^@feugene\//] } },
+    })
+    const dist = join(fixture.root, 'dist')
+    expect(granumImports(dist)).toContainEqual(expect.stringMatching(/ → @feugene\/granum\/contract$/))
+    expect(readManifestSync(join(dist, 'granum.manifest.json')).manifest.warnings).toContainEqual({ code: 'peer-missing', provider: '@feugene/granum' })
+  })
+
+  it('группа чанков пользователя не забирает контракт', async () => {
+    const baseline = await run(makeFixture())
+    const fixture = makeFixture({ runtimeConfig: true })
+    await build({
+      root: fixture.root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [vue(), granumProvider({ provider: fixture.provider, engine: testEngine(), log: () => {} })],
+      build: { minify: false, rolldownOptions: { external: ['vue'], output: { codeSplitting: { groups: [{ name: 'vendor', test: /contract|validate|dialect/ }] } } } },
+    })
+    const dist = join(fixture.root, 'dist')
+    expect(existsSync(join(dist, CONTRACT))).toBe(true)
+    expect(jsFiles(dist).filter(f => f !== CONTRACT).some(f => readFileSync(join(dist, f), 'utf8').includes(CONTRACT_CODE))).toBe(false)
+    const { manifest } = readManifestSync(join(dist, 'granum.manifest.json'))
+    expect(manifest.components.Card!.classes).toEqual(baseline.manifest.components.Card!.classes)
+  })
+
+  it('повторная сборка даёт тот же dist побайтно', async () => {
+    const fixture = makeFixture({ runtimeConfig: true })
+    const snapshot = async (): Promise<Record<string, string>> => {
+      const { dist } = await run(fixture)
+      return Object.fromEntries(readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter(f => /\.(?:js|css|json)$/.test(f)).sort().map(f => [f, readFileSync(join(dist, f), 'utf8')]))
+    }
+    const first = await snapshot()
+    expect(await snapshot()).toEqual(first)
+  })
+
+  it('объектная форма провайдера в dist грузится без granum', async () => {
+    const fixture = makeFixture({ runtimeConfig: true })
+    write(fixture.root, 'src/granum-provider/index.ts', `import { defineGranumProvider } from '@feugene/granum/contract'\nimport { cardConfig } from '../components/Card/config.ts'\nexport default defineGranumProvider({ id: '@t/kit', contractVersion: 1, components: [cardConfig] })\n`)
+    const { dist } = await run(fixture, { entries: { 'granum-provider/index': 'src/granum-provider/index.ts' } })
+    expect(granumImports(dist)).toEqual([])
+    mkdirSync(join(dist, '../node_modules'), { recursive: true })
+    symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(dist, '../node_modules/vue'), 'dir')
+    const provider = (await import(pathToFileURL(join(dist, 'granum-provider/index.js')).href) as { default: GranumProvider }).default
+    expect(provider.id).toBe('@t/kit')
+    expect(provider.components.map(c => c.name)).toEqual(['Card'])
+  })
+
+  /**
+   * У каждого провайдера своя копия контракта. Конфиг, который приложение не
+   * использует, бандлер обязан выбросить вместе с копией — иначе приложение на
+   * восьми провайдерах везло бы восемь копий.
+   */
+  it('клиентский бандл приложения: неиспользуемые конфиги выброшены вместе с копиями контракта', async () => {
+    const kit = makeFixture({ runtimeConfig: true })
+    const kit2 = makeFixture({ runtimeConfig: true, name: '@t/kit2' })
+    await run(kit)
+    await run(kit2)
+
+    const bundle = async (main: string): Promise<string> => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-contract-app-'))
+      mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+      symlinkSync(kit.root, join(root, 'node_modules/@t/kit'), 'dir')
+      symlinkSync(kit2.root, join(root, 'node_modules/@t/kit2'), 'dir')
+      symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(root, 'node_modules/vue'), 'dir')
+      write(root, 'index.html', `<!doctype html><div id="app"></div><script type="module" src="/src/main.ts"></script>`)
+      write(root, 'src/main.ts', main)
+      await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granum({ engine: testEngine(), providers: ['@t/kit', '@t/kit2'], components: 'all' }, { log: () => {} })] })
+      const assets = join(root, 'dist/assets')
+      return readdirSync(assets).filter(f => f.endsWith('.js')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
+    }
+
+    const unused = await bundle(`import { Card } from '@t/kit/components/Card'\nimport { Card as Card2 } from '@t/kit2/components/Card'\nconsole.log(Card, Card2)\n`)
+    expect(unused).not.toContain(CONTRACT_CODE)
+
+    const used = await bundle(`import { Card, cardConfig } from '@t/kit/components/Card'\nimport { Card as Card2 } from '@t/kit2/components/Card'\nconsole.log(Card, Card2, cardConfig.name)\n`)
+    expect(used.split(CONTRACT_CODE)).toHaveLength(2)
   })
 })

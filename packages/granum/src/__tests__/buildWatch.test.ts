@@ -1,6 +1,6 @@
 import type { RolldownWatcher } from 'rolldown'
 import type { GranumManifest, GranumProvider } from '../contract'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -158,6 +158,39 @@ describe('vite build --watch на сборке провайдера (B-15)', () 
       await session.await(m => m.components.Card!.classes.includes('p-5'), 'пересборка после починки')
 
       expect(logs.filter(line => line.includes('node:fs'))).toEqual([])
+    }
+    finally {
+      await session.close()
+    }
+  })
+
+  /**
+   * Контракт встраивается и в пересборке: разрешение модулей там может прийти из
+   * кэша, и встраивание не должно на него полагаться — чанк контракта задаёт
+   * группа чанков, а не эмит из хука.
+   */
+  it('встроенный контракт переживает пересборку', { timeout: TIMEOUT }, async () => {
+    const { root, provider } = makeFixture()
+    write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport { cardConfig } from './config.ts'\n`)
+    write(root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card' })\n`)
+    const dist = join(root, 'dist')
+    const granumImports = (): string[] => readdirSync(dist, { recursive: true, encoding: 'utf8' })
+      .filter(f => f.endsWith('.js') && !f.startsWith('granum/'))
+      .flatMap(f => [...readFileSync(join(dist, f), 'utf8').matchAll(/from\s*"(@feugene\/granum[^"]*)"/g)].map(m => `${f} → ${m[1]}`))
+    const session = await watch(root, provider, [])
+
+    try {
+      const first = await session.await(m => m.components.Card!.classes.includes('p-4'), 'первая сборка с классом p-4')
+      expect(existsSync(join(dist, 'granum/contract.js'))).toBe(true)
+      expect(granumImports()).toEqual([])
+
+      card(root, 'p-8')
+      const second = await session.await(m => m.components.Card!.classes.includes('p-8'), 'пересборка с классом p-8')
+      expect(existsSync(join(dist, 'granum/contract.js'))).toBe(true)
+      expect(granumImports()).toEqual([])
+      // Строки контракта в классы не попали ни в первой сборке, ни в пересборке.
+      expect(second.components.Card!.classes).toEqual(first.components.Card!.classes.map(c => (c === 'p-4' ? 'p-8' : c)))
+      expect(second.components.Card!.files.some(f => f.startsWith('granum/'))).toBe(false)
     }
     finally {
       await session.close()

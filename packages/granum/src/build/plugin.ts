@@ -15,6 +15,7 @@ import { builtinModules } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { normalizePath } from 'vite'
 import { GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
@@ -86,7 +87,7 @@ function ownContract(): { readonly entry: string, readonly dir: string } {
   for (const [entry, dir] of [['./contract.js', './'], ['../contract/index.ts', '../']] as const) {
     const path = fileURLToPath(new URL(entry, import.meta.url))
     if (existsSync(path))
-      return { entry: path, dir: fileURLToPath(new URL(dir, import.meta.url)) }
+      return { entry: path, dir: normalizePath(fileURLToPath(new URL(dir, import.meta.url))) }
   }
   throw new Error(`granumProvider: cannot locate the @feugene/granum/contract module next to ${import.meta.url}`)
 }
@@ -231,7 +232,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
               chunkFileNames: granumChunkFileNames(componentSources),
               // Контракт — отдельным чанком при любой селекции и в `--watch`:
               // строки его сообщений не должны смешаться с кодом компонента.
-              codeSplitting: { groups: [{ name: GRANUM_CONTRACT_CHUNK, test: (id: string) => id.startsWith(contract.dir) }] },
+              // Приоритет — выше групп пользователя: `vendor` по node_modules иначе
+              // забрал бы контракт опубликованного granum в общий чанк.
+              codeSplitting: { groups: [{ name: GRANUM_CONTRACT_CHUNK, priority: 1_000_000, test: (id: string) => normalizePath(id).startsWith(contract.dir) }] },
               assetFileNames: granumAssetFileNames(componentSources),
             },
           },

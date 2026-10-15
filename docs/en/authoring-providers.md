@@ -24,6 +24,7 @@ dist/
   components/<Name>/styles.css     component CSS
   groups/<g>/shared/*.js           shared chunks of a group
   chunks/*.js                      shared chunks outside groups
+  granum/contract.js               embedded granum contract, if the code imports it
   theme/*.css                      foundation (copy of src/theme)
   granum.manifest.json
 ```
@@ -196,7 +197,8 @@ await runRegistryCodegen({
   the consumer gets two copies. The second one is **outside the `granum.*`
   layers** and therefore beats the whole library. Drop such a plugin from a
   provider's config;
-- `granum.manifest.json` is in `exports`; `sideEffects: false`;
+- `granum.manifest.json` is in `exports`; `sideEffects: false`; the package `files`
+  cover the whole `dist`, `granum/contract.js` included;
 - a package with rules declares `engine.dialect`, is built by an engine of that
   dialect, and `engineModule` points at the built rule module;
 - component `dependencies` cover the imports — otherwise the build fails;

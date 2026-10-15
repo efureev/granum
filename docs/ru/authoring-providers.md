@@ -23,6 +23,7 @@ dist/
   components/<Name>/styles.css     CSS компонента
   groups/<g>/shared/*.js           общие чанки группы
   chunks/*.js                      общие чанки вне групп
+  granum/contract.js               встроенный контракт granum, если код его импортирует
   theme/*.css                      фундамент (копия src/theme)
   granum.manifest.json
 ```
@@ -191,7 +192,8 @@ await runRegistryCodegen({
   файл приезжает из манифеста, и потребитель получает два экземпляра. Второй
   при этом **вне слоёв `granum.*`** и потому сильнее всей библиотеки. Такой
   плагин из конфига провайдера убирают;
-- `granum.manifest.json` в `exports`; `sideEffects: false`;
+- `granum.manifest.json` в `exports`; `sideEffects: false`; `files` пакета покрывает
+  весь `dist`, включая `granum/contract.js`;
 - пакет с правилами объявляет `engine.dialect` и собран движком того же
   диалекта, а `engineModule` указывает на собранный модуль правил;
 - `dependencies` компонентов покрывают импорты — сборка иначе не пройдёт;

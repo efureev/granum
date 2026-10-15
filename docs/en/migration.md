@@ -48,6 +48,10 @@ v1 preset keeps working and is not changed; migrate one package at a time.
    `package.json#exports` lists `./granum.manifest.json`.
 5. `vite build`, then `granum doctor --strict` in a consuming application.
 
+The provider needs granum at build time, in `devDependencies`: the build embeds
+the contract helpers in `dist`, so a descriptor may be re-exported from a component
+entry without a runtime dependency on granum.
+
 ```diff
 - import { defineGranularComponent } from '@feugene/unocss-preset-granular/contract'
 + import { defineGranumComponent } from '@feugene/granum/contract'

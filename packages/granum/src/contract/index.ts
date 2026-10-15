@@ -39,7 +39,14 @@ export interface DefineGranumComponentOptions<Name extends string = string> {
  * Создаёт дескриптор компонента (C-18): `cssFiles` нормализуются к путям
  * относительно корня раскладки (`components/<Name>/<file>`), ссылки на токены
  * получают абсолютный `url`, исходное расположение сохраняется в `sourceUrl`.
+ *
+ * Хелпер чистый, и бандлер вправе выбросить вызов, чей результат не нужен:
+ * дескриптор, реэкспортированный из entry компонента, клиенту приложения обычно
+ * ни к чему, и с ним из бандла уходит встроенная в провайдер копия контракта —
+ * у каждого провайдера она своя. Проверку формы вызов уже прошёл на сборке
+ * провайдера.
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineGranumComponent<Name extends string>(
   importMetaUrl: string,
   options: DefineGranumComponentOptions<Name>,
