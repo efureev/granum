@@ -157,12 +157,13 @@ there is an HTML entry — that is where the links go, and without HTML the plug
 says so with a warning. It also needs `build.cssCodeSplit` (on by default):
 without it Vite merges all CSS into one file, and the plugin says so too. A server build produces no HTML, and in dev there are no
 hashed assets at all, so CSS still arrives as a single module. The price is the
-total weight, and it is not symbolic: every file is compressed with its own
-dictionary. On a design system with 222 kB of CSS that is 41.6 kB gzip in five
-layers against 32.9 kB in one file — **+27% on the first visit**. In exchange a
-markup change re-fetches 20.8 kB instead of 32.9, a theme change 5.9 kB. So the
-option pays off where repeat visits are many and the foundation changes rarely;
-if the page is read once, the price is paid for nothing.
+total weight: every file is compressed with its own dictionary. On a design system
+showcase (8 providers, 226 kB of CSS) that is 34.5 kB gzip in five layers plus the
+entry asset against 33.5 kB in one file — **+3% on the first visit**. In exchange
+a markup change re-fetches 21.2 kB instead of 33.5, a theme change 2.5 kB. On small
+CSS the overhead share is higher: the `apps/bench-split` stand is 3.0 kB against
+2.5 kB (+18%). The option pays off where repeat visits are many and the foundation
+changes rarely; if the page is read once, the price is paid for nothing.
 
 ### A host with several Vite environments
 
