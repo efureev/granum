@@ -174,7 +174,13 @@ emission do not suffer from that — they are memoized and happen once — and t
 report is written once, into the output directory of the resolved config. Of the
 config, not of the environment: an environment directory may be temporary (in
 Astro `prerender` is `dist/.prerender/`, which the host removes after the build),
-and the report would be deleted along with it.
+and the report would be deleted along with it. If an environment built later
+empties that directory (`emptyOutDir`), the report is put back.
+
+A `granum()` instance serves one build with all its environments. Separate builds —
+say, a client and then an SSR build in one script — each need their own
+`granum(config)`: the same instance would hand the second build the resolution and
+CSS of the first, so the plugin rejects it with `PluginInstanceReusedError`.
 
 `css.split` is not applicable on such a host: the `<link>` tags are injected
 through `transformIndexHtml`, and such a host builds HTML itself, bypassing that

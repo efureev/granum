@@ -10,12 +10,12 @@ import type { GranumConfig } from '../config'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
 import type { GranumThemeManifestOptions } from '../node/themeManifest'
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { ComponentOutsideSelectionError } from '../core/errors'
+import { ComponentOutsideSelectionError, PluginInstanceReusedError } from '../core/errors'
 import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
 import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCss'
 import { MANIFEST_FILE_NAME } from '../node/manifest'
@@ -175,14 +175,21 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
    * же строк лога об одной и той же сборке.
    */
   let reported = false
+  /** Написанный отчёт: окружение, собранное позже, может очистить его каталог (`emptyOutDir`). */
+  let reportWritten: { readonly target: string, readonly text: string } | undefined
+  /**
+   * Этот инстанс уже начал сборку. Конфиг ещё одной сборки после этого — повтор
+   * инстанса: окружения одного builder Vite разрешаются до первой из них.
+   */
+  let buildStarted = false
   /** Слои, уехавшие отдельными ассетами при `css.split`, в порядке слоёв (A-21). */
   let splitLayers: LayerName[] = []
   /** Проставлены ли `<link>` на них: без HTML-точки входа этого не произойдёт. */
   let splitLinked = false
-  /** Делим ли слои в этой сборке. */
   /** Делит ли Vite CSS по чанкам: без этого он склеит слои обратно в один файл. */
   let cssCodeSplit = true
   let splitWarned = false
+  /** Делим ли слои в этой сборке. */
   const splitting = (): boolean => config.css?.split === true && isBuild && !isSsrBuild && cssCodeSplit
 
   /*
@@ -352,6 +359,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     timings.report = 0
     bundleCss = undefined
     reported = false
+    reportWritten = undefined
     splitLayers = []
     splitLinked = false
     componentsWarned = false
@@ -377,6 +385,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     enforce: 'pre',
 
     configResolved(resolved: ResolvedConfig): void {
+      // Состояние инстанса — одной сборки: во второй он отдал бы её резолюцию и
+      // CSS и не написал бы отчёт. Окружения одного builder сюда не попадают —
+      // Vite разрешает их конфиги до первой сборки.
+      if (resolved.command === 'build' && buildStarted)
+        throw new PluginInstanceReusedError(resolve(root, outDir), resolve(resolved.root, resolved.build.outDir))
       root = resolved.root
       // Каталог берётся из разрешённого конфига, а НЕ из `this.environment` в
       // финальных хуках: у многосредового хоста каталог окружения бывает
@@ -421,6 +434,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     },
 
     async buildStart(): Promise<void> {
+      if (isBuild)
+        buildStarted = true
       const app = await prepare()
       for (const w of app.warnings) {
         if (w.kind === 'provider-without-manifest')
@@ -537,8 +552,18 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     },
 
     async closeBundle(): Promise<void> {
-      if (!isBuild || reported)
+      if (!isBuild)
         return
+      if (reported) {
+        // Окружение, собранное позже, очищает свой каталог (`emptyOutDir`), и
+        // отчёт, если лежал там, пропал бы. Возвращается тот же текст, без новой
+        // строки лога: сборка одна.
+        if (reportWritten && !existsSync(reportWritten.target)) {
+          mkdirSync(dirname(reportWritten.target), { recursive: true })
+          writeFileSync(reportWritten.target, reportWritten.text)
+        }
+        return
+      }
       reported = true
       const app = await prepare()
       const css = await emit()
@@ -555,8 +580,10 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       const file = config.report?.file ?? 'granum-report.json'
       if (file !== false) {
         const target = join(resolve(root, outDir), file)
+        const text = `${JSON.stringify(report, null, 2)}\n`
         mkdirSync(dirname(target), { recursive: true })
-        writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`)
+        writeFileSync(target, text)
+        reportWritten = { target, text }
       }
       timings.report = performance.now() - reportStarted
       log(

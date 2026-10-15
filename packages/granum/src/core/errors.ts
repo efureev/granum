@@ -431,6 +431,27 @@ export class GranumCodegenError extends GranumError {
   }
 }
 
+/**
+ * Тот же инстанс `granum()` передан во вторую отдельную сборку. Инстанс держит
+ * состояние одной сборки — резолюцию, эмиссию, «отчёт написан», — и во второй
+ * отдал бы чужие резолюцию и CSS, не написав отчёта. Окружения одного builder
+ * Vite (Astro) — одна сборка: их конфиги разрешаются до первой из них.
+ */
+export class PluginInstanceReusedError extends GranumError {
+  readonly code = 'plugin-instance-reused' as const
+
+  constructor(
+    readonly previousOutDir: string,
+    readonly outDir: string,
+  ) {
+    super(
+      `granum(): this plugin instance has already served a build into '${previousOutDir}', and Vite resolved a config `
+      + `for another build into '${outDir}'. Create a new granum(config) for every vite build — a client and an SSR build `
+      + `need two instances; the environments of one Vite builder (Astro) share one instance.`,
+    )
+  }
+}
+
 /** Приложение импортирует компонент провайдера, не вошедший в селекцию (A-6, INV-JS-2). */
 export class ComponentOutsideSelectionError extends GranumError {
   readonly code = 'component-outside-selection' as const

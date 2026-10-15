@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
-import { build } from 'vite'
+import { build, createBuilder } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
@@ -382,6 +382,65 @@ describe('granum() с настоящим Vite', async () => {
       generateBundle: (options: unknown, bundle: unknown) => void
       closeBundle: () => Promise<void>
     }
+
+    /** Каталог приложения для настоящих сборок: провайдер и vue — симлинками. */
+    function appRoot(): string {
+      const root = mkdtempSync(join(tmpdir(), 'granum-instance-'))
+      mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+      symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
+      symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(root, 'node_modules/vue'), 'dir')
+      write(root, 'index.html', `<!doctype html><div id="app"></div><script type="module" src="/src/main.ts"></script>`)
+      write(root, 'src/main.ts', `import 'virtual:granum.css'\nimport { createApp } from 'vue'\nimport App from './App.vue'\ncreateApp(App).mount('#app')\n`)
+      write(root, 'src/App.vue', `<template><div class="mx-auto"/></template>`)
+      return root
+    }
+
+    const appConfig = { providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'] }
+
+    /**
+     * Инстанс держит состояние одной сборки: резолюцию, эмиссию, «отчёт
+     * написан». Во второй отдельной сборке он отдал бы чужие резолюцию и CSS и
+     * не написал бы отчёт — поэтому повтор отвергается.
+     */
+    it('тот же инстанс во второй отдельной сборке — ошибка с обоими каталогами', async () => {
+      const root = appRoot()
+      const plugin = granum(appConfig, { log: () => {} })
+      const once = (outDir: string): ReturnType<typeof build> => build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), plugin], build: { minify: false, outDir } })
+
+      await once('dist/client')
+      expect(existsSync(join(root, 'dist/client/granum-report.json'))).toBe(true)
+      await expect(once('dist/server')).rejects.toMatchObject({
+        code: 'plugin-instance-reused',
+        message: expect.stringMatching(/dist\/client.*dist\/server/s),
+      })
+    })
+
+    /**
+     * Окружения одного builder Vite — одна сборка: Vite разрешает конфиги всех
+     * окружений до первой из них. Так собирает Astro, и разные `outDir` там законны.
+     */
+    it('окружения одного builder Vite делят инстанс: разные outDir — не ошибка', async () => {
+      const root = appRoot()
+      write(root, 'src/entry-server.ts', `export const ssr = true\n`)
+      const logs: string[] = []
+      const plugin = granum(appConfig, { log: line => logs.push(line) })
+      const builder = await createBuilder({
+        root,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [vue(), plugin],
+        environments: {
+          client: { build: { minify: false, outDir: 'dist/client' } },
+          ssr: { build: { minify: false, outDir: 'dist/server', rolldownOptions: { input: join(root, 'src/entry-server.ts') } } },
+        },
+        builder: {},
+      })
+      await builder.buildApp()
+
+      const reports = ['dist/client', 'dist/server'].filter(dir => existsSync(join(root, dir, 'granum-report.json')))
+      expect(reports).toHaveLength(1)
+      expect(logs.filter(line => /components, /.test(line))).toHaveLength(1)
+    })
 
     it('отчёт пишется один раз, в каталог разрешённого конфига, по бандлу с CSS', async () => {
       const root = mkdtempSync(join(tmpdir(), 'granum-multienv-'))

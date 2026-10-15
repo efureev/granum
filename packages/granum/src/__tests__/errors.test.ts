@@ -25,6 +25,7 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['InvalidTokenKeyError', () => new errors.InvalidTokenKeyError('p', '--x', 'light')],
   ['ManifestNotFoundError', () => new errors.ManifestNotFoundError('@x/pkg', '/app')],
   ['PackageExportsError', () => new errors.PackageExportsError('p', ['./granum.manifest.json'])],
+  ['PluginInstanceReusedError', () => new errors.PluginInstanceReusedError('/app/dist/client', '/app/dist/server')],
   ['ProviderNotRegisteredError', () => new errors.ProviderNotRegisteredError('p', 'ref')],
   ['TokenParseError', () => new errors.TokenParseError('message text', 'src', 'no-tokens')],
   ['TokenRefError', () => new errors.TokenRefError('p', 'light', 'X', 'file:///x.css')],
