@@ -197,7 +197,8 @@ Exit code `1` on any finding — the command can stand as a gate in CI.
 Why a component is in the build (`selected`, `dependency`, `not-selected`,
 `unknown`), the shortest chain from the selection root, who requires it, and
 what it contributes: classes, safelist, CSS, files, consumed and declared
-tokens.
+tokens. The selection roots are the build's own: the `components` list or,
+with `components: 'imports'`, the imports and PascalCase tags in the markup.
 
 ## `why-css`
 

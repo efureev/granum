@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { scanAppSources } from '../node/appSources'
+import { granumExplain } from '../node/diagnostics/explain'
 import { clearManifestCache, loadPackageManifest, serializeManifest } from '../node/manifest'
 import { tagSelection } from '../node/prepare'
 import { buildComponentIndex, granumResolver } from '../vite/resolver'
@@ -50,6 +51,10 @@ describe('granumResolver (A-8)', () => {
     expect(scan.componentImports).toEqual([])
     const app = await prepareTestApp({ providers: ['@x/kit'], components: 'imports', appSources: { dirs: ['src'] } }, root)
     expect(app.resolution.selection.order).toEqual(['@x/kit:Card', '@x/kit:Panel'])
+    // `explain` видит те же семена, что и селекция: компонент, выбранный тегом,
+    // выбран сам, а не тянется зависимостью без цепочки.
+    expect(granumExplain(app, '@x/kit:Panel')).toMatchObject({ reason: 'selected', chain: ['@x/kit:Panel'] })
+    expect(granumExplain(app, '@x/kit:Card')).toMatchObject({ reason: 'dependency', chain: ['@x/kit:Panel', '@x/kit:Card'] })
   })
 
   it('импорты: в селекцию идут только компоненты провайдеров графа, имя со строчной буквы тоже (A-3, C-3)', async () => {

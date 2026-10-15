@@ -195,6 +195,8 @@ granum audit dist --json               # для скрипта в CI
 Почему компонент в сборке (`selected`, `dependency`, `not-selected`,
 `unknown`), кратчайшая цепочка от корня селекции, кто его требует, и что он
 приносит: классы, safelist, CSS, файлы, потребляемые и объявляемые токены.
+Корни селекции — те же, что у сборки: список `components` или, при
+`components: 'imports'`, импорты и PascalCase-теги разметки.
 
 ## `why-css`
 

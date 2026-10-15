@@ -35,6 +35,12 @@ export interface PreparedApp {
   /** Время частей подготовки в миллисекундах: манифесты с пересчётом, скан исходников, резолюция. */
   readonly timings: { readonly providers: number, readonly appScan: number, readonly resolve: number }
   readonly appScan: AppSourcesScan
+  /**
+   * Селекция, поданная резолверу: список из конфига либо вычисленный по
+   * импортам и тегам (`'imports'`); `undefined` — `'all'`. Семена, от которых
+   * `granum explain` строит цепочку: другой источник разошёлся бы с селекцией.
+   */
+  readonly selectionInput: ComponentSelection | undefined
   /** Правила/варианты/preflights провайдеров графа, с источниками (E-9). */
   readonly engineContribution: Pick<EngineInput, 'rules' | 'variants' | 'preflights' | 'sources'>
   /** Решение по каждому провайдеру: диалект, отпечаток, откуда взяты классы (A-E3). */
@@ -270,6 +276,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
       resolve: performance.now() - started - providersMs - appScanMs,
     },
     appScan,
+    selectionInput: components,
     engineContribution: reconciled.contribution,
     engineDecisions: reconciled.decisions,
     reextractLost: reconciled.lost,

@@ -110,9 +110,9 @@ export function granumExplain(app: PreparedApp, target: string): ExplainReport {
 
   const { component, provider } = entry
   const included = resolution.selection.order.includes(key)
-  const seeds = app.config.components === 'imports'
-    ? normalizeSelection(app.appScan.componentImports, registry)
-    : normalizeSelection(app.config.components, registry)
+  // Семена — ровно то, что подготовка подала резолверу: в режиме `'imports'`
+  // это импорты и теги разметки, а не одни импорты.
+  const seeds = normalizeSelection(app.selectionInput, registry)
   const isSeed = seeds.includes(key)
   const chain = included && !isSeed ? shortestChain(registry, seeds, key) : (isSeed ? [key] : [])
   const requiredBy = resolution.selection.order.filter(other => other !== key && directDependencies(registry, other).includes(key))
