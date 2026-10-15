@@ -155,7 +155,7 @@ What counts as a finding:
 | a class unique to an unselected component, in the CSS | the component was not cut: the selection leaked |
 | the own CSS of an unselected component | its `styles.css` was inlined although the component is not selected |
 | a class of a selected component missing from the CSS | the opposite mistake: promised and not delivered |
-| a package token in the dist that nothing can reach | dead weight: pruning is on and did not take it |
+| a token the prune plan marked removable, in the dist and unreachable | dead weight: pruning (`pruneTokens.mode: 'on'`) promised to take it and did not |
 | a class with no engine rule, a token with no declaration | only with `--strict`: that is `doctor`'s job |
 
 The verdict is made on the CSS, not on the JS. The chunk layout is the bundler's
@@ -172,7 +172,12 @@ What the audit does not hold against you:
   component, and the build report lists such classes separately;
 * **a class the engine found no rule for** — it could not have been in the CSS
   in the first place; `unmatched` is what speaks about it;
-* **an unreachable token while pruning is off** — nobody promised to remove it;
+* **an unreachable token while pruning is `off` or `report`** — nobody promised
+  to remove it; with `on`, if the prune plan kept it (`keep`, `dynamicTokens`,
+  an override, a structural token): those roots are invisible to the audit, so
+  it lists such tokens as a note;
+* **an object provider** — it has no package with a manifest, so there is
+  nothing to judge its contents by; the audit lists it as a note;
 * **the engine's preflight variables (`--un-*`)** — a fixed cost of the engine,
   not a package token; the audit names them on their own line.
 

@@ -156,8 +156,57 @@ export function declaredCssClasses(css: string): Set<string> {
   const out = new Set<string>()
   const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
   for (const rule of source.matchAll(/([^{}]*)\{/g)) {
-    for (const m of rule[1]!.matchAll(/\.((?:\\.|[\w-])+)/g))
-      out.add(m[1]!.replace(/\\(.)/g, '$1'))
+    for (const name of selectorClassNames(rule[1]!))
+      out.add(name)
+  }
+  return out
+}
+
+/**
+ * Имена классов в селекторе с полным CSS-экранированием.
+ *
+ * Движок экранирует не только спецсимволы (`\:`, `\[`), но и ведущую цифру —
+ * hex-кодом с пробелом: `2xl:p-4` → `.\32 xl\:p-4`. Не-ASCII (`content-['→']`)
+ * он оставляет как есть. Разбор по одному символу после `\` давал класс `32`, и
+ * аудит видел недоставленный класс там, где он был, и не видел утечку там, где
+ * она была.
+ */
+function selectorClassNames(selector: string): string[] {
+  const out: string[] = []
+  for (let i = selector.indexOf('.'); i >= 0; i = selector.indexOf('.', i + 1)) {
+    let name = ''
+    let j = i + 1
+    while (j < selector.length) {
+      const ch = selector[j]!
+      if (ch === '\\') {
+        const hex = /^[0-9a-f]{1,6}/i.exec(selector.slice(j + 1, j + 7))
+        if (hex) {
+          const code = Number.parseInt(hex[0], 16)
+          name += code > 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : '�'
+          j += 1 + hex[0].length
+          // Пробельный символ после hex-кода — часть экранирования, а не селектора.
+          if (selector[j] === ' ' || selector[j] === '\t' || selector[j] === '\n')
+            j++
+        }
+        else if (j + 1 < selector.length) {
+          name += selector[j + 1]
+          j += 2
+        }
+        else {
+          break
+        }
+        continue
+      }
+      if (/[\w-]/.test(ch) || ch.charCodeAt(0) >= 0x80) {
+        name += ch
+        j++
+        continue
+      }
+      break
+    }
+    if (name)
+      out.push(name)
+    i = j - 1
   }
   return out
 }
@@ -226,9 +275,9 @@ function ownSelectorsOf(component: GranumManifestComponent, packageDist: string)
          * область темы. Старый разбор брал первый класс строки и вменял
          * компоненту тему приложения — на SSR-стенде это давало ложную находку.
          */
-        const subject = selector.trim().split(/[\s>+~]+/).pop() ?? ''
-        for (const m of subject.matchAll(/\.((?:\\.|[\w-])+)/g))
-          out.add(m[1]!.replace(/\\(.)/g, '$1'))
+        const subject = selector.trim().split(/(?<!\\[0-9a-f]{1,6})[\s>+~]+/i).pop() ?? ''
+        for (const name of selectorClassNames(subject))
+          out.add(name)
       }
     }
   }
@@ -285,11 +334,21 @@ export function granumAuditDist(options: AuditDistOptions): AuditDistReport {
    * селекции: они всегда вида `providerId:Name`. Так аудит работает и на отчёте
    * постарше, и на написанном руками — лишь бы селекция была.
    */
-  const providerIds = (report.providers ?? []).map(p => p.id)
   const fromSelection = [...new Set(selection.map(key => key.slice(0, key.lastIndexOf(':'))))]
-  const entries = (providerIds.length > 0 ? providerIds : fromSelection).map(id => ({ id }))
+  const entries = (report.providers?.length ? report.providers : fromSelection.map(id => ({ id })))
 
   for (const entry of entries) {
+    /*
+     * Объектный провайдер пакетом не является: `<id>/granum.manifest.json` у него
+     * не резолвится по определению, и судить о его составе не по чему. Это
+     * сведение, а не находка — иначе аудит ронял бы любое приложение с локальным
+     * провайдером.
+     */
+    if ('form' in entry && entry.form === 'object') {
+      providers.push({ id: entry.id, version: null, components: 0, declaredTokens: 0, manifest: false })
+      notes.push(`provider ${entry.id}: an object provider, not a package — no manifest to judge its contents by`)
+      continue
+    }
     let manifestPath: string | undefined
     try {
       manifestPath = require.resolve(`${entry.id}/granum.manifest.json`)
@@ -423,12 +482,25 @@ export function granumAuditDist(options: AuditDistOptions): AuditDistReport {
   const foreign = [...declared].filter(token => !packageTokens.has(token) && !token.startsWith(prefix)).sort()
 
   /*
-   * Мёртвый токен — находка только там, где обрезка включена: без неё никто и
-   * не обещал их снимать, и объявленный, но не использованный токен — норма.
+   * Мёртвый токен — находка только там, где обрезка токены снимает
+   * (`mode: 'on'`): без неё, как и в `report`, никто не обещал их снимать.
+   *
+   * И даже тогда находка — лишь то, что план обрезки назвал удаляемым
+   * (`prune.removable`), а в дистрибутиве оно осталось. Токен, который план
+   * сохранил по `keep`, `dynamicTokens`, override или как структурный, отсюда
+   * недостижим по определению: эти корни аудиту не видны, и обвинять за них
+   * доставку нельзя — это сведение.
    */
-  const pruning = report.prune !== undefined && report.prune !== null && report.prune.mode !== 'off'
-  if (dead.length > 0 && pruning)
-    problems.push(`package tokens in the dist that nothing can reach: ${dead.map(t => `--${t}`).join(' ')}`)
+  const pruning = report.prune?.mode === 'on'
+  if (dead.length > 0 && pruning) {
+    const removable = new Set((report.prune?.removable ?? []).map(token => String(token).replace(/^--/, '')))
+    const notRemoved = dead.filter(token => removable.has(token))
+    const keptByPlan = dead.filter(token => !removable.has(token))
+    if (notRemoved.length > 0)
+      problems.push(`package tokens in the dist that nothing can reach: ${notRemoved.map(t => `--${t}`).join(' ')}`)
+    if (keptByPlan.length > 0)
+      notes.push(`unreachable from the CSS and JS, but kept by the prune plan (keep, dynamicTokens, overrides or structural): ${keptByPlan.map(t => `--${t}`).join(' ')}`)
+  }
 
   const engineVars = [...declared].filter(token => token.startsWith(prefix))
 

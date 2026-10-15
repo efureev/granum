@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -27,6 +27,11 @@ function fixture(patch: {
   /** Отчёт от granum постарше: поля `classes.app` в нём нет вовсе. */
   readonly withoutAppClasses?: boolean
   readonly prune?: null
+  readonly pruneMode?: 'on' | 'report'
+  /** Что план обрезки назвал удаляемым; по умолчанию `--kit-dead`. */
+  readonly removable?: readonly string[]
+  /** Объектный провайдер в отчёте: манифеста пакета у него нет. */
+  readonly objectProvider?: string
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-audit-'))
   const packageDist = join(root, 'node_modules/@x/kit/dist')
@@ -61,7 +66,7 @@ function fixture(patch: {
   writeFileSync(join(dist, 'assets/index-abc.js'), patch.js ?? 'const cls = "p-4 flex"\n')
   writeFileSync(join(dist, 'granum-report.json'), JSON.stringify({
     selection: (patch.selection ?? ['@x/kit:Card']).map(key => ({ key })),
-    providers: [{ id: '@x/kit', form: 'manifest' }],
+    providers: [{ id: '@x/kit', form: 'manifest' }, ...(patch.objectProvider ? [{ id: patch.objectProvider, form: 'object' }] : [])],
     classes: {
       input: 4,
       matched: 3,
@@ -69,7 +74,7 @@ function fixture(patch: {
       ...(patch.withoutAppClasses ? {} : { app: patch.appClasses ?? [] }),
     },
     tokens: { undefined: patch.undefinedTokens ?? [] },
-    prune: patch.prune === null ? null : { mode: 'on', removable: ['--kit-dead'], kept: 2, deadPatterns: [] },
+    prune: patch.prune === null ? null : { mode: patch.pruneMode ?? 'on', removable: patch.removable ?? ['--kit-dead'], kept: 2, deadPatterns: [] },
     sizes: { total: { raw: 10, gzip: 5 } },
     sizesSource: 'bundle',
   }))
@@ -190,6 +195,28 @@ describe('granumAuditDist (D-9, INV-DIST-1)', () => {
     expect([...classes].sort()).toEqual(['bg-[var(--x)]', 'p-1.5', 'sm:flex'])
   })
 
+  it('declaredCssClasses: hex-экранирование движка и не-ASCII', () => {
+    // Ведущую цифру движок экранирует hex-кодом с пробелом: `2xl:p-4` → `.\32 xl\:p-4`.
+    const classes = declaredCssClasses('.\\32 xl\\:p-4{padding:1rem}.content-\\[\\\'→\\\'\\]::after{content:\'→\'}.\\31 0x\\:flex:hover{display:flex}')
+
+    expect([...classes].sort()).toEqual(['10x:flex', '2xl:p-4', 'content-[\'→\']'])
+  })
+
+  it('класс выбранного компонента с hex-экранированием доставленным считается, утечка — находится', () => {
+    const f = fixture({
+      css: ':root{--kit-fg:#111;--kit-bg:#fff}.x-card{color:var(--kit-fg)}.\\32 xl\\:p-4{padding:1rem}.\\32 xl\\:hidden{display:none}.flex{display:flex}body{background:var(--kit-bg)}',
+    })
+    const manifestPath = join(f.root, 'node_modules/@x/kit/dist/granum.manifest.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.components.Card.classes = ['2xl:p-4', 'flex']
+    manifest.components.Badge.classes = ['2xl:hidden', 'flex']
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    const report = granumAuditDist({ dist: f.dist })
+
+    expect(report.problems.join('\n')).not.toContain('missing from the CSS')
+    expect(report.problems.join('\n')).toContain('@x/kit:Badge: classes of an unselected component are in the CSS (2xl:hidden)')
+  })
+
   /**
    * Вердикт выносится по CSS, а не по JS: раскладку чанков выбирает бандлер, и
    * класс невыбранного компонента лежит в общем чанке не потому, что
@@ -290,6 +317,36 @@ describe('granumAuditDist (D-9, INV-DIST-1)', () => {
     expect(report.pruning).toBe(false)
     expect(report.tokens.dead).toEqual(['kit-dead'])
     expect(report.ok).toBe(true)
+  })
+
+  it('режим обрезки report токенов не снимает: недостижимый токен — не находка', () => {
+    const f = fixture({
+      css: ':root{--kit-fg:#111;--kit-bg:#fff;--kit-dead:1px}.x-card{color:var(--kit-fg)}.p-4{padding:1rem}.flex{display:flex}body{background:var(--kit-bg)}',
+      pruneMode: 'report',
+    })
+    const report = granumAuditDist({ dist: f.dist })
+
+    expect(report.pruning).toBe(false)
+    expect(report.ok).toBe(true)
+  })
+
+  it('недостижимый токен, который план обрезки сохранил (keep, dynamicTokens), — сведение, а не находка', () => {
+    const f = fixture({
+      css: ':root{--kit-fg:#111;--kit-bg:#fff;--kit-dead:1px}.x-card{color:var(--kit-fg)}.p-4{padding:1rem}.flex{display:flex}body{background:var(--kit-bg)}',
+      removable: [],
+    })
+    const report = granumAuditDist({ dist: f.dist })
+
+    expect(report.tokens.dead).toEqual(['kit-dead'])
+    expect(report.ok).toBe(true)
+    expect(report.notes.join('\n')).toContain('--kit-dead')
+  })
+
+  it('объектный провайдер в отчёте — сведение: пакета с манифестом у него нет', () => {
+    const report = granumAuditDist({ dist: fixture({ objectProvider: 'local-kit' }).dist })
+
+    expect(report.ok).toBe(true)
+    expect(report.notes.join('\n')).toContain('local-kit')
   })
 
   it('без отчёта сборки аудит отказывается работать, а не гадает', () => {
