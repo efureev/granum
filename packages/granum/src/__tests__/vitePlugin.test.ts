@@ -56,6 +56,37 @@ async function buildProvider(): Promise<string> {
   return root
 }
 
+/**
+ * Второй провайдер — с именами, которые `virtual:granum/components` не может
+ * реэкспортировать: `Card` уже есть у `@t/kit`, а `date-picker` не является
+ * идентификатором JS, хотя контракт его допускает (INV-CON-2).
+ */
+async function buildDashProvider(): Promise<string> {
+  const root = mkdtempSync(join(tmpdir(), 'granum-app-dash-'))
+  write(root, 'package.json', JSON.stringify({
+    name: '@t/dash',
+    version: '1.0.0',
+    type: 'module',
+    exports: { './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js', './components/date-picker': './dist/components/date-picker/index.js' },
+  }))
+  write(root, 'src/components/Card/Card.vue', `<template><div class="d-card"><slot /></div></template>\n`)
+  write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
+  write(root, 'src/components/date-picker/date-picker.vue', `<template><input class="d-date"></template>\n`)
+  write(root, 'src/components/date-picker/index.ts', `export { default as DatePicker } from './date-picker.vue'\n`)
+
+  const url = (name: string): string => pathToFileURL(join(root, `src/components/${name}/config.ts`)).href
+  const provider = defineGranumProvider({
+    id: '@t/dash',
+    contractVersion: 1,
+    components: [
+      defineGranumComponent(url('Card'), { name: 'Card' }),
+      defineGranumComponent(url('date-picker'), { name: 'date-picker' }),
+    ],
+  })
+  await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
+  return root
+}
+
 async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'providers' | 'engine'> & { providers?: GranumConfig['providers'], engine?: GranumConfig['engine'] }, appCode: string, entry = `import 'virtual:granum.css'`, reuseRoot?: string, vite: Pick<InlineConfig, 'build' | 'css'> = {}) {
   // `reuseRoot` — для второй сборки ТОГО ЖЕ приложения: без него не проверить,
   // что плагин не переписывает файлы, которые не менялись.
@@ -181,6 +212,43 @@ describe('granum() с настоящим Vite', async () => {
     )
     expect(readFileSync(file, 'utf8')).toContain('Panel')
     expect(widened.logs.some(l => l.startsWith('types: '))).toBe(true)
+  })
+
+  /**
+   * Реэкспорт по имени возможен не для каждого компонента селекции: `date-picker`
+   * идентификатором не является, а `Card` выбран у двух провайдеров. Раньше
+   * модуль из-за них не разбирался вовсе, и падала сборка любого приложения,
+   * импортирующего из него хоть что-то.
+   */
+  it('имя не идентификатор и имя у двух провайдеров не реэкспортируются, а называются (A-5)', async () => {
+    const dashRoot = await buildDashProvider()
+    const root = mkdtempSync(join(tmpdir(), 'granum-app-'))
+    mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+    symlinkSync(dashRoot, join(root, 'node_modules/@t/dash'), 'dir')
+
+    const app = await buildApp(
+      providerRoot,
+      {
+        providers: ['@t/kit', '@t/dash'],
+        components: ['@t/kit:Panel', '@t/dash:Card', '@t/dash:date-picker'],
+        js: { dts: 'src/granum.d.ts' },
+        report: { file: false },
+      },
+      `<script setup lang="ts">import { Panel } from 'virtual:granum/components'</script><template><Panel/></template>`,
+      undefined,
+      root,
+    )
+
+    expect(app.js).toContain('flex gap-2')
+    const written = readFileSync(join(root, 'src/granum.d.ts'), 'utf8')
+    expect(written).toContain('export { Panel } from \'@t/kit/components/Panel\'')
+    expect(written).not.toContain('Card')
+    expect(written).not.toContain('date-picker')
+    // По строке на имя и один раз за сборку, хотя модулем пользуются и `load`, и `js.dts`.
+    expect(app.logs.filter(l => l.includes('virtual:granum/components'))).toEqual([
+      'warning: virtual:granum/components does not re-export \'Card\' — it is selected from @t/kit and @t/dash; import it from the package subpath',
+      'warning: virtual:granum/components does not re-export \'date-picker\' — not a JavaScript identifier; import it from \'@t/dash/components/date-picker\'',
+    ])
   })
 
   it('срезы по слоям загружаются отдельными модулями (A-12)', async () => {

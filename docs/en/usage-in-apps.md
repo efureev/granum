@@ -191,6 +191,11 @@ has no side effects: tree-shaking removes what is unused. Plain imports of
 `@acme/ui/components/XhPanel` work too; the plugin neither rewrites provider
 code nor changes the chunk layout.
 
+Not every component can be re-exported by name. `date-picker` is not a JS
+identifier, and a `Card` selected from two providers at once is ambiguous.
+The module skips such names and lists them in a build warning — import them
+from the package subpath: `@acme/ui/components/date-picker`.
+
 The channels differ, and that matters: JS follows the imports, CSS follows the
 selection. A component that is in the selection but not imported does not make
 it into the bundle, while its CSS does. To drop both, narrow the selection

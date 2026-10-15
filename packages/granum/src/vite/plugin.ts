@@ -40,20 +40,68 @@ export interface GranumPluginOptions {
   readonly log?: (line: string) => void
 }
 
-/** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
+/** Слова, которые нельзя взять в `import { … }` без `as`, хотя по форме это идентификатор. */
+const RESERVED_WORDS = new Set((
+  'await break case catch class const continue debugger default delete do else enum export extends false '
+  + 'finally for function if implements import in instanceof interface let new null package private protected '
+  + 'public return static super switch this throw true try typeof var void while with yield'
+).split(' '))
+
+/** Имя, которое приложение может импортировать как есть: `import { Name } from …`. */
+function isImportableName(name: string): boolean {
+  return /^[A-Z_$][\w$]*$/i.test(name) && !RESERVED_WORDS.has(name)
+}
+
+interface ComponentExport {
+  readonly name: string
+  readonly from: string
+}
+
+/** Компонент селекции, которого в `virtual:granum/components` нет, и почему. */
+interface SkippedExport {
+  readonly name: string
+  readonly reason: 'identifier' | 'ambiguous'
+  readonly from: readonly string[]
+  readonly providers: readonly string[]
+}
+
 /**
  * Реэкспорты `virtual:granum/components`: имя компонента и subpath пакета, из
  * которого он приезжает. Одно место на модуль и на его объявления типов — иначе
  * они разъедутся, и типы будут описывать не то, что импортируется.
+ *
+ * Реэкспорт по имени возможен не всегда. Контракт допускает имена с дефисом
+ * (INV-CON-2), а одно имя может прийти от двух провайдеров. Такая строка ломала
+ * бы модуль целиком, и вместе с ним сборку всего, что из него импортирует. Эти
+ * имена пропускаются и называются — как у резолвера авто-импорта, который
+ * неоднозначное имя тоже не резолвит (A-5).
  */
-function componentExports(app: PreparedApp): { name: string, from: string }[] {
-  const out: { name: string, from: string }[] = []
+function componentExports(app: PreparedApp): { exports: ComponentExport[], skipped: SkippedExport[] } {
+  const owners = new Map<string, string[]>()
   for (const { provider, component } of app.resolution.selection.entries) {
     if (provider.form !== 'manifest')
       continue
-    out.push({ name: component.name, from: `${provider.id}/components/${component.name}` })
+    owners.set(component.name, [...(owners.get(component.name) ?? []), provider.id])
   }
-  return out
+  const exports: ComponentExport[] = []
+  const skipped: SkippedExport[] = []
+  for (const [name, providers] of owners) {
+    const from = providers.map(id => `${id}/components/${name}`)
+    if (!isImportableName(name))
+      skipped.push({ name, reason: 'identifier', from, providers })
+    else if (providers.length > 1)
+      skipped.push({ name, reason: 'ambiguous', from, providers })
+    else
+      exports.push({ name, from: from[0]! })
+  }
+  return { exports, skipped }
+}
+
+function skippedMessage(entry: SkippedExport): string {
+  const head = `warning: ${VIRTUAL_COMPONENTS} does not re-export '${entry.name}'`
+  if (entry.reason === 'identifier')
+    return `${head} — not a JavaScript identifier; import it from ${entry.from.map(f => `'${f}'`).join(' or ')}`
+  return `${head} — it is selected from ${entry.providers.join(' and ')}; import it from the package subpath`
 }
 
 /**
@@ -64,8 +112,7 @@ function componentExports(app: PreparedApp): { name: string, from: string }[] {
  * они зависят от конфига приложения, а не от пакета. Поэтому точный вариант —
  * порождаемый, как `components.d.ts` у авто-импорта.
  */
-function componentTypes(app: PreparedApp): string {
-  const exports = componentExports(app)
+function componentTypes(exports: readonly ComponentExport[]): string {
   return [
     '// Сгенерировано granum по селекции `granum.config`. Правки будут перезаписаны.',
     '',
@@ -76,6 +123,7 @@ function componentTypes(app: PreparedApp): string {
   ].join('\n')
 }
 
+/** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
 function assetNameOf(layer: LayerName): string {
   return `granum.${layer}.css`
 }
@@ -151,6 +199,22 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     return emitted
   }
   /*
+   * Реэкспорты модуля компонентов. Пропущенные имена называются там, где модулем
+   * пользуются, — в `load` и при записи `js.dts`, — и один раз за сборку, хотя
+   * в ней бывают оба.
+   */
+  let componentsWarned = false
+  const reexports = (app: PreparedApp): ComponentExport[] => {
+    const { exports, skipped } = componentExports(app)
+    if (!componentsWarned) {
+      componentsWarned = true
+      for (const entry of skipped)
+        log(skippedMessage(entry))
+    }
+    return exports
+  }
+
+  /*
    * Объявления пишутся только по просьбе (`js.dts`) и только если изменились:
    * запись без нужды дёргала бы watcher dev-сервера на каждый перезапуск.
    */
@@ -159,7 +223,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     if (target === undefined)
       return
     const file = resolve(root, target)
-    const next = componentTypes(app)
+    const next = componentTypes(reexports(app))
     let current: string | undefined
     try {
       current = readFileSync(file, 'utf8')
@@ -184,6 +248,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     reported = false
     splitLayers = []
     splitLinked = false
+    componentsWarned = false
     if (!server)
       return
     for (const id of [RESOLVED_CSS, RESOLVED_COMPONENTS, RESOLVED_THEMES, ...LAYER_NAMES.map(n => `${RESOLVED_LAYER_PREFIX}${n}.css`)]) {
@@ -337,7 +402,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       }
       if (id === RESOLVED_COMPONENTS) {
         const app = await prepare()
-        return `${componentExports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
+        return `${reexports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
       }
       if (id === RESOLVED_THEMES) {
         const app = await prepare()
