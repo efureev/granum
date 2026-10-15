@@ -35,9 +35,12 @@ function makeFixture(options: {
   engineRules?: boolean
   /** Пакет без утилит вовсе: ни классов, ни safelist — только свой CSS. */
   plain?: boolean
+  /** Поле выбора файла в шаблоне Card: `accept="image/*"` уезжает в чанк строкой. */
+  fileInput?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false } = options
+  const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
   write(root, 'package.json', JSON.stringify({
     name: '@t/kit',
@@ -52,7 +55,7 @@ function makeFixture(options: {
   write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
   write(root, 'src/components/Card/Card.vue', plain
     ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
-    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}</script>\n<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
+    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/components/Panel/Panel.vue', plain
     ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
@@ -278,6 +281,14 @@ describe('granumProvider с настоящим Vite', () => {
     // поэтому сужается здесь, а не берётся из типа.
     const files = doubled[0]?.files as string[] | undefined
     expect(files?.every(f => f.endsWith('.js'))).toBe(true)
+  })
+
+  it('`/*` в строке чанка не съедает классы и токены дальше по коду (INV-ENG-5, INV-DIAG-2)', async () => {
+    const { manifest } = await run(makeFixture({ fileInput: true }))
+    const card = manifest.components.Card!
+
+    expect(card.classes).toEqual(expect.arrayContaining(['sr-only', 'p-4', 'bg-[var(--t-bg)]']))
+    expect(card.tokens.consumes).toEqual(expect.arrayContaining(['--t-bg', '--t-space']))
   })
 
   it('без такого плагина предупреждения нет', async () => {

@@ -162,6 +162,15 @@ const url = 'https://example.test/mr-9' // хвостовой комментар
     expect(stripComments('<!-- p-9 --> a', 'x.ts')).toContain('p-9')
     expect(stripComments(`const u = 'https://a/b' // c`, 'x.ts')).toContain('https://a/b')
   })
+
+  it('`/*` в атрибуте шаблона не съедает классы до комментария в <script> (INV-ENG-5)', () => {
+    const sfc = '<template>\n  <input type="file" accept="image/*" class="sr-only">\n  <div class="p-4 grid-cols-[repeat(2,1fr)]">x</div>\n</template>\n<script setup lang="ts">\n/** mt-9 */\nconst a = 1\n</script>\n'
+    const set = extractWindClasses(sfc, 'App.vue')
+    expect(set).toContain('sr-only')
+    expect(set).toContain('p-4')
+    expect(set).toContain('grid-cols-[repeat(2,1fr)]')
+    expect(set).not.toContain('mt-9')
+  })
 })
 
 describe('windEngine: кэш вывода и словарь (A-17, E-1, E-4, INV-ENG-7, INV-ENG-12)', () => {

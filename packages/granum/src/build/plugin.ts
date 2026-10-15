@@ -20,6 +20,7 @@ import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { scanCssDeclarations } from '../node/cssDeclarations'
+import { collectImportSpecifiers } from '../node/imports'
 import { MANIFEST_FILE_NAME, writeManifestSync } from '../node/manifest'
 import { materializeProviderRefs } from '../node/materializeRefs'
 import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
@@ -196,7 +197,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     transform(code, id): null {
       if (id.startsWith('\0') || id.includes('/node_modules/'))
         return null
-      for (const specifier of importSpecifiers(code)) {
+      for (const specifier of collectImportSpecifiers(code)) {
         const kind = boundaryKind(specifier)
         if (kind)
           graphViolations.push({ file: relative(root, id.replace(/[?#].*$/, '')), specifier, kind })
@@ -479,22 +480,6 @@ function boundaryKind(source: string): BoundaryViolation['kind'] | undefined {
   if (/^@feugene\/granum\/(?:build|vite|node|codegen)(?:\/|$)/.test(source))
     return 'granum-node-entry'
   return undefined
-}
-
-const IMPORT_RES = [
-  /\b(?:import|export)\b[^'";]+?\bfrom\s*['"]([^'"]+)['"]/g,
-  /\bimport\s*['"]([^'"]+)['"]/g,
-  /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-]
-
-function importSpecifiers(code: string): Set<string> {
-  const out = new Set<string>()
-  const source = code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
-  for (const re of IMPORT_RES) {
-    for (const m of source.matchAll(re))
-      out.add(m[1]!)
-  }
-  return out
 }
 
 function dedupeViolations(items: readonly BoundaryViolation[]): BoundaryViolation[] {

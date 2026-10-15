@@ -1,11 +1,13 @@
 /** Спецификаторы импортов собранного модуля — для проверок границы на `dist` (INV-BND-1). */
 import { builtinModules } from 'node:module'
+import { stripCommentsWith } from '../engine/extract'
 
 const NODE_BUILTINS = new Set(builtinModules)
 const GRANUM_NODE_ENTRY_RE = /^@feugene\/granum\/(?:build|vite|node|codegen)(?:\/|$)/
 
 export function collectImportSpecifiers(code: string): string[] {
-  const source = code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1')
+  // Срез с учётом строк: `/*` внутри `'./icons/*.svg'` не съедает импорты дальше по файлу.
+  const source = stripCommentsWith(code, 'module.js', 'all')
   const out = new Set<string>()
   for (const re of [
     /\b(?:import|export)\b[^'";]+?\bfrom\s*['"]([^'"]+)['"]/g,
