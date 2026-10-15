@@ -110,6 +110,25 @@ describe('granum cli: вызов и коды выхода (INV-ERR-3)', () => {
     }
   })
 
+  /*
+   * Гейт CI обязан падать громко. `--strict=true` раньше молча выключал гейт
+   * (булев флаг искался без значения), опечатка `--stric` игнорировалась, а
+   * `codegen --check=true` переписывал файлы вместо проверки.
+   */
+  it('флаги разбираются строго: значение у булева флага и неизвестный флаг — код 2', async () => {
+    const root = appDir()
+    for (const argv of [
+      ['doctor', 'granum.config.mjs', '--strict=true'],
+      ['doctor', 'granum.config.mjs', '--stric'],
+      ['codegen', '.', '--check=true'],
+      ['audit', 'dist', '--root'],
+    ]) {
+      const t = io(root)
+      expect(await runGranumCli(argv, t.io), argv.join(' ')).toBe(2)
+      expect(t.err[0]).toContain('usage:')
+    }
+  })
+
   it('ошибка загрузки конфига — код 1 и сообщение с префиксом', async () => {
     const root = appDir({ config: 'export const nothing = 1\n' })
     const t = io(root)
@@ -318,6 +337,14 @@ describe('granum codegen', () => {
     const bad = io(root)
     expect(await runGranumCli(['codegen', '--targets=barrel,nope'], bad.io)).toBe(2)
     expect(bad.err[0]).toContain('unknown target')
+  })
+
+  it('значение флага через пробел — значение, а не позиционный аргумент', async () => {
+    const root = providerDir()
+    const t = io(root)
+    expect(await runGranumCli(['codegen', root, '--targets', 'barrel', '--prefix', 'Gr'], t.io), t.err.join('\n')).toBe(0)
+    expect(t.out[0]).toContain('Written (1)')
+    expect(readFileSync(join(root, 'src/index.ts'), 'utf8')).toContain(`export * from './components/GrAlert'`)
   })
 
   it('ошибка генерации (нет exports) — код 1 с сообщением', async () => {

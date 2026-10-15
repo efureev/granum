@@ -70,28 +70,74 @@ interface ParsedArgs {
   command?: string
   positionals: string[]
   flags: Set<string>
-  /** Флаги со значением: `--prefix=Gr`. */
+  /** Флаги со значением: `--prefix=Gr` или `--prefix Gr`. */
   values: Map<string, string>
+  /** Неверный вызов: флаг не той формы или неизвестный (код 2). */
+  error?: string
 }
 
+/** Флаги, которые понимает каждая команда: булевы и со значением. */
+const GLOBAL_FLAGS = ['--json', '--help', '--version']
+const COMMAND_FLAGS: Readonly<Record<CliCommand, { readonly bool?: readonly string[], readonly value?: readonly string[] }>> = {
+  'doctor': { bool: ['--strict', '--components'], value: ['--allow', '--code', '--component'] },
+  'explain': {},
+  'why-css': {},
+  'tokens': { bool: ['--deep'] },
+  'prune': { bool: ['--strict'] },
+  'report': { bool: ['--strict'] },
+  'audit': { bool: ['--strict'], value: ['--root'] },
+  'codegen': { bool: ['--check', '--subcomponents'], value: ['--targets', '--prefix', '--components-dir', '--barrel', '--registry', '--exports'] },
+}
+
+/**
+ * Разбор строгий: CLI стоит гейтом в CI, и гейт обязан падать громко, а не
+ * молча выключаться. Булев флаг со значением (`--strict=true`) и неизвестный
+ * флаг (`--stric`) — неверный вызов, а не тихое «нет». Флаг со значением
+ * принимает и `--prefix=Gr`, и `--prefix Gr`: иначе значение становилось
+ * позиционным аргументом, а флаг — пустым.
+ */
 function parseArgs(args: readonly string[]): ParsedArgs {
+  const command = args.find(arg => !arg.startsWith('--'))
+  const spec = command !== undefined && (CLI_COMMANDS as readonly string[]).includes(command) ? COMMAND_FLAGS[command as CliCommand] : undefined
+  const boolFlags = new Set([...GLOBAL_FLAGS, ...(spec?.bool ?? [])])
+  const valueFlags = new Set(spec?.value ?? [])
   const positionals: string[] = []
   const flags = new Set<string>()
   const values = new Map<string, string>()
-  for (const arg of args) {
-    if (arg.startsWith('--')) {
-      const eq = arg.indexOf('=')
-      if (eq > 0)
-        values.set(arg.slice(0, eq), arg.slice(eq + 1))
-      else
-        flags.add(arg)
-    }
-    else {
+  let error: string | undefined
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (!arg.startsWith('--')) {
       positionals.push(arg)
+      continue
+    }
+    const eq = arg.indexOf('=')
+    const name = eq > 0 ? arg.slice(0, eq) : arg
+    if (boolFlags.has(name)) {
+      if (eq > 0)
+        error ??= `flag '${name}' takes no value (got '${arg}')`
+      flags.add(name)
+    }
+    else if (valueFlags.has(name)) {
+      if (eq > 0) {
+        values.set(name, arg.slice(eq + 1))
+      }
+      else if (i + 1 < args.length && !args[i + 1]!.startsWith('--')) {
+        values.set(name, args[i + 1]!)
+        i++
+      }
+      else {
+        error ??= `flag '${name}' needs a value`
+      }
+    }
+    else if (spec !== undefined) {
+      // Без известной команды судить о флаге не по чему: ошибку назовёт проверка команды.
+      error ??= `unknown flag '${name}' for 'granum ${command}'`
     }
   }
-  const command = positionals.shift()
-  return { ...(command !== undefined ? { command } : {}), positionals, flags, values }
+  positionals.shift()
+  return { ...(command !== undefined ? { command } : {}), positionals, flags, values, ...(error !== undefined ? { error } : {}) }
 }
 
 function emit(io: CliIo, json: boolean, report: unknown, text: () => string): void {
@@ -99,7 +145,7 @@ function emit(io: CliIo, json: boolean, report: unknown, text: () => string): vo
 }
 
 export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<number> {
-  const { command, positionals, flags, values } = parseArgs(argv)
+  const { command, positionals, flags, values, error } = parseArgs(argv)
   const cwd = io.cwd ?? process.cwd()
   const json = flags.has('--json')
 
@@ -113,6 +159,10 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
   }
   if (!(CLI_COMMANDS as readonly string[]).includes(command)) {
     io.stderr(`granum: unknown command '${command}'\n\n${USAGE}`)
+    return 2
+  }
+  if (error !== undefined) {
+    io.stderr(`granum ${command}: ${error}\n\n${USAGE}`)
     return 2
   }
 

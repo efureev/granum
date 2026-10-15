@@ -29,7 +29,11 @@ native `import()`. The `default`, `granum` and `config` exports are accepted.
 |---|---|
 | `0` | clean |
 | `1` | errors found; with `--strict` also warnings; a runtime failure |
-| `2` | invalid invocation: missing command, config or subject |
+| `2` | invalid invocation: missing command, config or subject; an unknown flag; a value on a boolean flag (`--strict=true`); a value flag without a value |
+
+Flags are parsed strictly because the command stands as a gate in CI: a typo or
+the wrong form of a flag is exit code `2`, not a silently disabled check. A
+value flag takes both `--prefix=Gr` and `--prefix Gr`.
 
 `doctor` returns `1` on any `error` regardless of `--strict`; `explain`,
 `tokens` and `why-css` return `1` when the subject is not found; `prune`
