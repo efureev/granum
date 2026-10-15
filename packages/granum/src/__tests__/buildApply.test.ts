@@ -19,6 +19,11 @@ describe('expandApply (B-11, ADR-3)', () => {
     expect(await expandApply(css, engine, 'a.css')).toBe(css)
   })
 
+  it('`/*` внутри строки не открывает комментарий и не прячет директиву', async () => {
+    const css = '.a::after{content:"/*"}\n.b{@apply font-bold;}\n/* x */\n'
+    expect(await expandApply(css, engine, 'a.css')).toBe('.a::after{content:"/*"}\n.b{font-weight:700;}\n/* x */\n')
+  })
+
   it('без @apply текст не меняется', async () => {
     expect(await expandApply('.a{color:red}', engine, 'a.css')).toBe('.a{color:red}')
   })

@@ -24,6 +24,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative } from 'node:path'
 import process from 'node:process'
+import { stripCssComments } from '../../engine/extract'
 
 /** Минимум отчёта сборки, который нужен аудиту: остальные поля не читаются. */
 interface AuditInputReport {
@@ -154,7 +155,7 @@ function walk(dir: string, accept: (name: string) => boolean, out: string[] = []
  */
 export function declaredCssClasses(css: string): Set<string> {
   const out = new Set<string>()
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   for (const rule of source.matchAll(/([^{}]*)\{/g)) {
     for (const name of selectorClassNames(rule[1]!))
       out.add(name)
@@ -214,7 +215,7 @@ function selectorClassNames(selector: string): string[] {
 /** Объявленные в CSS кастом-проперти (без `--`), включая блоки внутри at-rules. */
 export function declaredCssTokens(css: string): Set<string> {
   const out = new Set<string>()
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   for (const m of source.matchAll(/(?<=[{;\s])--([\w-]+)\s*:/g))
     out.add(m[1]!)
   return out
@@ -226,7 +227,7 @@ export function declaredCssTokens(css: string): Set<string> {
  * только другой мёртвый токен, живым не считается.
  */
 export function reachableCssTokens(css: string, js: string): Set<string> {
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   const valueRefs = new Map<string, string[]>()
   let stripped = source
   for (const m of source.matchAll(/(?<=[{;\s])--([\w-]+)\s*:([^;}]*)/g)) {
@@ -263,7 +264,7 @@ function ownSelectorsOf(component: GranumManifestComponent, packageDist: string)
     catch {
       continue
     }
-    const source = text.replace(/\/\*[\s\S]*?\*\//g, '')
+    const source = stripCssComments(text)
     for (const rule of source.matchAll(/([^{}]*)\{/g)) {
       const prelude = rule[1]!
       if (prelude.trim().startsWith('@'))

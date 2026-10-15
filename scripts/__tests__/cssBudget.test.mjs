@@ -19,6 +19,11 @@ describe('cssBudget', () => {
     expect([...referencedTokens(css, 'el.style.getPropertyValue("--d")')].sort()).toEqual(['a', 'b', 'd'])
   })
 
+  it('`/*` внутри строки не съедает объявления дальше', () => {
+    const css = ':root{--a:"/*";--b:1px}/* --z:1 */.x{margin:var(--b)}'
+    expect([...declaredTokens(css)].sort()).toEqual(['a', 'b'])
+  })
+
   it('достижимость идёт от корней вне значений и по значениям объявлений', () => {
     const css = ':root{--a:1px;--b:var(--a);--c:3;--d:var(--c)}.x{margin:var(--b)}'
     const reachable = reachableTokens(css, '')

@@ -13,6 +13,7 @@
  * объявленным один раз, а обрезка, построенная на нём, оставит в файле
  * осиротевший fallback удалённого токена.
  */
+import { stripCssComments } from '../engine/extract'
 
 /** Одно объявление custom property с координатами в исходном тексте. */
 export interface CssDeclarationOccurrence {
@@ -290,7 +291,7 @@ function markOtherContent(css: string, block: CssBlock): void {
   }
   residual += css.slice(cursor, bodyEnd)
 
-  block.hasOtherContent = residual.replace(/\/\*[\s\S]*?\*\//g, '').replace(/[;\s]/g, '').length > 0
+  block.hasOtherContent = stripCssComments(residual).replace(/[;\s]/g, '').length > 0
 }
 
 /** Только объявления — самый частый запрос. */

@@ -4,6 +4,7 @@ export { ConfigLoadError, loadGranumConfigFile } from './cli/loadConfig'
 export type { LoadedGranumConfig } from './cli/loadConfig'
 export type * from './config'
 export { defineGranumConfig } from './config'
+export { stripCssComments } from './engine/extract'
 /**
  * Точка входа `./node`: манифесты, эмиссия CSS, диагностика как функции
  * (ТЗ §7, §12). Node-only, без внешних зависимостей. Эмиссия и диагностика —

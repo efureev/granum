@@ -280,7 +280,32 @@ function stripScript(code: string, lineComments: LineComments): string {
   return out.done()
 }
 
-function stripCss(code: string): string {
+interface CssStripOptions {
+  /** Строчный `//` целой строкой: в исходниках с синтаксисом препроцессора он бывает, в CSS — нет. */
+  readonly lineComments: boolean
+  /** Чем заменить комментарий `/* … *\/` длиной `length`. */
+  readonly replace: (length: number) => string
+}
+
+const SOURCE_CSS: CssStripOptions = { lineComments: true, replace: () => ' ' }
+
+/** Чем заменить комментарий: убрать, пробелом или пробелами той же длины (когда важны смещения). */
+export type CssCommentReplacement = 'remove' | 'space' | 'keep-offsets'
+
+/**
+ * Комментарии `/* *\/` CSS — с учётом строк и нецитированного `url(…)`: `/*`
+ * внутри них комментарий не открывает. Регэксп по всему тексту съел бы CSS до
+ * ближайшего `*\/`, и правила за ним пропали бы молча. `//` в CSS не
+ * комментарий и не трогается; незакрытый `/*` ничего не съедает.
+ */
+export function stripCssComments(css: string, replacement: CssCommentReplacement = 'remove'): string {
+  const replace = replacement === 'remove'
+    ? () => ''
+    : replacement === 'space' ? () => ' ' : (length: number) => ' '.repeat(length)
+  return stripCss(css, { lineComments: false, replace })
+}
+
+function stripCss(code: string, options: CssStripOptions = SOURCE_CSS): string {
   const out = cuts(code)
   let lineHasCode = false
   let i = 0
@@ -300,11 +325,11 @@ function stripCss(code: string): string {
       const end = blockCommentEnd(code, i + 2)
       if (end < 0)
         break
-      out.cut(i, end, ' ')
+      out.cut(i, end, options.replace(end - i))
       i = end
       continue
     }
-    if (ch === '/' && next === '/' && !lineHasCode) {
+    if (ch === '/' && next === '/' && !lineHasCode && options.lineComments) {
       const eol = lineEnd(code, i)
       out.cut(i, eol, '')
       i = eol

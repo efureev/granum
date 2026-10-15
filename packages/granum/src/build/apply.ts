@@ -5,6 +5,7 @@
  */
 import type { GranumEngine } from '../engine/types'
 import { ApplyExpansionError } from '../core/errors'
+import { stripCssComments } from '../engine/extract'
 import { scanCssBlocks } from '../node/cssDeclarations'
 
 /**
@@ -15,7 +16,7 @@ import { scanCssBlocks } from '../node/cssDeclarations'
 const APPLY_RE = /@apply\b([^;{}]*);?/g
 
 function blankComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, m => ' '.repeat(m.length))
+  return stripCssComments(css, 'keep-offsets')
 }
 
 export function hasApply(css: string): boolean {

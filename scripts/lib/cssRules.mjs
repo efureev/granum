@@ -4,6 +4,7 @@
  * они — способ доставки, а не содержание. `@media`/`@supports`/`@container`
  * входят в контекст правила, `@keyframes` — одно правило с телом целиком.
  */
+import { stripCssComments } from '@feugene/granum/node'
 
 const RULE_AT_RULES = /^@(?:media|supports|container|layer|document)\b/
 
@@ -79,7 +80,7 @@ export function normalizeDeclarations(body) {
 export function collectCssRules(css, context = '') {
   const rules = new Map()
   let i = 0
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   while (i < source.length) {
     const open = source.indexOf('{', i)
     const semi = source.indexOf(';', i)

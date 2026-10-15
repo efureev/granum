@@ -12,7 +12,7 @@
 import type { GranumTokenSet } from '../contract'
 import type { CssBlock } from './cssDeclarations'
 import { TokenParseError } from '../core/errors'
-import { stripComments } from '../engine/extract'
+import { stripComments, stripCssComments } from '../engine/extract'
 import { isCssDataUrl, readCss, readCssSync, resolveCssFilePath } from './css'
 import { scanCssBlocks } from './cssDeclarations'
 
@@ -131,7 +131,7 @@ function extractBlocksDetailed(css: string): { blocks: ParsedTokenBlock[], skipp
 
 /** Прелюдия без комментариев: `scanCssBlocks` захватывает в неё комментарий перед селектором. */
 function cleanPrelude(prelude: string): string {
-  return prelude.replace(/\/\*[\s\S]*?\*\//g, ' ').trim().replace(/\s+/g, ' ')
+  return stripCssComments(prelude, 'space').trim().replace(/\s+/g, ' ')
 }
 
 /** Собственные объявления блока; комментарий внутри значения срезается с учётом строк. */

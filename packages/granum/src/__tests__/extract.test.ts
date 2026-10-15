@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractClasses, stripComments } from '../engine/extract'
+import { extractClasses, stripComments, stripCssComments } from '../engine/extract'
 import { collectImportSpecifiers } from '../node/imports'
 import { scanTokenConsumption } from '../node/tokenScan'
 
@@ -112,6 +112,30 @@ describe('stripComments: CSS', () => {
   it('нецитированный url() со звёздочкой', () => {
     const css = '.a{background:url(/img/*.png)}\n.b{color:var(--xh-fg)}\n/* var(--xh-dead) */'
     expect([...scanTokenConsumption(css, 'a.css').uses.keys()]).toEqual(['xh-fg'])
+  })
+})
+
+/**
+ * Разбор CSS (`@apply`, аудит, бюджет, сверка правил) режет только `/* *\/`:
+ * `//` в CSS не комментарий. Строки и нецитированный `url(…)` обходятся.
+ */
+describe('stripCssComments', () => {
+  it('`/*` в строке и в url() не открывает комментарий', () => {
+    expect(stripCssComments('.a{content:"/*"}.b{x:1}/* c */')).toBe('.a{content:"/*"}.b{x:1}')
+    expect(stripCssComments('.a{background:url(/img/*.png)}/* c */.b{}')).toBe('.a{background:url(/img/*.png)}.b{}')
+  })
+
+  it('замена: убрать, пробел или пробелы той же длины', () => {
+    const css = '.a{}/* x */.b{}'
+    expect(stripCssComments(css)).toBe('.a{}.b{}')
+    expect(stripCssComments(css, 'space')).toBe('.a{} .b{}')
+    expect(stripCssComments(css, 'keep-offsets')).toBe('.a{}       .b{}')
+    expect(stripCssComments(css, 'keep-offsets')).toHaveLength(css.length)
+  })
+
+  it('`//` не комментарий CSS, незакрытый `/*` ничего не съедает', () => {
+    expect(stripCssComments('// a\n.b{x:1}')).toBe('// a\n.b{x:1}')
+    expect(stripCssComments('.a{x:1} /* oops')).toBe('.a{x:1} /* oops')
   })
 })
 

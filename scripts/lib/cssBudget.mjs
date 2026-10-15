@@ -3,6 +3,7 @@
  * обращения к FS: ввод — текст, вывод — данные. I/O и печать живут в
  * `report-css-budget.mjs`.
  */
+import { stripCssComments } from '@feugene/granum/node'
 
 /** Роли ассетов; список упорядочен, первое совпадение выигрывает. Неопознанный ассет роняет отчёт. */
 export const ASSET_ROLES = [
@@ -19,7 +20,7 @@ export function classifyAsset(fileName) {
 /** Объявленные в CSS кастом-проперти (без `--`), включая блоки внутри at-rules. */
 export function declaredTokens(css) {
   const out = new Set()
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   for (const m of source.matchAll(/(?<=[{;\s])--([\w-]+)\s*:/g))
     out.add(m[1])
   return out
@@ -40,7 +41,7 @@ export function referencedTokens(css, js) {
  * (в правилах CSS, в JS), далее — по значениям объявлений.
  */
 export function reachableTokens(css, js) {
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   const valueRefs = new Map()
   let stripped = source
   for (const m of source.matchAll(/(?<=[{;\s])--([\w-]+)\s*:([^;}]*)/g)) {
@@ -101,7 +102,7 @@ export function cssLayerBody(css, layer) {
  */
 export function cssClassesOf(css) {
   const out = new Set()
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const source = stripCssComments(css)
   for (const rule of source.matchAll(/([^{}]*)\{/g)) {
     const prelude = rule[1]
     if (prelude.trim().startsWith('@'))

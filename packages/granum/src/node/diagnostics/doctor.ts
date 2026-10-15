@@ -10,6 +10,7 @@ import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
 import { isLoadedManifest } from '../../contract/manifest'
 import { sortedUnique } from '../../core/dedupe'
+import { stripCssComments } from '../../engine/extract'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { findUndefinedTokens } from '../undefinedTokens'
@@ -257,7 +258,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       const css = readIfExists(resolveProviderPath(path, provider.baseUrl), key)
       if (css === undefined)
         continue
-      if (/@apply\s/.test(css.replace(/\/\*[\s\S]*?\*\//g, '')))
+      if (/@apply\s/.test(stripCssComments(css)))
         error('apply-not-expanded', key, `${path} still contains @apply — rebuild the provider with granumProvider()`)
       if (/!\s*important/i.test(css))
         warn('important-in-provider-css', key, `${path} uses !important — inside cascade layers it inverts the layer order (ADR-4)`)

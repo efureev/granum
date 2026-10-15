@@ -189,6 +189,11 @@ describe('granumAuditDist (D-9, INV-DIST-1)', () => {
     expect(report.problems.join('\n')).toContain('own rules missing from the CSS (x-card)')
   })
 
+  it('declaredCssClasses: `/*` внутри строки не съедает правила дальше', () => {
+    const classes = declaredCssClasses('.a::after{content:"/*"}.b{color:red}/* .c{} */.d{gap:1px}')
+    expect([...classes].sort()).toEqual(['a', 'b', 'd'])
+  })
+
   it('declaredCssClasses: экранирование снимается, значения не читаются', () => {
     const classes = declaredCssClasses('.bg-\\[var\\(--x\\)\\]{background:var(--x)}.p-1\\.5{padding:1.5rem}@media (min-width:40rem){.sm\\:flex{display:flex}}')
 

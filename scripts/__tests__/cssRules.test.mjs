@@ -8,6 +8,11 @@ describe('cssRules', () => {
     expect(rules.get('|.x')).toEqual(['color:red', 'margin:0'])
   })
 
+  it('`/*` внутри строки не открывает комментарий', () => {
+    const rules = collectCssRules('.a::after{content:"/*"}.b{color:red}/* .c{x:1} */')
+    expect([...rules.keys()]).toEqual(['|.a::after', '|.b'])
+  })
+
   it('порядок объявлений и селекторов в списке не важен; ; внутри url() не режет', () => {
     expect(normalizeDeclarations('b:url(data:x;base64,zz);a:1')).toEqual(['a:1', 'b:url(data:x;base64,zz)'])
     const a = collectCssRules('.a,.b{x:1;y:2}')
