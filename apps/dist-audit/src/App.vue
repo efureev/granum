@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /*
- * Импорт из корневого бареля пакета — намеренно, а не из subpath компонента.
- * Барель реэкспортирует оба компонента, и только так видно работу
- * tree-shaking: `XxBadge` в бандл не попадает, хотя объявлен рядом.
+ * Компонент — из своего подпути: по нему granum видит, что выбрано. Импорт
+ * компонента из корня пакета guard отвергает — корень тянет весь пакет.
  */
-import { XxCard } from '@granum-fixtures/mini-ds'
+import { XxCard } from '@granum-fixtures/mini-ds/components/XxCard'
 </script>
 
 <template>

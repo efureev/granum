@@ -296,6 +296,7 @@ interface EngineOutput {
 | CSS-файл манифеста отсутствует | `CssReadError` (провайдер, секция, субъект, `cause`) | сборка приложения |
 | strict-разбор `tokenDefinitionsRef` не удался | `TokenParseError` внутри `TokenRefError` | сборка провайдера |
 | импорт компонента вне селекции при `guard: 'error'` | `ComponentOutsideSelectionError` (импортёр) | сборка приложения |
+| импорт компонента из корня пакета-провайдера или корня целиком при `guard: 'error'` | `ComponentRootImportError` (провайдер, компоненты, импортёр) | сборка и dev приложения |
 | тот же инстанс `granum()` во второй отдельной сборке (окружения одного builder Vite — одна сборка) | `PluginInstanceReusedError` (оба `outDir`) | разрешение конфига второй сборки |
 | форма конфига невалидна | `InvalidConfigError` (путь до поля) | загрузка конфига |
 | `@apply` не раскрывается: класс без правила, вариант (селекторный или через at-rule), класс из нескольких правил, вложенный контекст | `ApplyExpansionError` (`reason`) | сборка провайдера |

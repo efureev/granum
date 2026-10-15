@@ -18,6 +18,13 @@ read by 2.0 and the other way round.
 
 Application:
 
+- A component imported from the provider package root
+  (`import { GrChip } from '@feugene/granularity'`) or the root imported as a whole
+  (`import * as`, `export * from`, `import()`) is a `ComponentRootImportError`
+  under `js.guard`. Import components from `<package>/components/<Name>` or from
+  `virtual:granum/components`; other root names (utilities, constants, types) are
+  fine. The selection only sees a component by its subpath, and the root loads the
+  whole package in dev and in SSR.
 - An unknown key in `granum.config` is an `InvalidConfigError` with the path to
   the key and a hint — the nearest valid key for a typo, the new place for a v1
   preset key. Remove typos and leftovers such as `themes.themeFiles`,

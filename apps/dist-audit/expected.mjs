@@ -35,7 +35,7 @@ export default {
   js: {
     present: [{ what: 'код XxCard в чанке пакета', js: 'xxx-card' }],
     absent: [
-      { what: 'код невыбранного XxBadge — его выбросил tree-shaking, хотя барель экспортирует оба', js: 'inline-block' },
+      { what: 'код невыбранного XxBadge — его никто не импортирует', js: 'inline-block' },
       { what: 'его акцентный класс', js: 'bg-[var(--xxx-accent)]' },
     ],
   },

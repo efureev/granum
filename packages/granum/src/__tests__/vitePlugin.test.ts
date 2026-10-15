@@ -9,7 +9,7 @@ import { build, createBuilder } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { ComponentOutsideSelectionError } from '../core/errors'
+import { ComponentOutsideSelectionError, ComponentRootImportError } from '../core/errors'
 import { granum } from '../vite/plugin'
 import { testEngine } from './testEngine'
 
@@ -39,7 +39,7 @@ async function buildProvider(): Promise<string> {
   write(root, 'src/components/Panel/index.ts', `export { default as Panel } from './Panel.vue'\n`)
   write(root, 'src/components/Table/Table.vue', `<template><table class="w-full t-table"></table></template>\n`)
   write(root, 'src/components/Table/index.ts', `export { default as Table } from './Table.vue'\n`)
-  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\nexport * from './components/Table/index.ts'\n`)
+  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\nexport * from './components/Table/index.ts'\nexport const KIT_SIZES = ['kit-size-s', 'kit-size-m']\n`)
 
   const url = (name: string): string => pathToFileURL(join(root, `src/components/${name}/config.ts`)).href
   const provider = defineGranumProvider({
@@ -345,6 +345,41 @@ describe('granum() с настоящим Vite', async () => {
       expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])
       expect(app.css).toContain('@layer granum.tokens {')
       expect(app.css).toContain('@layer granum.components {')
+    })
+  })
+
+  describe('компонент из корня пакета — ошибка guard', () => {
+    /** Исходная ошибка сборки: из хука трансформации бандлер заворачивает её в свою. */
+    const failureOf = (promise: Promise<unknown>): Promise<unknown> =>
+      promise.then(() => undefined, (e: unknown) => (e as { errors?: unknown[] }).errors?.[0] ?? e)
+
+    it('компонент из корня — ошибка, даже выбранный: селекция видит его только по подпути', async () => {
+      const error = await failureOf(buildApp(providerRoot, { components: ['@t/kit:Card'] }, `<script setup lang="ts">import { Card } from '@t/kit'</script><template><Card/></template>`))
+      expect(error).toBeInstanceOf(ComponentRootImportError)
+      expect(error).toMatchObject({ providerId: '@t/kit', components: ['Card'], whole: false, importer: 'src/App.vue' })
+      expect((error as Error).message).toContain(`'@t/kit/components/Card'`)
+    })
+
+    it('корень целиком — ошибка', async () => {
+      const error = await failureOf(buildApp(providerRoot, { components: ['@t/kit:Card'] }, `<script setup lang="ts">import * as kit from '@t/kit'\nconst { Card } = kit</script><template><Card/></template>`))
+      expect(error).toMatchObject({ providerId: '@t/kit', whole: true })
+    })
+
+    it('прочие имена корня и импорт одних типов — можно', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'] },
+        `<script setup lang="ts">import type { Card as CardType } from '@t/kit'\nimport { KIT_SIZES } from '@t/kit'\nimport { Card } from '@t/kit/components/Card'\nconst sizes: string[] = KIT_SIZES\nconst _type: typeof CardType | undefined = undefined</script><template><Card :data-sizes="sizes.join()"/></template>`,
+      )
+      expect(app.js).toContain('kit-size-s')
+    })
+
+    it('guard: warn — предупреждение и сборка; off — тишина', async () => {
+      const code = `<script setup lang="ts">import { Card } from '@t/kit'</script><template><Card/></template>`
+      const warned = await buildApp(providerRoot, { components: ['@t/kit:Card'], js: { guard: 'warn' } }, code)
+      expect(warned.logs.some(l => l.startsWith('warning:') && l.includes(`'@t/kit/components/Card'`))).toBe(true)
+      const off = await buildApp(providerRoot, { components: ['@t/kit:Card'], js: { guard: 'off' } }, code)
+      expect(off.logs.some(l => l.includes('package root'))).toBe(false)
     })
   })
 

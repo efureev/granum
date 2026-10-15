@@ -453,6 +453,35 @@ export class PluginInstanceReusedError extends GranumError {
 }
 
 /** Приложение импортирует компонент провайдера, не вошедший в селекцию (A-6, INV-JS-2). */
+/**
+ * Компонент импортирован из корня пакета-провайдера. Селекция и guard видят
+ * компонент по его подпути, а корневой barrel тянет весь пакет: в dev и в SSR
+ * это все его компоненты, а CSS компонента, которого нет в селекции, не приедет.
+ */
+export class ComponentRootImportError extends GranumError {
+  readonly code = 'component-root-import' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly components: readonly string[],
+    readonly whole: boolean,
+    readonly importer: string | undefined,
+  ) {
+    const where = importer ? ` in '${importer}'` : ''
+    const subject = whole
+      ? `The provider package '${providerId}' is imported as a whole${where} (import * as, export * from or import())`
+      : `${components.length === 1 ? 'Component' : 'Components'} ${components.map(name => `'${name}'`).join(', ')} `
+        + `${components.length === 1 ? 'is' : 'are'} imported from the package root '${providerId}'${where}`
+    const instead = whole || components.length === 0
+      ? `'${providerId}/components/<Name>'`
+      : components.map(name => `'${providerId}/components/${name}'`).join(', ')
+    super(
+      `${subject}. Import components from ${instead} or from 'virtual:granum/components': granum selects a component `
+      + `by its subpath, while the package root loads every component of the package.`,
+    )
+  }
+}
+
 export class ComponentOutsideSelectionError extends GranumError {
   readonly code = 'component-outside-selection' as const
 

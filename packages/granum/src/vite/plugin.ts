@@ -15,8 +15,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { ComponentOutsideSelectionError, PluginInstanceReusedError } from '../core/errors'
+import { ComponentOutsideSelectionError, ComponentRootImportError, PluginInstanceReusedError } from '../core/errors'
 import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
+import { findPackageRootImports } from '../node/imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCss'
 import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
@@ -33,6 +34,20 @@ const RESOLVED_CSS = `\0${VIRTUAL_CSS}`
 const RESOLVED_LAYER_PREFIX = `\0${VIRTUAL_LAYER_PREFIX}`
 const RESOLVED_COMPONENTS = `\0${VIRTUAL_COMPONENTS}`
 const RESOLVED_THEMES = `\0${VIRTUAL_THEMES}`
+/** Модули приложения, в коде которых ищутся импорты компонентов из корня пакета. */
+const SCRIPT_RE = /\.(?:[cm]?[jt]sx?|vue|svelte|astro)$/
+/** Разметка: импорты живут в блоках `<script>` и во frontmatter Astro. */
+const MARKUP_RE = /\.(?:vue|svelte|astro)$/
+const SCRIPT_BLOCK_RE = /<script\b[^>]*>([\s\S]*?)<\/script>/gi
+const FRONTMATTER_RE = /^\s*---\r?\n([\s\S]*?)\r?\n---/
+
+/** Код скриптов разметки: блоки `<script>` и frontmatter, через перевод строки. */
+function scriptBlocksOf(markup: string): string {
+  const blocks = [...markup.matchAll(SCRIPT_BLOCK_RE)].map(m => m[1]!)
+  const frontmatter = FRONTMATTER_RE.exec(markup)?.[1]
+  return (frontmatter === undefined ? blocks : [frontmatter, ...blocks]).join('\n')
+}
+
 /** Слой при `css.split`: отдельная CSS-точка входа без объявления порядка (A-21). */
 const VIRTUAL_SPLIT_PREFIX = 'virtual:granum/split/'
 const RESOLVED_SPLIT_PREFIX = `\0${VIRTUAL_SPLIT_PREFIX}`
@@ -367,6 +382,17 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       void refresh(server)
   }
 
+  /** id провайдера → имена его компонентов; одна карта на резолюцию. */
+  const componentNames = new WeakMap<PreparedApp['resolution'], ReadonlyMap<string, ReadonlySet<string>>>()
+  const componentsByProvider = (app: PreparedApp): ReadonlyMap<string, ReadonlySet<string>> => {
+    let map = componentNames.get(app.resolution)
+    if (!map) {
+      map = new Map([...app.resolution.registry.providers].map(([id, provider]) => [id, new Set(provider.components.map(c => c.name))]))
+      componentNames.set(app.resolution, map)
+    }
+    return map
+  }
+
   const providerKeyOf = (app: PreparedApp, source: string): string | undefined => {
     const m = /^(@[^/]+\/[^/]+|[^./@][^/]*)\/components\/([^/?#]+)$/.exec(source)
     if (!m)
@@ -491,6 +517,29 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       if (guard === 'error')
         throw error
       log(`warning: ${error.message}`)
+      return null
+    },
+
+    /*
+     * Компонент — только из подпути или виртуального модуля. Импорт из корня
+     * пакета guard в `resolveId` не видит: там нет имён, а имя компонента и
+     * решает. Поэтому проверка — по исходному коду модуля, до остальных
+     * трансформов: позже Vite в dev переписывает спецификаторы в пути файлов.
+     * У SFC и разметки проверяются блоки `<script>` и frontmatter.
+     */
+    async transform(code, id) {
+      const guard = config.js?.guard ?? 'error'
+      const path = id.replace(/[?#].*$/, '')
+      if (guard === 'off' || id.startsWith('\0') || id.includes('/node_modules/') || id.includes('?') || !SCRIPT_RE.test(path))
+        return null
+      const app = await prepare()
+      const source = MARKUP_RE.test(path) ? scriptBlocksOf(code) : code
+      for (const found of findPackageRootImports(source, componentsByProvider(app))) {
+        const error = new ComponentRootImportError(found.providerId, found.components, found.whole, relative(root, path))
+        if (guard === 'error')
+          throw error
+        log(`warning: ${error.message}`)
+      }
       return null
     },
 

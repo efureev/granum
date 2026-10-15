@@ -200,6 +200,14 @@ has no side effects: tree-shaking removes what is unused. Plain imports of
 `@acme/ui/components/XhPanel` work too; the plugin neither rewrites provider
 code nor changes the chunk layout.
 
+A component is taken only this way — from its subpath or from the virtual module.
+Importing a component from the package root (`import { XhPanel } from '@acme/ui'`)
+or the root as a whole (`import * as ui`, `export * from`, `import()`) is rejected
+by the guard with `ComponentRootImportError`: the selection sees a component by its
+subpath, while the root pulls the whole package — in dev and in SSR every component
+of it. Other root names — utilities, constants, types — may be imported. Strictness
+is set by the same `js.guard`.
+
 Not every component can be re-exported by name. `date-picker` is not a JS
 identifier, and a `Card` selected from two providers at once is ambiguous.
 The module skips such names and lists them in a build warning — import them

@@ -12,6 +12,7 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['CircularProviderDependencyError', () => new errors.CircularProviderDependencyError(['a', 'b', 'a'])],
   ['ComponentNotFoundError', () => new errors.ComponentNotFoundError('p', 'X', ['A', 'B'], 'ref')],
   ['ComponentOutsideSelectionError', () => new errors.ComponentOutsideSelectionError('p:X', '/app/src/App.vue', ['p:A'])],
+  ['ComponentRootImportError', () => new errors.ComponentRootImportError('p', ['X'], false, 'src/App.vue')],
   ['CssReadError', () => new errors.CssReadError('p', 'theme', 'light', 'theme/light.css')],
   ['CssSourceError', () => new errors.CssSourceError('https://x/y.css', 'unsupported-protocol')],
   ['DuplicateComponentNameError', () => new errors.DuplicateComponentNameError('p', 'X')],

@@ -28,12 +28,13 @@ async function buildProvider(): Promise<string> {
     name: '@t/kit',
     version: '1.0.0',
     type: 'module',
-    exports: { './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js' },
+    exports: { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js' },
   }))
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px}')
   write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
   write(root, 'src/components/Card/Card.vue', `<template><div class="t-card p-4"><slot /></div></template>\n<style>.t-card{gap:var(--t-space)}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
+  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\n`)
   const provider = defineGranumProvider({
     id: '@t/kit',
     contractVersion: 1,
@@ -138,4 +139,10 @@ describe('granum() на dev-сервере (A-16)', async () => {
     await waitFor(() => app.reloaded.includes(CSS_ID), 'CSS reload')
     expect((await app.server.transformRequest('virtual:granum.css'))?.code).toContain('--t-space:9px')
   }, 30_000)
+
+  it('компонент из корня пакета — ошибка и в dev: Vite покажет её оверлеем', async () => {
+    const app = await startApp(providerRoot)
+    write(app.root, 'src/App.vue', `<script setup lang="ts">import { Card } from '@t/kit'</script>\n<template><Card/></template>\n`)
+    await expect(app.server.transformRequest('/src/App.vue')).rejects.toMatchObject({ code: 'component-root-import', components: ['Card'] })
+  })
 })

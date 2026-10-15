@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { extractClasses, stripComments, stripCssComments } from '../engine/extract'
-import { collectImportSpecifiers } from '../node/imports'
+import { collectImportSpecifiers, findPackageRootImports } from '../node/imports'
 import { scanTokenConsumption } from '../node/tokenScan'
 
 /**
@@ -190,5 +190,44 @@ describe('collectImportSpecifiers: комментарии срезаются с 
   it('импорт в комментарии не считается, URL в строке не режется', () => {
     const code = `const u = 'https://cdn.example/x' // import 'node:path'\n/* import 'node:os' */\nimport a from './a.js'\n`
     expect(collectImportSpecifiers(code)).toEqual(['./a.js'])
+  })
+})
+
+describe('findPackageRootImports: компоненты из корня пакета-провайдера', () => {
+  const providers = new Map([['@acme/ui', new Set(['Button', 'Chip', 'date-picker'])], ['@acme/base', new Set(['Box'])]])
+  const find = (code: string): unknown => findPackageRootImports(code, providers)
+
+  it('именованный импорт и реэкспорт компонента — нарушение, прочие имена — нет', () => {
+    expect(find(`import { Button, useToast, Chip as C } from '@acme/ui'`)).toEqual([{ providerId: '@acme/ui', components: ['Button', 'Chip'], whole: false }])
+    expect(find(`export { Box } from "@acme/base"`)).toEqual([{ providerId: '@acme/base', components: ['Box'], whole: false }])
+    expect(find(`import Ui, { Button } from '@acme/ui'`)).toEqual([{ providerId: '@acme/ui', components: ['Button'], whole: false }])
+    expect(find(`import{Button}from"@acme/ui";`)).toEqual([{ providerId: '@acme/ui', components: ['Button'], whole: false }])
+  })
+
+  it('корень целиком — нарушение: import * as, export * from, export * as, import()', () => {
+    for (const code of [`import * as ui from '@acme/ui'`, `export * from '@acme/ui'`, `export * as ui from '@acme/ui'`, `const ui = await import('@acme/ui')`])
+      expect(find(code), code).toEqual([{ providerId: '@acme/ui', components: [], whole: true }])
+  })
+
+  it('не нарушение: прочие имена, импорт по умолчанию, ради побочного эффекта, одни типы, подпуть, чужой пакет', () => {
+    for (const code of [
+      `import { useToast, TONE } from '@acme/ui'`,
+      `import ui from '@acme/ui'`,
+      `import { default as ui } from '@acme/ui'`,
+      `import '@acme/ui'`,
+      `import type { Button } from '@acme/ui'`,
+      `import { type Button, useToast } from '@acme/ui'`,
+      `export type { Button } from '@acme/ui'`,
+      `import { Button } from '@acme/ui/components/Button'`,
+      `import { Button } from '@other/ui'`,
+      `export { Button }`,
+      `const s = "import { Button } from '@acme/ui'"`,
+    ])
+      expect(find(code), code).toEqual([])
+  })
+
+  it('несколько импортов одного пакета сводятся в одну находку', () => {
+    expect(find(`import { Button } from '@acme/ui'\nimport { Chip } from '@acme/ui'\nimport * as all from '@acme/ui'\n`))
+      .toEqual([{ providerId: '@acme/ui', components: ['Button', 'Chip'], whole: true }])
   })
 })

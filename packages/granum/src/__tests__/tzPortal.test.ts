@@ -4,12 +4,11 @@ import type { GranumLoadedManifest, GranumProvider } from '../contract'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
-import { defineGranumComponent, defineGranumProvider } from '../contract'
+import { defineGranumProvider } from '../contract'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
 import { granum } from '../vite/plugin'
@@ -79,31 +78,6 @@ async function buildPackage(root: string, provider: GranumProvider, options: Par
   })
 }
 
-/** Пакет `@t/<name>` с компонентами `Card` и `Table`, баррелем в корне и подпутями. */
-async function barrelPackage(name: string, extra: Record<string, string> = {}): Promise<string> {
-  const root = mkdtempSync(join(tmpdir(), `granum-tz-${name}-`))
-  put(root, 'package.json', JSON.stringify({
-    name: `@t/${name}`,
-    version: '1.0.0',
-    type: 'module',
-    exports: { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js', './components/Table': './dist/components/Table/index.js' },
-  }))
-  put(root, 'src/components/Card/Card.vue', `<template><div class="t-card p-4"><slot /></div></template>\n`)
-  put(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
-  put(root, 'src/components/Table/Table.vue', `<template><table class="t-table w-full"></table></template>\n`)
-  put(root, 'src/components/Table/index.ts', `export { default as Table } from './Table.vue'\n`)
-  put(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Table/index.ts'\n`)
-  for (const [rel, content] of Object.entries(extra))
-    put(root, rel, content)
-  const url = (n: string): string => pathToFileURL(join(root, `src/components/${n}/config.ts`)).href
-  await buildPackage(root, defineGranumProvider({
-    id: `@t/${name}`,
-    contractVersion: 1,
-    components: [defineGranumComponent(url('Card'), { name: 'Card' }), defineGranumComponent(url('Table'), { name: 'Table' })],
-  }))
-  return root
-}
-
 /** Приложение на собранных пакетах; возвращает CSS, отчёт и лог плагина. */
 async function buildApp(packages: Record<string, string>, config: Omit<GranumConfig, 'engine'>, appVue: string) {
   const root = mkdtempSync(join(tmpdir(), 'granum-tz-app-'))
@@ -120,26 +94,6 @@ async function buildApp(packages: Record<string, string>, config: Omit<GranumCon
   const css = readdirSync(assets).filter(f => f.endsWith('.css')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
   return { css, report: JSON.parse(readFileSync(join(root, 'dist/granum-report.json'), 'utf8')), logs }
 }
-
-describe('пункт ТЗ-4: импорт из корня провайдера', () => {
-  it('4: guard не видит компонент вне селекции, импортированный из корня пакета', async () => {
-    const pkg = await barrelPackage('bar')
-    const app = await buildApp({ bar: pkg }, { providers: ['@t/bar'], components: ['@t/bar:Card'] }, `<script setup lang="ts">import { Card, Table } from '@t/bar'</script>\n<template><Card/><Table/></template>\n`)
-    expect(app.report.selection.map((s: { key: string }) => s.key)).toEqual(['@t/bar:Card'])
-    // Код Table в бандле, а его CSS-классов нет: компонент без утилит.
-    expect(app.css).not.toContain('.w-full')
-    // Тот же импорт подпутём guard ловит — разница только в спецификаторе.
-    await expect(buildApp({ bar: pkg }, { providers: ['@t/bar'], components: ['@t/bar:Card'] }, `<script setup lang="ts">import { Table } from '@t/bar/components/Table'</script>\n<template><Table/></template>\n`))
-      .rejects
-      .toThrow(/Component '@t\/bar:Table' is imported from 'src\/App\.vue[^']*' but is not part of the granum selection/)
-  })
-
-  it('4: `components: \'imports\'` не считает импорт из корня, если тег не совпал с именем', async () => {
-    const pkg = await barrelPackage('imp')
-    const app = await buildApp({ imp: pkg }, { providers: ['@t/imp'], components: 'imports' }, `<script setup lang="ts">import { Table as Grid } from '@t/imp'</script>\n<template><Grid/></template>\n`)
-    expect(app.report.selection).toEqual([])
-  })
-})
 
 describe('пункт ТЗ-7: провайдер только с правилами', () => {
   /**
