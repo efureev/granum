@@ -159,6 +159,60 @@ granumProvider({
 является и объявлять его не нужно: рёбра считаются по коду, попавшему в
 чанки чужого компонента.
 
+## Провайдер только с правилами
+
+Свои правила утилит приложение может передать фабрике движка
+(`windEngine({ rules })`), но тогда отпечаток словаря его движка расходится с
+отпечатками пакетов, и granum на каждой сборке пересчитывает их классы из
+файлов. Если цена важна, правила выносят в пакет-провайдер без компонентов:
+движок приложения остаётся ванильным, и сборка идёт быстрым путём.
+
+```ts
+// src/engine.ts — модуль правил, уезжает в dist/engine.js
+import type { GranumRule } from '@feugene/granum/engine'
+
+export const brandRules: readonly GranumRule[] = [
+  ['brand-logo', { 'background-color': '#7c3aed' }],
+  [/^brand-pad-(\d+)$/, ([, step]) => ({ padding: `${Number(step) * 4}px` })],
+]
+
+export default { rules: brandRules }
+```
+
+```ts
+// vite.config.ts
+granumProvider({
+  provider: defineGranumProvider({
+    id: '@acme/brand-rules',
+    contractVersion: 1,
+    components: [],
+    engine: { dialect: WIND_DIALECT_EXTRA, rules: brandRules },
+  }),
+  engine: windEngine(),
+  indexEntry: false,
+  entries: { engine: 'src/engine.ts' },
+  engineModule: 'engine.js',
+})
+```
+
+- Пакет собирают **ванильным** движком своего диалекта, без правил пакета:
+  отпечаток в манифесте тогда равен отпечатку ванильного движка приложения, и
+  приложение принимает манифест как есть.
+- Диалект пакета обязан совпасть с диалектом движка приложения: иначе модуль
+  правил не загружается (`engine-rules-skipped` в `doctor`), и классы правил не
+  генерируются.
+- Модуль исполняется в Node на сборке приложения и отдаёт
+  `export default { rules, variants, preflights }`. Данные правил встраивайте при
+  сборке пакета: JSON внутри пакета бандлер встраивает сам. Импорт JSON из другого
+  пакета, оставленный внешним, сборка выпускает без атрибута
+  `with { type: 'json' }`, и приложение падает при загрузке модуля с
+  `ERR_IMPORT_ATTRIBUTE_MISSING`.
+- В `exports` достаточно `./granum.manifest.json`: модуль правил приложение
+  находит по пути из манифеста.
+
+Рабочий пример — фикстура [`rules-only-package`](../../fixtures/rules-only-package)
+и стенд [`app-rules`](../../apps/app-rules).
+
 ## Codegen
 
 Реестр провайдера, barrel и `exports` генерируются из директорий

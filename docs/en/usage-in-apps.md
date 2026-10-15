@@ -316,4 +316,5 @@ fingerprint drifted from the application's engine — for instance because the
 application passed its own rules to the engine — and classes are read from the
 package's files (`granum doctor` names the reason). On a design system with
 eight providers that is half a second per build; if the price matters, move the
-application's rules into a provider package of their own.
+application's rules into a provider package of their own — a
+[rules-only provider](./authoring-providers.md#rules-only-provider).

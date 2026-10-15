@@ -150,7 +150,10 @@ granum audit dist --json               # for a script in CI
 No config needed: the selection and the provider list come from
 `dist/granum-report.json`, the components and the declared tokens from the
 providers' manifests. That is why the command can be dropped into **another**
-repository's pipeline: its `dist` is enough.
+repository's pipeline: its `dist` is enough. An empty selection is not an error:
+an application may take only the engine rules from a package, and the audit then
+checks that the packages' components stayed out of the dist. Only a report with
+neither a selection nor a provider list is an error: there is nothing to judge by.
 
 What counts as a finding:
 

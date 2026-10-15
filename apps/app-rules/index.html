@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>granum app-rules — правила в пакете</title>
+  </head>
+  <body>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-rules</code></p>
+      <h1>Правила в пакете</h1>
+      <p class="demo-lead">
+        Свои правила приложение не передаёт движку, а берёт из пакета
+        <code>@granum-fixtures/rules-only</code> — провайдера без компонентов. Движок остаётся
+        ванильным, и классы пакетов не пересчитываются.
+      </p>
+      <h2>Что видно</h2>
+      <ul class="demo-notes">
+        <li>Фиолетовый значок — <code>brand-logo</code>, правило пакета из его модуля.</li>
+        <li>Отступ внутри значка — <code>brand-pad-3</code>, регэксп-правило пакета.</li>
+        <li>Отступ вокруг — <code>p-6</code>, обычная утилита словаря wind.</li>
+      </ul>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-rules verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

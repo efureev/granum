@@ -306,8 +306,10 @@ export function granumAuditDist(options: AuditDistOptions): AuditDistReport {
   }
   const report = JSON.parse(readFileSync(reportPath, 'utf8')) as AuditInputReport
   const selection = (report.selection ?? []).map(entry => entry.key)
-  if (selection.length === 0)
-    throw new Error(`granum audit: the report '${reportPath}' has an empty selection — nothing to audit`)
+  // Пустая селекция — законная сборка: приложение может брать у пакета только
+  // правила движка. Судить не по чему лишь тогда, когда нет и списка провайдеров.
+  if (selection.length === 0 && !report.providers?.length)
+    throw new Error(`granum audit: the report '${reportPath}' has neither a selection nor a provider list — nothing to audit`)
 
   const require = createRequire(join(root, 'package.json'))
   const providers: AuditProviderInfo[] = []
@@ -317,6 +319,8 @@ export function granumAuditDist(options: AuditDistOptions): AuditDistReport {
   const packageTokens = new Set<string>()
   const selected = new Set(selection)
   const unmatchedClasses = new Set((report.classes?.unmatched ?? []).map(e => e.className))
+  if (selection.length === 0)
+    notes.push('no component is selected — the audit checks that the providers\' components and unreachable tokens stayed out of the dist')
 
   /** Первый проход: манифесты и состав. Судить можно только зная селекцию целиком. */
   interface Loaded {

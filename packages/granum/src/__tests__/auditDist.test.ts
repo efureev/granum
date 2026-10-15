@@ -107,6 +107,26 @@ describe('granumAuditDist (D-9, INV-DIST-1)', () => {
    * этого не различала и работала лишь потому, что у двух компонентов фикстуры
    * классы не пересекались.
    */
+  /**
+   * Приложение может не выбрать ни одного компонента — например, берёт у пакета
+   * только правила движка. Аудит тогда не падает, а проверяет то, что можно:
+   * компоненты пакетов в дистрибутив не доехали.
+   */
+  it('пустая селекция при списке провайдеров: аудит идёт и ловит утечку невыбранного компонента', () => {
+    const clean = granumAuditDist({ dist: fixture({ selection: [], css: ':root{--kit-fg:#111;--kit-bg:#fff}\nbody{color:var(--kit-fg);background:var(--kit-bg)}', js: '' }).dist })
+    expect(clean.ok).toBe(true)
+    expect(clean.notes.join('\n')).toContain('no component is selected')
+    const leaked = granumAuditDist({ dist: fixture({ selection: [], css: '.rounded-badge{border-radius:9px}', js: '' }).dist })
+    expect(leaked.ok).toBe(false)
+    expect(leaked.problems.join('\n')).toContain('Badge')
+  })
+
+  it('ни селекции, ни провайдеров в отчёте — судить не по чему, ошибка', () => {
+    const f = fixture()
+    writeFileSync(join(f.dist, 'granum-report.json'), JSON.stringify({ selection: [], providers: [], classes: { unmatched: [] } }))
+    expect(() => granumAuditDist({ dist: f.dist })).toThrow(/neither a selection nor a provider list/)
+  })
+
   it('общий класс выбранного и невыбранного находкой не считается', () => {
     const f = fixture()
     const report = granumAuditDist({ dist: f.dist })

@@ -1,0 +1,15 @@
+{
+  "name": "@granum-fixtures/rules-only",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Granum provider without components: engine rules only, shipped as a module to applications on the same dialect.",
+  "sideEffects": false,
+  "exports": {
+    "./granum.manifest.json": "./dist/granum.manifest.json"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs"
+  }
+}

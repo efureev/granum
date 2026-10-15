@@ -11,7 +11,7 @@ import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { ComponentOutsideSelectionError, ComponentRootImportError } from '../core/errors'
 import { granum } from '../vite/plugin'
-import { testEngine } from './testEngine'
+import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
  * Сквозная интеграция (A-2…A-20): провайдер собирается плагином `granumProvider`
@@ -509,5 +509,59 @@ describe('granum() с настоящим Vite', async () => {
       expect(logs).toHaveLength(2)
       expect(logs[0]).toMatch(/1 components/)
     })
+  })
+})
+
+/**
+ * Провайдер без компонентов, только с правилами движка: так приложение выносит
+ * свои правила из фабрики движка и сохраняет быстрый путь.
+ */
+describe('провайдер только с правилами движка', async () => {
+  const packageRoot = mkdtempSync(join(tmpdir(), 'granum-rules-only-'))
+  write(packageRoot, 'package.json', JSON.stringify({ name: '@t/rules', version: '1.0.0', type: 'module', exports: { './granum.manifest.json': './dist/granum.manifest.json' } }))
+  write(packageRoot, 'src/engine.ts', `export default { rules: [['rule-only', { color: 'red' }]] }\n`)
+  const provider = defineGranumProvider({ id: '@t/rules', contractVersion: 1, components: [], engine: { dialect: TEST_DIALECT, rules: [['rule-only', { color: 'red' }]] } })
+  await build({
+    root: packageRoot,
+    configFile: false,
+    logLevel: 'silent',
+    plugins: [granumProvider({ provider, engine: testEngine(), indexEntry: false, entries: { engine: 'src/engine.ts' }, engineModule: 'engine.js', log: () => {} })],
+    build: { minify: false },
+  })
+
+  async function buildRulesApp(engine: GranumConfig['engine']): Promise<{ css: string, report: { providers: { id: string, rulesLoaded: boolean, classes: string, reason: string }[] } }> {
+    const root = mkdtempSync(join(tmpdir(), 'granum-rules-app-'))
+    mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+    symlinkSync(packageRoot, join(root, 'node_modules/@t/rules'), 'dir')
+    symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(root, 'node_modules/vue'), 'dir')
+    write(root, 'index.html', `<!doctype html><div id="app"></div><script type="module" src="/src/main.ts"></script>`)
+    write(root, 'src/main.ts', `import 'virtual:granum.css'\nimport { createApp } from 'vue'\nimport App from './App.vue'\ncreateApp(App).mount('#app')\n`)
+    write(root, 'src/App.vue', `<template><div class="rule-only p-4"/></template>\n`)
+    await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granum({ engine, providers: ['@t/rules'], appSources: { dirs: ['src'] } }, { log: () => {} })], build: { minify: false } })
+    const assets = join(root, 'dist/assets')
+    return {
+      css: readdirSync(assets).filter(f => f.endsWith('.css')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n'),
+      report: JSON.parse(readFileSync(join(root, 'dist/granum-report.json'), 'utf8')),
+    }
+  }
+
+  it('манифест: компонентов нет, отпечаток — движка сборки, правила — модулем', () => {
+    const manifest = JSON.parse(readFileSync(join(packageRoot, 'dist/granum.manifest.json'), 'utf8'))
+    expect(manifest.components).toEqual({})
+    expect(manifest.engine).toMatchObject({ dialect: TEST_DIALECT, vocabulary: testEngine().vocabulary, module: 'engine.js' })
+    expect(manifest.warnings).toEqual([])
+  })
+
+  it('приложение того же диалекта на ванильном движке получает правило, пересчёта нет', async () => {
+    const app = await buildRulesApp(testEngine())
+    expect(app.css).toContain('.rule-only')
+    expect(app.css).toMatch(/\.rule-only\s*\{\s*color:\s*red/)
+    expect(app.report.providers[0]).toMatchObject({ id: '@t/rules', rulesLoaded: true, classes: 'manifest', reason: 'none' })
+  })
+
+  it('приложение чужого диалекта правила пакета не загружает', async () => {
+    const app = await buildRulesApp(testEngine({ dialect: 'granum-tests/other@1' }))
+    expect(app.css).not.toContain('.rule-only')
+    expect(app.report.providers[0]!.rulesLoaded).toBe(false)
   })
 })

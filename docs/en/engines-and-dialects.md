@@ -196,7 +196,8 @@ exist precisely for engine authors; the core carries no implementation at all. A
 working example built from scratch, without a line of UnoCSS, is
 `fixtures/atoms-engine` in this repository: a six-rule vocabulary, its own
 `granum-fixtures/atoms@1` dialect, on which the `atoms-package` fixture and the
-`apps/app-atoms` application are built.
+`apps/app-atoms` application are built. A rules-only package on the wind
+vocabulary is the `rules-only-package` fixture with the `apps/app-rules` stand.
 
 ## The implementation version decides nothing
 

@@ -163,6 +163,61 @@ Importing a constant or a type from another component's directory is not a
 dependency and need not be declared: edges are computed from code that landed
 in another component's chunks.
 
+## Rules-only provider
+
+An application may pass its own utility rules to the engine factory
+(`windEngine({ rules })`), but then its engine's vocabulary fingerprint drifts
+from the packages' fingerprints, and granum re-extracts their classes from files
+on every build. If the price matters, the rules move into a provider package with
+no components: the application's engine stays vanilla, and the build takes the
+fast path.
+
+```ts
+// src/engine.ts — the rules module, shipped as dist/engine.js
+import type { GranumRule } from '@feugene/granum/engine'
+
+export const brandRules: readonly GranumRule[] = [
+  ['brand-logo', { 'background-color': '#7c3aed' }],
+  [/^brand-pad-(\d+)$/, ([, step]) => ({ padding: `${Number(step) * 4}px` })],
+]
+
+export default { rules: brandRules }
+```
+
+```ts
+// vite.config.ts
+granumProvider({
+  provider: defineGranumProvider({
+    id: '@acme/brand-rules',
+    contractVersion: 1,
+    components: [],
+    engine: { dialect: WIND_DIALECT_EXTRA, rules: brandRules },
+  }),
+  engine: windEngine(),
+  indexEntry: false,
+  entries: { engine: 'src/engine.ts' },
+  engineModule: 'engine.js',
+})
+```
+
+- The package is built with the **vanilla** engine of its dialect, without the
+  package rules: the fingerprint in the manifest then equals that of the
+  application's vanilla engine, and the application takes the manifest as is.
+- The package dialect must equal the dialect of the application's engine:
+  otherwise the rules module is not loaded (`engine-rules-skipped` in `doctor`),
+  and the rule classes are not generated.
+- The module runs in Node during the application build and provides
+  `export default { rules, variants, preflights }`. Embed the rule data at package
+  build time: the bundler inlines JSON from inside the package by itself. A JSON
+  import from another package left external comes out without the
+  `with { type: 'json' }` attribute, and the application fails to load the module
+  with `ERR_IMPORT_ATTRIBUTE_MISSING`.
+- `exports` needs only `./granum.manifest.json`: the application finds the rules
+  module by the path in the manifest.
+
+A working example is the [`rules-only-package`](../../fixtures/rules-only-package)
+fixture and the [`app-rules`](../../apps/app-rules) stand.
+
 ## Codegen
 
 The provider registry, the barrel and `exports` are generated from the
