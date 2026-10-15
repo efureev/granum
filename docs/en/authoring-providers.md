@@ -52,7 +52,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 | `dependencies` | components whose code this component imports; the short form means the same provider, `id:Name` another one |
 | `safelist` | only classes assembled in JS at runtime; template literals are not listed here — the build extracts them |
 | `dynamicTokens` | tokens whose name is assembled at runtime; pruning keeps them while the component is in the build |
-| `cssFiles` | CSS read as is; path relative to `config.ts`, inside the component directory |
+| `cssFiles` | CSS read as is; path relative to `config.ts`, inside the component directory. A `styles.css` next to an SFC `<style>` is merged with it into one file, the declared CSS first |
 | `tokenDefinitions` | structural tokens of the component per theme; keys without `--` |
 | `group` | shared chunks of several components go to `groups/<g>/shared/` |
 

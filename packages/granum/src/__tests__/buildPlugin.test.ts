@@ -37,9 +37,11 @@ function makeFixture(options: {
   plain?: boolean
   /** Поле выбора файла в шаблоне Card: `accept="image/*"` уезжает в чанк строкой. */
   fileInput?: boolean
+  /** `<style>` в SFC Panel рядом с объявленным `cssFiles: ['./styles.css']` — раскладка из руководства. */
+  panelStyle?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false } = options
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
   write(root, 'package.json', JSON.stringify({
@@ -59,7 +61,7 @@ function makeFixture(options: {
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/components/Panel/Panel.vue', plain
     ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
-    : `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n`)
+    : `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n${panelStyle ? '<style>.t-panel-sfc{margin:var(--t-gap)}</style>\n' : ''}`)
   write(root, 'src/components/Panel/index.ts', `export { default as Panel } from './Panel.vue'\n`)
   if (!brokenCss)
     write(root, 'src/components/Panel/styles.css', '.t-panel{color:var(--t-fg, red)}\n')
@@ -289,6 +291,19 @@ describe('granumProvider с настоящим Vite', () => {
 
     expect(card.classes).toEqual(expect.arrayContaining(['sr-only', 'p-4', 'bg-[var(--t-bg)]']))
     expect(card.tokens.consumes).toEqual(expect.arrayContaining(['--t-bg', '--t-space']))
+  })
+
+  it('`<style>` SFC и объявленный `styles.css` склеиваются, а не затирают друг друга (B-3, INV-MAN-6)', async () => {
+    const { manifest, dist } = await run(makeFixture({ panelStyle: true }))
+    const panel = manifest.components.Panel!
+    const css = readFileSync(join(dist, 'components/Panel/styles.css'), 'utf8')
+
+    // Порядок — как у списка `css` в манифесте: сначала `cssFiles`, затем эмитированный.
+    expect(css).toContain('.t-panel{')
+    expect(css).toContain('.t-panel-sfc{')
+    expect(css.indexOf('.t-panel{')).toBeLessThan(css.indexOf('.t-panel-sfc{'))
+    expect(panel.css).toEqual(['components/Panel/styles.css'])
+    expect(panel.tokens.consumes).toEqual(expect.arrayContaining(['--t-fg', '--t-gap']))
   })
 
   it('без такого плагина предупреждения нет', async () => {

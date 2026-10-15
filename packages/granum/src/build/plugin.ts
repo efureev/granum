@@ -278,6 +278,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       // 1. Объявленный CSS компонентов — копия из исходников с раскрытым `@apply`.
       const copiedCss = new Map<string, string>()
       for (const { descriptor, dir } of componentSources.values()) {
+        const emittedCss = analysis.components.get(descriptor.name)?.cssAssets ?? []
         for (const path of descriptor.cssFiles ?? []) {
           const rel = path.slice(`components/${descriptor.name}/`.length)
           const from = join(dir, rel)
@@ -289,8 +290,17 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
             throw new CssReadError(provider.id, 'component', descriptor.name, from, { cause })
           }
           const expanded = await expandApply(css, engine, path)
-          writeOut(outDir, path, expanded)
-          copiedCss.set(path, expanded)
+          /*
+           * `cssFiles: ['./styles.css']` рядом с `<style>` SFC — раскладка из
+           * руководства, и бандлер уже записал стили SFC ровно по этому пути
+           * (`granumAssetFileNames`). Перезапись теряла бы их молча, поэтому
+           * файл склеивается в порядке списка `css` манифеста: сначала
+           * объявленный, затем эмитированный (B-3).
+           */
+          const emitted = emittedCss.includes(path) ? readOut(outDir, path, new Map()) : ''
+          const content = emitted ? `${expanded}\n${emitted}` : expanded
+          writeOut(outDir, path, content)
+          copiedCss.set(path, content)
         }
       }
 
