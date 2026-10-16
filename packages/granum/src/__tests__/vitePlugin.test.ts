@@ -433,6 +433,27 @@ describe('granum() с настоящим Vite', async () => {
       expect(fromMarkup.map((u: { className: string }) => u.className)).toEqual(['gap-zz'])
     })
 
+    /**
+     * Лист приложения, подключённый строкой, ассетом бандла не становится, но
+     * правило у приложения есть. CSS-модуль классы хеширует: литерал в разметке
+     * с ними не совпадёт, и это находка.
+     */
+    it('класс из листа appSources, подключённого через ?raw или ?inline, — не находка; из CSS-модуля — находка', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-app-raw-css-'))
+      write(root, 'src/raw.css', '.raw-zz{color:teal}\n')
+      write(root, 'src/inline.css', '.inline-zz{color:teal}\n')
+      write(root, 'src/card.module.css', '.mod-zz{color:teal}\n')
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'] },
+        `<template><div class="p-4 raw-zz inline-zz mod-zz nowhere-zz"/></template>\n`,
+        `import 'virtual:granum.css'\nimport raw from './raw.css?raw'\nimport inline from './inline.css?inline'\nimport mod from './card.module.css'\nconsole.log(raw, inline, mod)`,
+        root,
+      )
+      const fromMarkup = app.report.classes.unmatched.filter((u: { sources: string[] }) => u.sources.includes('src/App.vue'))
+      expect(fromMarkup.map((u: { className: string }) => u.className)).toEqual(['mod-zz', 'nowhere-zz'])
+    })
+
     it('регэксп и код в TS и в <script> SFC — не атрибут; HTML в строке — атрибут', async () => {
       const root = mkdtempSync(join(tmpdir(), 'granum-app-markup-'))
       write(root, 'src/markup-check.ts', `export const check = (s: string): boolean => /class="max-w-full px-4 leading-6/.test(s) && s.includes('tabindex="0"')\nexport const row = '<li class="str-zz">x</li>'\n`)

@@ -115,8 +115,10 @@ function sizeOf(text: string, brotli: boolean): LayerSize {
  * Классы без правила с известным источником. Слово из исходников приложения
  * само по себе не класс — экстрактор берёт всё подряд, — и не судится. Класс
  * из атрибута разметки судится, если его нет ни у движка, ни в CSS собранного
- * бандла (утилиты, CSS провайдеров, свой CSS приложения, стили SFC); без CSS
- * бандла собственный CSS приложения не виден, и вердикта нет (`declared` не задан).
+ * бандла (утилиты, CSS провайдеров, свой CSS приложения, стили SFC), ни в
+ * `.css`-файлах `appSources` (лист, подключённый строкой, ассетом не становится);
+ * без CSS бандла собственный CSS приложения не виден, и вердикта нет
+ * (`declared` не задан).
  */
 function unmatchedClasses(
   app: PreparedApp,
@@ -263,7 +265,7 @@ export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundle
     classes: {
       input: css.engineInput.length,
       matched: css.engine.matched.size,
-      unmatched: unmatchedClasses(app, css, sourcesOf, bundles.length > 0 ? declaredCssClasses(bundles.join('\n')) : undefined),
+      unmatched: unmatchedClasses(app, css, sourcesOf, bundles.length > 0 ? new Set([...declaredCssClasses(bundles.join('\n')), ...app.appScan.declaredClasses]) : undefined),
       safelistRedundant: css.safelistRedundant,
       app: [...appClasses].filter(className => packageClasses.has(className)).sort(),
     },

@@ -37,8 +37,12 @@ markup lands in the report's `unmatched` together with the file it sits in. The
 build line says `N without a rule`, `granum report` shows `✗ <class> ← src/App.vue`,
 and `granum report --strict` and `granum audit --strict` fail. Judged are classes
 from `class` and `className` (in JSX also a string in curly braces) and string
-literals in `:class` that neither the engine nor the build's CSS has: utilities,
-package CSS, the application's own CSS, SFC styles. A class assembled on the fly
+literals in `:class` that neither the engine nor the build's CSS has (utilities,
+package CSS, the application's own CSS, SFC styles), nor a `.css` file in
+`appSources` — including one imported as a string (`?raw`, `?inline`), which
+never becomes an asset. A CSS module (`*.module.css`) does not count: its classes
+are hashed and a literal in the markup does not match them. A class from a sheet
+in `appSources` that nothing imports is not a finding either. A class assembled on the fly
 (`clsx`, a template string with an interpolation) and the other words of the
 sources are not judged — use `granum why-css <class>` for them. `doctor` does not
 see the build's CSS and does not judge such classes.

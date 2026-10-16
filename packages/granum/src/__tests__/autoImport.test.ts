@@ -62,6 +62,19 @@ describe('granumResolver', () => {
     expect(granumResolver({ providers: [list, twin] }, { root }).resolve('XListItem')).toBeUndefined()
   })
 
+  /**
+   * Лист приложения объявляет классы, даже если приходит строкой (`?raw`,
+   * `?inline`), а не ассетом. CSS-модуль — нет: его классы хешируются, и
+   * литерал в разметке с ними не совпадёт.
+   */
+  it('scanAppSources: классы, объявленные .css-файлами, кроме CSS-модулей', () => {
+    const root = mkdtempSync(join(tmpdir(), 'granum-app-css-'))
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/raw.css'), '.raw-b, .raw-a:hover { color: red }\n@media (width > 1px) { .raw-c { color: blue } }\n')
+    writeFileSync(join(root, 'src/card.module.css'), '.mod-x { color: red }\n')
+    expect(scanAppSources({ dirs: ['src'] }, root, testEngine()).declaredClasses).toEqual(['raw-a', 'raw-b', 'raw-c'])
+  })
+
   it('теги разметки без импорта попадают в селекцию при components: imports', async () => {
     const { root } = appWithManifest()
     writeFileSync(join(root, 'src/App.vue'), '<template>\n  <Panel class="gap-2">\n    <my-widget /><Unknown/>\n  </Panel>\n</template>\n')

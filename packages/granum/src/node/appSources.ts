@@ -9,6 +9,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { sortedUnique } from '../core/dedupe'
 import { scanScript, stripComments } from '../engine/extract'
+import { declaredCssClasses } from './diagnostics/auditDist'
 import { scanTokenConsumption } from './tokenScan'
 
 export const DEFAULT_APP_EXTENSIONS = ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'jsx', 'tsx', 'vue', 'svelte', 'astro', 'html', 'css'] as const
@@ -24,6 +25,13 @@ export interface AppSourcesScan {
   readonly componentTags: readonly string[]
   /** Классы из атрибутов разметки → файлы, где они стоят: их отчёт судит, в отличие от прочих слов. */
   readonly classAttributes: Readonly<Record<string, readonly string[]>>
+  /**
+   * Классы, объявленные `.css`-файлами: правило у приложения есть, даже если лист
+   * приходит строкой (`?raw`, `?inline`), а не ассетом бандла. CSS-модули
+   * (`*.module.css`) не в счёт: их классы хешируются, и литерал в разметке с
+   * ними не совпадёт.
+   */
+  readonly declaredClasses: readonly string[]
 }
 
 /**
@@ -173,7 +181,7 @@ export function collectClassAttributes(code: string, file: string): string[] {
 
 export function scanAppSources(config: GranumAppSources | undefined, root: string, engine: GranumEngine): AppSourcesScan {
   if (!config)
-    return { files: [], classes: [], consumes: [], componentImports: [], componentTags: [], classAttributes: {} }
+    return { files: [], classes: [], consumes: [], componentImports: [], componentTags: [], classAttributes: {}, declaredClasses: [] }
   const extensions = config.extensions ?? DEFAULT_APP_EXTENSIONS
   const files: string[] = []
   const classes = new Set<string>()
@@ -181,6 +189,7 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
   const imports = new Set<string>()
   const tags = new Set<string>()
   const classAttributes: Record<string, string[]> = {}
+  const declaredClasses = new Set<string>()
 
   for (const dir of config.dirs) {
     for (const file of listSourceFiles(resolve(root, dir), extensions)) {
@@ -203,6 +212,10 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
         for (const name of collectClassAttributes(text, file))
           (classAttributes[name] ??= []).push(file)
       }
+      else if (!file.endsWith('.module.css')) {
+        for (const name of declaredCssClasses(text))
+          declaredClasses.add(name)
+      }
       const scan = scanTokenConsumption(text, file)
       for (const name of scan.uses.keys())
         consumes.add(`--${name}`)
@@ -211,5 +224,5 @@ export function scanAppSources(config: GranumAppSources | undefined, root: strin
     }
   }
 
-  return { files, classes: sortedUnique(classes), consumes: sortedUnique(consumes), componentImports: sortedUnique(imports), componentTags: sortedUnique(tags), classAttributes }
+  return { files, classes: sortedUnique(classes), consumes: sortedUnique(consumes), componentImports: sortedUnique(imports), componentTags: sortedUnique(tags), classAttributes, declaredClasses: sortedUnique(declaredClasses) }
 }
