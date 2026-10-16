@@ -33,6 +33,8 @@ export interface ExplainReport {
   readonly tokens: readonly ExplainTokenContribution[]
   readonly consumes: readonly string[]
   readonly available?: readonly string[]
+  /** Названная часть составного компонента: отчёт — о её владельце `key`. */
+  readonly part?: string
 }
 
 function directDependencies(registry: ComponentRegistry, key: ComponentKey): ComponentKey[] {
@@ -109,6 +111,7 @@ export function granumExplain(app: PreparedApp, target: string): ExplainReport {
   }
 
   const { component, provider } = entry
+  const part = resolved.part
   const included = resolution.selection.order.includes(key)
   // Семена — ровно то, что подготовка подала резолверу: в режиме `'imports'`
   // это импорты и теги разметки, а не одни импорты.
@@ -153,6 +156,7 @@ export function granumExplain(app: PreparedApp, target: string): ExplainReport {
     files,
     tokens,
     consumes: component.consumesTokens,
+    ...(part ? { part } : {}),
   }
 }
 
@@ -170,6 +174,8 @@ export function formatExplainReport(report: ExplainReport): string {
   push(title)
   push('='.repeat(title.length))
   push()
+  if (report.part)
+    push(`'${report.part}' is a part of the compound component ${report.key}: it lives in its module, so the report is about the owner.`)
   push(`Status: ${report.included ? 'in the build' : 'NOT in the build'} — ${REASON_TEXT[report.reason]}`)
   if (report.reason === 'unknown') {
     push()

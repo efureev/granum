@@ -50,6 +50,8 @@ export interface TokensReport {
   readonly undefinedCount: number
   readonly available?: readonly string[]
   readonly unresolved?: 'ambiguous' | 'unknown'
+  /** Названная часть составного компонента: отчёт — о её владельце `key`. */
+  readonly part?: string
 }
 
 function originOf(layer: TokenLayerValue, targetKey: string): { origin: TokenOrigin, declaredBy: string } {
@@ -170,6 +172,7 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
     declares: declares.sort((a, b) => a.theme.localeCompare(b.theme, 'en') || a.token.localeCompare(b.token, 'en')),
     uses: uses.sort((a, b) => a.token.localeCompare(b.token, 'en')),
     undefinedCount: uses.filter(u => u.origin === 'none').length,
+    ...(resolved.part ? { part: resolved.part } : {}),
   }
 }
 
@@ -180,6 +183,8 @@ export function formatTokensReport(report: TokensReport): string {
   push(title)
   push('='.repeat(title.length))
   push()
+  if (report.part)
+    push(`'${report.part}' is a part of the compound component ${report.key}: it lives in its module, so the report is about the owner.`)
   if (report.unresolved) {
     push(report.unresolved === 'ambiguous' ? 'The name is ambiguous — qualify it with the provider id:' : 'No provider declares such a component. Known:')
     for (const k of report.available ?? [])

@@ -251,6 +251,27 @@ describe('granum explain', () => {
   })
 })
 
+/**
+ * Часть составного компонента живёт в модуле владельца: `explain` и `tokens`
+ * по её ключу или имени показывают владельца и называют часть.
+ */
+describe('часть составного компонента в explain и tokens', () => {
+  it('ключ и короткое имя части сводятся к владельцу с пометкой; неоднозначная часть — список', async () => {
+    const list = makeManifest('@x/list', { XList: { subcomponents: ['XListItem'] } })
+    const a = await prepareTestApp({ providers: [list], components: ['@x/list:XList'] }, mkdtempSync(join(tmpdir(), 'granum-explain-part-')))
+    for (const target of ['@x/list:XListItem', 'XListItem']) {
+      expect(granumExplain(a, target)).toMatchObject({ key: '@x/list:XList', part: 'XListItem', reason: 'selected', included: true })
+      expect(granumTokens(a, target)).toMatchObject({ key: '@x/list:XList', part: 'XListItem', included: true })
+    }
+    expect(formatExplainReport(granumExplain(a, 'XListItem'))).toContain(`'XListItem' is a part of the compound component @x/list:XList`)
+    expect(formatTokensReport(granumTokens(a, 'XListItem'))).toContain(`'XListItem' is a part of the compound component @x/list:XList`)
+
+    const twin = makeManifest('@x/twin', { XGrid: { subcomponents: ['XListItem'] } })
+    const b = await prepareTestApp({ providers: [list, twin], components: ['@x/list:XList'] }, mkdtempSync(join(tmpdir(), 'granum-explain-part-')))
+    expect(granumExplain(b, 'XListItem')).toMatchObject({ reason: 'unknown', available: ['@x/list:XListItem', '@x/twin:XListItem'] })
+  })
+})
+
 describe('granum why-css', () => {
   it('каналы: классы манифеста, safelist, CSS компонента, исходники приложения; правило движка', async () => {
     const a = await app(fixture())

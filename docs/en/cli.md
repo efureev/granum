@@ -201,7 +201,9 @@ Why a component is in the build (`selected`, `dependency`, `not-selected`,
 `unknown`), the shortest chain from the selection root, who requires it, and
 what it contributes: classes, safelist, CSS, files, consumed and declared
 tokens. The selection roots are the build's own: the `components` list or,
-with `components: 'imports'`, the imports and PascalCase tags in the markup.
+with `components: 'imports'`, the imports and PascalCase tags in the markup. A key
+or name of a compound component part (`@acme/ui:XhListItem`) is reduced by
+`explain` and `tokens` to its owner, and the report names the part (`part` in `--json`).
 
 ## `why-css`
 
