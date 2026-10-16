@@ -173,6 +173,34 @@ export function ownerOf(provider: ProviderNode, name: string): ComponentNode | u
   return ownerName === undefined ? undefined : provider.components.find(component => component.name === ownerName)
 }
 
+/**
+ * Имя без провайдера → тот единственный провайдер, что его объявляет: правило
+ * тегов разметки и резолвера авто-импорта. Компонент первичен — к частям
+ * составных компонентов имя идёт, только если компонента с таким именем нет ни
+ * у кого. Имя у двух провайдеров неоднозначно и в карту не попадает: гадать
+ * нельзя ни селекции, ни импорту.
+ */
+export function uniqueDeclarers(providers: readonly ProviderNode[]): ReadonlyMap<string, ProviderNode> {
+  const components = new Map<string, ProviderNode[]>()
+  const parts = new Map<string, ProviderNode[]>()
+  const declare = (into: Map<string, ProviderNode[]>, name: string, provider: ProviderNode): void => {
+    into.set(name, [...(into.get(name) ?? []), provider])
+  }
+  for (const provider of providers) {
+    for (const component of provider.components)
+      declare(components, component.name, provider)
+    for (const part of provider.subcomponents?.keys() ?? [])
+      declare(parts, part, provider)
+  }
+  const out = new Map<string, ProviderNode>()
+  for (const name of new Set([...components.keys(), ...parts.keys()])) {
+    const declared = components.get(name) ?? parts.get(name)!
+    if (declared.length === 1)
+      out.set(name, declared[0]!)
+  }
+  return out
+}
+
 /** Все имена тем, для которых у провайдера есть хоть какой-то вклад (уровень пакета и компонентов). */
 export function suppliedThemeNames(node: ProviderNode): Set<string> {
   const names = new Set<string>()

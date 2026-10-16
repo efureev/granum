@@ -263,7 +263,9 @@ declare module 'virtual:granum/components' {
 
 For `unplugin-vue-components` and compatible tools there is a resolver: given
 a component name it returns the provider subpath; an unknown or ambiguous
-name (two providers with the same `Name`) is not resolved.
+name (two providers with the same `Name`) is not resolved. A part of a compound
+component (`<XhListItem>`) resolves to its own subpath, which the guard and the
+selection reduce to the owner; a component with the same name elsewhere wins.
 
 ```ts
 import { granum, granumResolver } from '@feugene/granum/vite'

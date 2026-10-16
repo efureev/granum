@@ -7,11 +7,8 @@
 на теме-файле работают, корневой импорт компонента ловит `ComponentRootImportError`. На
 трёх приложениях granularity — витрине ядра, портале (Astro 7, статика) и стендах
 `@feugene/astro-granularity` (`static`, `ssr`, `hybrid`) — нашлись места, где granum 2.0.0
-ведёт себя не так, как обещает его собственная документация. Ниже их два, по двум темам:
+ведёт себя не так, как обещает его собственная документация. Открытым остался один пункт:
 
-- **части составных компонентов** (ТЗ-2): у ядра granularity 22 таких части
-  (`GrListItem`, `GrTabPanel`, `GrDropdownMenuItem`…); у каждой свой подпуть в `exports`,
-  ведущий в модуль родителя, — его заводит сам `granum codegen --subcomponents`;
 - **проверка `unmatched`** (ТЗ-5): ложные находки «класс без правила». Пока они
   есть, `granum report --strict` и `granum audit --strict` в CI включить нельзя, а настоящие
   находки тонут среди ложных: на портале их 267, из них 52 настоящих.
@@ -43,12 +40,10 @@ yarn workspace @granum-apps/tz-granularity repro
 Вывод на текущем коде (строки «ждём» опущены):
 
 ```
-✗ воспроизводится  ТЗ-2: granumResolver не резолвит части
-  сейчас: XcList → @granum-fixtures/composite/components/XcList; XcListItem → undefined
 ✗ воспроизводится  ТЗ-5: CSS приложения через ?raw не виден проверке unmatched
   сейчас: unmatched: ["raw-note"] — правило .raw-note в src/raw.css, на страницу едет строкой
 
-2 из 2 воспроизводятся.
+1 из 1 воспроизводится.
 ```
 
 **Общий критерий готовности:** `repro:expect` зелёный, у каждого исправления есть свой
@@ -58,33 +53,9 @@ yarn workspace @granum-apps/tz-granularity repro
 
 | ID | Что | Класс | Чем бьёт по granularity |
 |---|---|---|---|
-| ТЗ-2 | `granumResolver` не знает частей | дыра в возможности | авто-импорт `<GrListItem>` через granum не работает; granularity держит свой резолвер |
 | ТЗ-5 | CSS приложения строкой (`?raw`) не виден | вопрос | на портале 215 ложных находок из 267 |
 
 ---
-
-## ТЗ-2. `granumResolver` не резолвит части составных компонентов
-
-**Документация** (`usage-in-apps.md`, «Auto-import»): «по имени компонента он отдаёт subpath
-провайдера».
-
-**Пример:** `resolve('XcList')` → `@granum-fixtures/composite/components/XcList`,
-`resolve('XcListItem')` → `undefined`. В шаблоне `<XcListItem>` не импортируется.
-
-**Причина.** `vite/resolver.ts`, `buildComponentIndex` строит индекс по
-`registry.components` — частей там нет.
-
-**Что хотим увидеть.**
-
-- `resolve('XcListItem')` → `{ name: 'XcListItem', from: '@granum-fixtures/composite/components/XcListItem' }`.
-  Подпуть части годится как есть: guard и селекция сводят его к владельцу.
-- Части есть в `names()`.
-- Правило неоднозначности распространяется и на них: часть с тем же именем у двух
-  провайдеров не резолвится.
-
-**Как поступит granularity.** `@feugene/unplugin-granularity` 1.1.0 сейчас строит свой индекс по
-`exports` установленных пакетов и ведёт часть в подпуть родителя. После исправления он
-сможет опереться на `granumResolver`.
 
 ## ТЗ-5. CSS приложения, подключённый строкой (`?raw`), не виден проверке
 

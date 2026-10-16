@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 import { windEngine } from '@feugene/granum-engine-wind'
-import { granum, granumResolver } from '@feugene/granum/vite'
+import { granum } from '@feugene/granum/vite'
 import { build } from 'vite'
 
 const here = fileURLToPath(new URL('./', import.meta.url))
@@ -27,19 +27,6 @@ const record = (id, title, now, expected, reproduced) => results.push({ id, titl
 const reportOf = dir => JSON.parse(readFileSync(join(dir, 'granum-report.json'), 'utf8'))
 
 const quiet = { logLevel: 'silent', customLogger: undefined }
-
-// ── ТЗ-2. granumResolver не знает частей ─────────────────────────────────────
-{
-  const resolver = granumResolver({ providers: [PROVIDER] }, { root: here })
-  const got = Object.fromEntries(['XcList', 'XcListItem'].map(name => [name, resolver.resolve(name)?.from]))
-  record(
-    'ТЗ-2',
-    'granumResolver не резолвит части',
-    `XcList → ${got.XcList}; XcListItem → ${got.XcListItem}`,
-    `XcListItem → ${PROVIDER}/components/XcListItem (подпуть, который guard сводит к XcList)`,
-    got.XcListItem === undefined,
-  )
-}
 
 // ── ТЗ-5. CSS приложения, подключённый строкой (`?raw`), отчёту не виден ─────
 {

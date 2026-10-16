@@ -19,7 +19,7 @@ import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { sortedUnique } from '../core/dedupe'
 import { DuplicateProviderIdError, TokenRefError } from '../core/errors'
-import { ownerOf, toProviderNode } from '../core/providerNode'
+import { ownerOf, toProviderNode, uniqueDeclarers } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
@@ -191,31 +191,19 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
 }
 
 /**
- * Теги разметки → ключи селекции: имя берётся, если ровно один
- * провайдер графа его объявляет; неоднозначное или чужое имя пропускается.
- * Компонент первичен: к частям составных компонентов (тег части даёт её
- * владельца) имя идёт, только если компонента с таким именем нет ни у кого —
- * резолвер авто-импорта знает компоненты и подставил бы его.
+ * Теги разметки → ключи селекции по тому же правилу имён, что у резолвера
+ * авто-импорта (`uniqueDeclarers`): имя у ровно одного провайдера, компонент
+ * первичен; тег части даёт её владельца. Неоднозначное или чужое имя
+ * пропускается.
  */
 export function tagSelection(tags: readonly string[], inputs: readonly GranumProviderInput[]): string[] {
   if (tags.length === 0)
     return []
-  const components = new Map<string, ProviderNode[]>()
-  const parts = new Map<string, ProviderNode[]>()
-  const declare = (into: Map<string, ProviderNode[]>, name: string, node: ProviderNode): void => {
-    into.set(name, [...(into.get(name) ?? []), node])
-  }
-  for (const input of inputs) {
-    const node = toProviderNode(input)
-    for (const component of node.components)
-      declare(components, component.name, node)
-    for (const part of node.subcomponents?.keys() ?? [])
-      declare(parts, part, node)
-  }
+  const declarers = uniqueDeclarers(inputs.map(toProviderNode))
   const out: string[] = []
   for (const tag of tags) {
-    const providers = components.get(tag) ?? parts.get(tag)
-    const owner = providers?.length === 1 ? ownerOf(providers[0]!, tag) : undefined
+    const provider = declarers.get(tag)
+    const owner = provider ? ownerOf(provider, tag) : undefined
     if (owner)
       out.push(`${owner.providerId}:${owner.name}`)
   }

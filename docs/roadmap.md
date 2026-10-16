@@ -390,7 +390,6 @@ CSS в браузере.
 воспроизводит стенд `apps/tz-granularity` на фикстуре `fixtures/composite-package`
 (`yarn workspace @granum-apps/tz-granularity repro`):
 
-* `granumResolver` не резолвит части (ТЗ-2);
 * CSS приложения, подключённый строкой (`?raw`), проверке `unmatched` не виден — вопрос (ТЗ-5).
 
 Закрыто ТЗ портала Granularity (2026-10): портал сверил свою документацию с кодом

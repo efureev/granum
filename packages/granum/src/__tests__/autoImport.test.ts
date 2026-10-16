@@ -43,6 +43,25 @@ describe('granumResolver', () => {
     expect([...buildComponentIndex({ providers: ['@x/kit'] }, root, { prefix: 'Pa' }).keys()]).toEqual(['Panel'])
   })
 
+  /**
+   * Часть составного компонента резолвится своим подпутём: guard и селекция
+   * сводят его к владельцу. Правило неоднозначности — то же, что у тегов.
+   */
+  it('части составных компонентов: подпуть части, компонент первичен, неоднозначная часть — undefined', () => {
+    const root = mkdtempSync(join(tmpdir(), 'granum-resolver-parts-'))
+    const list = makeManifest('@x/list', { XList: { subcomponents: ['XListItem', 'XListHead'] } })
+    const resolver = granumResolver({ providers: [list] }, { root })
+    expect(resolver.resolve('XListItem')).toEqual({ name: 'XListItem', from: '@x/list/components/XListItem' })
+    expect(resolver.names()).toEqual(['XList', 'XListHead', 'XListItem'])
+    expect([...buildComponentIndex({ providers: [list] }, root, { prefix: 'XListH' }).keys()]).toEqual(['XListHead'])
+    // Компонент с тем же именем у другого провайдера первичен.
+    const other = makeManifest('@x/other', { XListItem: {} })
+    expect(granumResolver({ providers: [list, other] }, { root }).resolve('XListItem')).toEqual({ name: 'XListItem', from: '@x/other/components/XListItem' })
+    // Часть с одним именем у двух провайдеров — неоднозначна.
+    const twin = makeManifest('@x/twin', { XGrid: { subcomponents: ['XListItem'] } })
+    expect(granumResolver({ providers: [list, twin] }, { root }).resolve('XListItem')).toBeUndefined()
+  })
+
   it('теги разметки без импорта попадают в селекцию при components: imports', async () => {
     const { root } = appWithManifest()
     writeFileSync(join(root, 'src/App.vue'), '<template>\n  <Panel class="gap-2">\n    <my-widget /><Unknown/>\n  </Panel>\n</template>\n')

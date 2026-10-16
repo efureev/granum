@@ -11,6 +11,7 @@
  */
 import type { GranumConfig } from '../config'
 import process from 'node:process'
+import { uniqueDeclarers } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { loadProviderInputs } from '../node/prepare'
 
@@ -41,23 +42,21 @@ export interface GranumComponentResolver {
   names: () => readonly string[]
 }
 
-/** Имя → subpath; неоднозначное имя (у двух провайдеров) не резолвится. */
+/**
+ * Имя → subpath по правилу имён тегов (`uniqueDeclarers`): неоднозначное имя
+ * (у двух провайдеров) не резолвится, компонент первичен. Часть составного
+ * компонента резолвится своим подпутём — он ведёт в модуль владельца, и guard с
+ * селекцией сводят его к владельцу.
+ */
 export function buildComponentIndex(config: GranumResolverConfig, root: string, options: GranumResolverOptions = {}): ReadonlyMap<string, GranumResolvedComponent> {
   const inputs = loadProviderInputs(config, root)
   const registry = resolveGranum({ providers: inputs, components: [] }).registry
   const allowed = options.providers ? new Set(options.providers) : undefined
-  const owners = new Map<string, string[]>()
-  for (const [, entry] of registry.components) {
-    if (allowed && !allowed.has(entry.provider.id))
-      continue
-    if (options.prefix !== undefined && !entry.component.name.startsWith(options.prefix))
-      continue
-    owners.set(entry.component.name, [...(owners.get(entry.component.name) ?? []), entry.provider.id])
-  }
+  const providers = [...registry.providers.values()].filter(provider => !allowed || allowed.has(provider.id))
   const index = new Map<string, GranumResolvedComponent>()
-  for (const [name, providers] of owners) {
-    if (providers.length === 1)
-      index.set(name, { name, from: `${providers[0]}/components/${name}` })
+  for (const [name, provider] of uniqueDeclarers(providers)) {
+    if (options.prefix === undefined || name.startsWith(options.prefix))
+      index.set(name, { name, from: `${provider.id}/components/${name}` })
   }
   return index
 }
