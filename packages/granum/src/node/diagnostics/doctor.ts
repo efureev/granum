@@ -8,11 +8,13 @@ import type { ResolvedThemeWarning, ThemeNamesSource } from '../../core/resolveT
 import type { ProviderClassSource } from '../dialects'
 import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { isLoadedManifest } from '../../contract/manifest'
 import { sortedUnique } from '../../core/dedupe'
 import { stripCssComments } from '../../engine/extract'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
+import { packageSubcomponents } from '../subcomponents'
 import { findUndefinedTokens } from '../undefinedTokens'
 
 export interface DoctorProviderInfo {
@@ -72,6 +74,7 @@ export type DoctorDiagnosticCode
     | 'provider-classes-recovered'
     | 'provider-classes-dropped'
     | 'engine-rules-skipped'
+    | 'subcomponents-missing'
 
 export interface DoctorDiagnostic {
   readonly level: 'error' | 'warn'
@@ -347,6 +350,17 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       warn('provider-without-manifest', w.providerId, 'provider is passed as an object and its baseUrl is not a directory on disk: classes and consumed tokens are unknown; build it with granumProvider()')
     else if (w.kind === 'provider-scanned')
       warn('provider-scanned', w.providerId, 'provider is passed as an object: classes and tokens were scanned from its dist by the application (slow path, no bundle graph); publish granum.manifest.json with granumProvider()')
+  }
+  // Провайдер, собранный прежней версией granum: в `exports` его пакета есть
+  // подпути частей, а манифест их не записал — guard и селекция таких частей не
+  // видят. Читать `package.json` доктору можно: он и так ходит по файлам пакета.
+  for (const p of resolution.providers) {
+    if (p.form !== 'manifest' || !p.baseUrl?.startsWith('file:'))
+      continue
+    const fromExports = packageSubcomponents(fileURLToPath(p.baseUrl), p.id, p.components.map(c => c.name))
+    const missing = Object.entries(fromExports).flatMap(([owner, parts]) => parts.filter(part => p.subcomponents?.get(part) !== owner).map(part => `${part} → ${owner}`))
+    if (missing.length > 0)
+      warn('subcomponents-missing', p.id, 'package.json#exports has subpaths of compound component parts that the manifest does not record: the provider was built by an older granum — rebuild it, or the guard and the selection do not see these parts', missing)
   }
   const withSelected = new Set(components.map(c => c.providerId))
   for (const p of providers) {

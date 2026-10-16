@@ -68,6 +68,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `provider-classes-recovered` | warn | движок приложения знает классы, которых в манифесте нет: сборка пакета их потеряла |
 | `provider-classes-dropped` | warn | у классов из манифеста нет правила у движка приложения; они остаются во входе движка и в `unmatched` |
 | `unused-provider` | warn | провайдер ничего не приносит в сборку |
+| `subcomponents-missing` | warn | в `exports` пакета есть подпути частей составных компонентов, а манифест их не записал: провайдер собран прежней версией granum, и guard с селекцией этих частей не видят — пересоберите его |
 
 ```
 granum doctor

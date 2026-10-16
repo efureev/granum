@@ -69,6 +69,7 @@ legal but suspicious.
 | `provider-classes-recovered` | warn | the application engine knows classes missing from the manifest: the package build lost them |
 | `provider-classes-dropped` | warn | classes from the manifest have no rule in the application engine; they stay in the engine input and in `unmatched` |
 | `unused-provider` | warn | the provider contributes nothing to the build |
+| `subcomponents-missing` | warn | the package `exports` has subpaths of compound component parts that the manifest does not record: the provider was built by an older granum, and the guard and the selection do not see these parts — rebuild it |
 
 ```
 granum doctor

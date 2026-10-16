@@ -10,6 +10,8 @@
  * в синтетический), и guard, селекция и граф провайдера-соседа судят по ней
  * владельца, не читая `exports` сами.
  */
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 import { isValidComponentName } from '../contract'
 
 /** Компонент и его entry: пути от корня пакета, POSIX, без `./`. */
@@ -83,4 +85,33 @@ export function subcomponentsFromExports(exports: unknown, components: readonly 
   for (const parts of Object.values(byOwner))
     parts.sort()
   return { byOwner, ambiguous: ambiguous.sort() }
+}
+
+/**
+ * Части по `exports` пакета, в котором лежит раскладка `distDir`: ближайший вверх
+ * `package.json`, и только если это пакет самого провайдера, — иначе он чужой
+ * (корень монорепо, приложение), и частей нет. Так их выводит медленный путь
+ * объектного провайдера, а `doctor` сверяет с ними манифест.
+ */
+export function packageSubcomponents(distDir: string, providerId: string, componentNames: readonly string[]): Readonly<Record<string, readonly string[]>> {
+  for (let dir = distDir; ; dir = dirname(dir)) {
+    const file = join(dir, 'package.json')
+    if (existsSync(file)) {
+      let pkg: { name?: unknown, exports?: unknown }
+      try {
+        pkg = JSON.parse(readFileSync(file, 'utf8')) as typeof pkg
+      }
+      catch {
+        return {}
+      }
+      if (pkg.name !== providerId)
+        return {}
+      return subcomponentsFromExports(pkg.exports, componentNames.map(name => ({
+        name,
+        entries: [relative(dir, join(distDir, 'components', name, 'index.js')).split(/[\\/]/).join('/')],
+      }))).byOwner
+    }
+    if (dirname(dir) === dir)
+      return {}
+  }
 }

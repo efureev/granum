@@ -225,6 +225,34 @@ describe('granum doctor', () => {
   })
 })
 
+/**
+ * Провайдер, собранный прежней версией granum: в `exports` его пакета есть
+ * подпути частей, а манифест их не записал — guard и селекция их не видят.
+ */
+describe('doctor: части составных компонентов, которых манифест не знает', () => {
+  const withExports = (f: Fixture): void => writeFileSync(join(f.root, 'node_modules/@x/kit/package.json'), JSON.stringify({
+    name: '@x/kit',
+    exports: { './components/Card': './dist/components/Card/index.js', './components/CardItem': './dist/components/Card/index.js' },
+  }))
+
+  it('алиас части в exports без записи в манифесте — subcomponents-missing', async () => {
+    const f = fixture()
+    withExports(f)
+    const report = await granumDoctor(await app(f))
+    const found = report.diagnostics.filter(d => d.code === 'subcomponents-missing')
+    expect(found).toMatchObject([{ level: 'warn', subject: '@x/kit', items: ['CardItem → Card'] }])
+  })
+
+  it('манифест знает часть — тишина', async () => {
+    const f = fixture()
+    withExports(f)
+    const { manifest } = f.manifest
+    const recorded = { ...f.manifest, manifest: { ...manifest, components: { ...manifest.components, Card: { ...manifest.components.Card!, subcomponents: ['CardItem'] } } } }
+    const report = await granumDoctor(await prepareTestApp({ providers: [recorded], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] } }, f.root))
+    expect(report.diagnostics.filter(d => d.code === 'subcomponents-missing')).toEqual([])
+  })
+})
+
 describe('granum explain', () => {
   it('корень селекции, зависимость и невыбранный компонент', async () => {
     const a = await app(fixture())
