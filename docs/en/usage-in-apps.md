@@ -211,8 +211,9 @@ hook. Leave the option at its default `false` — CSS then arrives as a single
 import { XhPanel } from 'virtual:granum/components'
 ```
 
-The virtual module re-exports the selected components from their subpaths and
-has no side effects: tree-shaking removes what is unused. Plain imports of
+The virtual module re-exports the selected components from their subpaths, and
+the parts of selected compound components from theirs, and has no side effects:
+tree-shaking removes what is unused. Plain imports of
 `@acme/ui/components/XhPanel` work too; the plugin neither rewrites provider
 code nor changes the chunk layout.
 

@@ -87,7 +87,9 @@ interface SkippedExport {
 /**
  * Реэкспорты `virtual:granum/components`: имя компонента и subpath пакета, из
  * которого он приезжает. Одно место на модуль и на его объявления типов — иначе
- * они разъедутся, и типы будут описывать не то, что импортируется.
+ * они разъедутся, и типы будут описывать не то, что импортируется. Части
+ * выбранного составного компонента реэкспортируются тоже, своими подпутями: их
+ * код — в модуле владельца, который и так в селекции.
  *
  * Реэкспорт по имени возможен не всегда. Контракт допускает имена с дефисом,
  * а одно имя может прийти от двух провайдеров. Такая строка ломала
@@ -100,7 +102,9 @@ function componentExports(app: PreparedApp): { exports: ComponentExport[], skipp
   for (const { provider, component } of app.resolution.selection.entries) {
     if (provider.form !== 'manifest')
       continue
-    owners.set(component.name, [...(owners.get(component.name) ?? []), provider.id])
+    const parts = [...(provider.subcomponents ?? [])].filter(([, owner]) => owner === component.name).map(([part]) => part)
+    for (const name of [component.name, ...parts])
+      owners.set(name, [...(owners.get(name) ?? []), provider.id])
   }
   const exports: ComponentExport[] = []
   const skipped: SkippedExport[] = []
@@ -592,8 +596,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       const app = await prepare()
       const source = MARKUP_RE.test(path) ? scriptBlocksOf(code) : code
       for (const found of findPackageRootImports(source, componentsByProvider(app))) {
-        const parts = app.resolution.registry.providers.get(found.providerId)?.subcomponents
-        const error = new ComponentRootImportError(found.providerId, found.components, found.whole, relative(root, path), found.components.filter(name => parts?.has(name)))
+        const error = new ComponentRootImportError(found.providerId, found.components, found.whole, relative(root, path))
         if (guard === 'error')
           throw error
         log(`warning: ${error.message}`)

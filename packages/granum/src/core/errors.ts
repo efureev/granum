@@ -464,17 +464,11 @@ export class PluginInstanceReusedError extends GranumError {
 export class ComponentRootImportError extends GranumError {
   readonly code = 'component-root-import' as const
 
-  /**
-   * `parts` — те из `components`, что являются частями составных компонентов:
-   * `virtual:granum/components` реэкспортирует компоненты, а не части, и для них
-   * совет — только подпуть.
-   */
   constructor(
     readonly providerId: string,
     readonly components: readonly string[],
     readonly whole: boolean,
     readonly importer: string | undefined,
-    parts: readonly string[] = [],
   ) {
     const where = importer ? ` in '${importer}'` : ''
     const subject = whole
@@ -484,14 +478,9 @@ export class ComponentRootImportError extends GranumError {
     const instead = whole || components.length === 0
       ? `'${providerId}/components/<Name>'`
       : components.map(name => `'${providerId}/components/${name}'`).join(', ')
-    const onlyParts = !whole && components.length > 0 && components.every(name => parts.includes(name))
-    const partNote = parts.length > 0
-      ? ` ${parts.map(name => `'${name}'`).join(', ')} ${parts.length === 1 ? 'is a part' : 'are parts'} of a compound component: `
-      + `'virtual:granum/components' does not re-export parts, import ${parts.length === 1 ? 'it' : 'them'} from the subpath.`
-      : ''
     super(
-      `${subject}. Import components from ${instead}${onlyParts ? '' : ` or from 'virtual:granum/components'`}: granum selects a component `
-      + `by its subpath, while the package root loads every component of the package.${partNote}`,
+      `${subject}. Import components from ${instead} or from 'virtual:granum/components': granum selects a component `
+      + `by its subpath, while the package root loads every component of the package.`,
     )
   }
 }

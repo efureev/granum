@@ -547,10 +547,41 @@ describe('granum() с настоящим Vite', async () => {
       const error = await failureOf(buildApp(providerRoot, { providers: ['@t/list'], components: ['@t/list:XList'] }, `<script setup lang="ts">import { XListItem } from '@t/list'</script>\n<template><XListItem>a</XListItem></template>\n`, undefined, listApp()))
       expect(error).toBeInstanceOf(ComponentRootImportError)
       expect(error).toMatchObject({ providerId: '@t/list', components: ['XListItem'], whole: false })
-      // Виртуальный модуль реэкспортирует компоненты, а не части: совет — только подпуть.
-      expect((error as Error).message).toContain(`'@t/list/components/XListItem'`)
-      expect((error as Error).message).toContain(`'XListItem' is a part of a compound component`)
-      expect((error as Error).message).not.toContain(`or from 'virtual:granum/components'`)
+      // Совет тот же, что для компонента: подпуть части или виртуальный модуль — он
+      // реэкспортирует части выбранного владельца.
+      expect((error as Error).message).toContain(`Import components from '@t/list/components/XListItem' or from 'virtual:granum/components'`)
+    })
+
+    it('virtual:granum/components реэкспортирует части выбранного владельца — и в js.dts', async () => {
+      const app = await buildApp(
+        providerRoot,
+        { providers: ['@t/list'], components: ['@t/list:XList'], js: { dts: 'src/granum.d.ts' } },
+        `<script setup lang="ts">import { XList, XListItem } from 'virtual:granum/components'</script>\n<template><XList><XListItem>a</XListItem></XList></template>\n`,
+        undefined,
+        listApp(),
+      )
+      expect(readFileSync(join(app.root, 'src/granum.d.ts'), 'utf8')).toContain(`export { XListItem } from '@t/list/components/XListItem'`)
+      expect(app.css).toMatch(/\.x-list\s*\{/)
+    })
+
+    it('имя части, совпавшее с выбранным компонентом другого провайдера, не реэкспортируется — с предупреждением', async () => {
+      const twinRoot = mkdtempSync(join(tmpdir(), 'granum-app-twin-'))
+      write(twinRoot, 'package.json', JSON.stringify({ name: '@t/twin', version: '1.0.0', type: 'module', exports: { './granum.manifest.json': './dist/granum.manifest.json', './components/XListItem': './dist/components/XListItem/index.js' } }))
+      write(twinRoot, 'src/components/XListItem/XListItem.vue', `<template><li class="twin-item"><slot /></li></template>\n`)
+      write(twinRoot, 'src/components/XListItem/index.ts', `export { default as XListItem } from './XListItem.vue'\n`)
+      const twin = defineGranumProvider({ id: '@t/twin', contractVersion: 1, components: [defineGranumComponent(pathToFileURL(join(twinRoot, 'src/components/XListItem/config.ts')).href, { name: 'XListItem' })] })
+      await build({ root: twinRoot, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider: twin, engine: testEngine(), indexEntry: false, log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
+      const root = listApp()
+      symlinkSync(twinRoot, join(root, 'node_modules/@t/twin'), 'dir')
+      const app = await buildApp(
+        providerRoot,
+        { providers: ['@t/list', '@t/twin'], components: ['@t/list:XList', '@t/twin:XListItem'], js: { dts: 'src/granum.d.ts' } },
+        `<script setup lang="ts">import { XList } from 'virtual:granum/components'</script>\n<template><XList>a</XList></template>\n`,
+        undefined,
+        root,
+      )
+      expect(readFileSync(join(app.root, 'src/granum.d.ts'), 'utf8')).not.toContain('XListItem')
+      expect(app.logs).toContain(`warning: virtual:granum/components does not re-export 'XListItem' — it is selected from @t/list and @t/twin; import it from the package subpath`)
     })
   })
 
