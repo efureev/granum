@@ -165,6 +165,28 @@ describe('vite build --watch на сборке провайдера', () => {
   })
 
   /**
+   * Части составных компонентов сборка выводит из `package.json#exports`:
+   * `codegen --subcomponents`, запущенный посреди watch-сессии, меняет только
+   * его — и манифест обязан это увидеть, а не остаться от прошлого `exports`.
+   */
+  it('правка exports в package.json пересобирает манифест', { timeout: TIMEOUT }, async () => {
+    const { root, provider } = makeFixture()
+    const session = await watch(root, provider, [])
+
+    try {
+      await session.await(m => m.components.Card!.classes.includes('p-4'), 'первая сборка')
+      const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { exports: Record<string, string> }
+      pkg.exports['./components/CardPart'] = pkg.exports['./components/Card']!
+      write(root, 'package.json', JSON.stringify(pkg))
+      const next = await session.await(m => m.components.Card!.subcomponents?.includes('CardPart') === true, 'пересборка с частью CardPart')
+      expect(next.components.Card!.subcomponents).toEqual(['CardPart'])
+    }
+    finally {
+      await session.close()
+    }
+  })
+
+  /**
    * Контракт встраивается и в пересборке: разрешение модулей там может прийти из
    * кэша, и встраивание не должно на него полагаться — чанк контракта задаёт
    * группа чанков, а не эмит из хука.

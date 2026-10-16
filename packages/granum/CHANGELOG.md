@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **`vite build --watch` провайдера видит правку `package.json`.** Части
+  составных компонентов сборка выводит из `exports`, а `package.json` модулем
+  сборки не является: `codegen --subcomponents`, запущенный посреди watch-сессии,
+  пересборки не вызывал, и манифест оставался от прежнего `exports`. Теперь
+  `package.json` под наблюдением.
 - **`exports` строкой не роняет сборку провайдера `TypeError`.** Проверка
   `package.json#exports` искала подпути оператором `in` и на `"exports":
   "./dist/index.js"` падала с `Cannot use 'in' operator`. Теперь строка или

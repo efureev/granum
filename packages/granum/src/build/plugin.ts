@@ -276,6 +276,10 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       graphViolations = []
       analysis = undefined
       granumImports = []
+      // Части составных компонентов выводятся из `exports`: `codegen` посреди
+      // `vite build --watch` меняет только `package.json`, а модулем сборки он не
+      // является, и без наблюдения манифест остался бы от прежнего `exports`.
+      this.addWatchFile(join(root, 'package.json'))
     },
 
     // Граница ловится на исходном коде модулей: `vite:resolve` подменяет `node:*`
