@@ -1,5 +1,5 @@
 import type { GranumManifest, GranumProvider } from '../contract'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -700,9 +700,10 @@ describe('части составного компонента из exports', ()
   })
 
   /**
-   * Пакет за симлинком (`/var` → `/private/var` на macOS): Vite приводит корень
-   * к реальному пути, каталоги исходников приходят такими же, и цель на исходный
-   * entry сравнивается в одной форме.
+   * Пакет за симлинком: Vite приводит корень к реальному пути, каталоги
+   * исходников приходят такими же, и цель на исходный entry сравнивается в одной
+   * форме. Симлинк заводит сам тест — временный каталог симлинком бывает не
+   * везде (`/var` на macOS — да, `/tmp` на Linux — нет).
    */
   it('цель на исходный entry находится и при корне через симлинк', async () => {
     const fixture = makeFixture({
@@ -716,8 +717,9 @@ describe('части составного компонента из exports', ()
         },
       },
     })
-    expect(realpathSync(fixture.root)).not.toBe(fixture.root)
-    const { manifest } = await run(fixture)
+    const link = `${fixture.root}-link`
+    symlinkSync(fixture.root, link, 'dir')
+    const { manifest } = await run({ ...fixture, root: link })
     expect(manifest.components.Card?.subcomponents).toEqual(['CardDev'])
   })
 
