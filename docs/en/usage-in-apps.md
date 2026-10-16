@@ -283,6 +283,13 @@ without an import joins the selection when exactly one provider of the graph
 declares the name. That keeps the selection independent of the bundler's
 transform order.
 
+The resolver's `providers` option narrows its choice, not the tag scan: the
+scan does not know the resolver's settings. A name declared by two providers
+(`Card` in `@a/ui` and `@b/ui`) does not join the selection by its tag even when
+a resolver limited to `@a/ui` has inserted `@a/ui/components/Card`, and in
+`'imports'` mode the guard fails such a build. Import that component by its
+subpath explicitly (the selection sees imports in the sources) or list it in `components`.
+
 ## Themes at runtime
 
 ```ts
