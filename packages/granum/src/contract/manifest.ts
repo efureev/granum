@@ -42,6 +42,14 @@ export interface GranumManifestComponent {
   readonly safelist: readonly string[]
   readonly tokens: GranumManifestComponentTokens
   readonly hash: string
+  /**
+   * Части составного компонента: имена подпутей `exports["./components/<Part>"]`,
+   * которые ведут в entry этого компонента. Своего модуля у части нет, поэтому
+   * guard и селекция судят по ней владельца.
+   *
+   * Необязательное: манифест без поля читается как «частей нет».
+   */
+  readonly subcomponents?: readonly string[]
 }
 
 /**

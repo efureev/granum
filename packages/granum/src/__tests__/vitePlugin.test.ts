@@ -131,6 +131,41 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
   }
 }
 
+/**
+ * Провайдер с составным компонентом: `XList` реэкспортирует часть `XListItem`, а
+ * `exports` ведёт её подпуть в модуль владельца — как `codegen --subcomponents`.
+ */
+async function buildListProvider(): Promise<string> {
+  const root = mkdtempSync(join(tmpdir(), 'granum-app-list-'))
+  write(root, 'package.json', JSON.stringify({
+    name: '@t/list',
+    version: '1.0.0',
+    type: 'module',
+    exports: {
+      '.': './dist/index.js',
+      './granum.manifest.json': './dist/granum.manifest.json',
+      './components/XList': './dist/components/XList/index.js',
+      './components/XListItem': './dist/components/XList/index.js',
+      './components/XNote': './dist/components/XNote/index.js',
+    },
+  }))
+  write(root, 'src/components/XList/XList.vue', `<template><ul class="x-list"><slot /></ul></template>\n<style>.x-list{margin:0}</style>\n`)
+  write(root, 'src/components/XList/XListItem.vue', `<template><li class="x-list-item"><slot /></li></template>\n`)
+  write(root, 'src/components/XList/index.ts', `export { default as XList } from './XList.vue'\nexport { default as XListItem } from './XListItem.vue'\n`)
+  write(root, 'src/components/XNote/XNote.vue', `<template><p class="x-note"><slot /></p></template>\n`)
+  write(root, 'src/components/XNote/index.ts', `export { default as XNote } from './XNote.vue'\n`)
+  write(root, 'src/index.ts', `export * from './components/XList/index.ts'\nexport * from './components/XNote/index.ts'\n`)
+
+  const url = (name: string): string => pathToFileURL(join(root, `src/components/${name}/config.ts`)).href
+  const provider = defineGranumProvider({
+    id: '@t/list',
+    contractVersion: 1,
+    components: [defineGranumComponent(url('XList'), { name: 'XList' }), defineGranumComponent(url('XNote'), { name: 'XNote' })],
+  })
+  await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
+  return root
+}
+
 describe('granum() с настоящим Vite', async () => {
   const providerRoot = await buildProvider()
 
@@ -448,6 +483,53 @@ describe('granum() с настоящим Vite', async () => {
       expect(warned.logs.some(l => l.startsWith('warning:') && l.includes(`'@t/kit/components/Card'`))).toBe(true)
       const off = await buildApp(providerRoot, { components: ['@t/kit:Card'], js: { guard: 'off' } }, code)
       expect(off.logs.some(l => l.includes('package root'))).toBe(false)
+    })
+  })
+
+  /**
+   * Часть составного компонента живёт в модуле владельца и без его CSS
+   * голая: guard, селекция `'imports'` и проверка корня судят владельца.
+   */
+  describe('часть составного компонента сводится к владельцу', async () => {
+    const listProvider = await buildListProvider()
+    const listApp = (): string => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-app-parts-'))
+      mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+      symlinkSync(listProvider, join(root, 'node_modules/@t/list'), 'dir')
+      return root
+    }
+    const failureOf = (promise: Promise<unknown>): Promise<unknown> =>
+      promise.then(() => undefined, (e: unknown) => (e as { errors?: unknown[] }).errors?.[0] ?? e)
+    const importPart = `<script setup lang="ts">import { XListItem } from '@t/list/components/XListItem'</script>\n<template><XListItem>a</XListItem></template>\n`
+    const keys = (report: { selection: { key: string }[] }): string[] => report.selection.map(entry => entry.key)
+
+    it('подпуть части вне селекции — ошибка на владельце с названной частью; владелец в селекции — сборка с его CSS', async () => {
+      const error = await failureOf(buildApp(providerRoot, { providers: ['@t/list'], components: ['@t/list:XNote'] }, importPart, undefined, listApp()))
+      expect(error).toBeInstanceOf(ComponentOutsideSelectionError)
+      expect(error).toMatchObject({ key: '@t/list:XList', part: 'XListItem', importer: 'src/App.vue' })
+      expect((error as Error).message).toContain(`through its part 'XListItem'`)
+
+      const app = await buildApp(providerRoot, { providers: ['@t/list'], components: ['@t/list:XList'] }, importPart, undefined, listApp())
+      expect(app.css).toMatch(/\.x-list\s*\{/)
+    })
+
+    it(`components: 'imports' — импорт и тег части дают владельца и его CSS`, async () => {
+      // Без тега `<XListItem>` в шаблоне: владельца даёт именно импорт.
+      const byImport = await buildApp(providerRoot, { providers: ['@t/list'], components: 'imports' }, `<script setup lang="ts">import { XListItem } from '@t/list/components/XListItem'\nconst item = XListItem</script>\n<template><component :is="item">a</component></template>\n`, undefined, listApp())
+      expect(keys(byImport.report)).toEqual(['@t/list:XList'])
+      expect(byImport.css).toMatch(/\.x-list\s*\{/)
+      const byTag = await buildApp(providerRoot, { providers: ['@t/list'], components: 'imports' }, `<template><XListItem>a</XListItem></template>\n`, undefined, listApp())
+      expect(keys(byTag.report)).toEqual(['@t/list:XList'])
+    })
+
+    it('часть из корня пакета — ComponentRootImportError', async () => {
+      const error = await failureOf(buildApp(providerRoot, { providers: ['@t/list'], components: ['@t/list:XList'] }, `<script setup lang="ts">import { XListItem } from '@t/list'</script>\n<template><XListItem>a</XListItem></template>\n`, undefined, listApp()))
+      expect(error).toBeInstanceOf(ComponentRootImportError)
+      expect(error).toMatchObject({ providerId: '@t/list', components: ['XListItem'], whole: false })
+      // Виртуальный модуль реэкспортирует компоненты, а не части: совет — только подпуть.
+      expect((error as Error).message).toContain(`'@t/list/components/XListItem'`)
+      expect((error as Error).message).toContain(`'XListItem' is a part of a compound component`)
+      expect((error as Error).message).not.toContain(`or from 'virtual:granum/components'`)
     })
   })
 

@@ -256,9 +256,10 @@ component directories but none starts with the prefix, the generator fails
 with `no-components-with-prefix` and writes nothing: otherwise a typo in the
 prefix would strip every registry. `--components-dir`,
 `--barrel`, `--registry` override the paths; `--subcomponents` adds `exports`
-aliases for parts of compound components; `--exports=import` writes string
-subpaths without `types` (a package without declarations). Custom targets (`markedBlock`) go
-through the programmatic API of `@feugene/granum/codegen`.
+aliases for parts of compound components — the provider build records them in
+the owner's manifest entry, and the application judges a part as its owner;
+`--exports=import` writes string subpaths without `types` (a package without
+declarations). Custom targets (`markedBlock`) go through the programmatic API of `@feugene/granum/codegen`.
 
 ## Programmatic access
 

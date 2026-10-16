@@ -71,6 +71,15 @@ selection:
 src/App.vue but is not part of the selection [@acme/ui:XhPanel, …]
 ```
 
+A compound component ships its parts in its own module: `XhListItem` lives in
+`XhList`, and the subpath `@acme/ui/components/XhListItem` is an `exports` alias to
+the owner's module (`granum codegen --subcomponents`). The provider build records
+such parts in the owner's manifest entry, and the application judges a part as its
+owner: a part subpath with `XhList` outside the selection is a
+`ComponentOutsideSelectionError` on `XhList` naming the part, in `'imports'` mode an
+import or a `<XhListItem>` tag adds `XhList` to the selection, and a part from the
+package root is the same error as a component. Rebuild a provider built by an older granum.
+
 ## The engine and package classes
 
 `engine` in the config is a utility engine instance: granum has none of its

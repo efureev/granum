@@ -67,6 +67,11 @@ export interface ProviderNode {
   /** Исходные зависимости: инстансы тянутся в граф, строки — мягкие. */
   readonly dependencies: readonly (GranumProvider | string)[]
   readonly source: GranumProviderInput
+  /**
+   * Части составных компонентов: имя части → имя владельца. Только у
+   * манифестной формы — части выводит сборка провайдера из его `exports`.
+   */
+  readonly subcomponents?: ReadonlyMap<string, string>
 }
 
 const EMPTY: readonly never[] = Object.freeze([])
@@ -114,6 +119,11 @@ function fromObject(provider: GranumProvider): ProviderNode {
 
 function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
   const { manifest } = loaded
+  const subcomponents = new Map<string, string>()
+  for (const [name, component] of Object.entries(manifest.components)) {
+    for (const part of component.subcomponents ?? [])
+      subcomponents.set(part, name)
+  }
   return {
     id: manifest.id,
     form: 'manifest',
@@ -145,7 +155,22 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
     engineArtifact: manifest.engine,
     dependencies: manifest.dependencies,
     source: loaded,
+    ...(subcomponents.size > 0 ? { subcomponents } : {}),
   }
+}
+
+/**
+ * Компонент, чей модуль отдаёт это имя — из подпути `<pkg>/components/<Name>`
+ * или из тега разметки: сам компонент либо владелец части. Часть живёт в модуле
+ * владельца и без его CSS голая, поэтому guard, селекция и граф провайдера
+ * судят по ней владельца. Компонент первичен: имя компонента частью не бывает.
+ */
+export function ownerOf(provider: ProviderNode, name: string): ComponentNode | undefined {
+  const owner = provider.components.find(component => component.name === name)
+  if (owner)
+    return owner
+  const ownerName = provider.subcomponents?.get(name)
+  return ownerName === undefined ? undefined : provider.components.find(component => component.name === ownerName)
 }
 
 /** Все имена тем, для которых у провайдера есть хоть какой-то вклад (уровень пакета и компонентов). */

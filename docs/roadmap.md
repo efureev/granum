@@ -390,9 +390,6 @@ CSS в браузере.
 воспроизводит стенд `apps/tz-granularity` на фикстуре `fixtures/composite-package`
 (`yarn workspace @granum-apps/tz-granularity repro`):
 
-* подпуть части составного компонента (`components/XcListItem`) проходит мимо guard:
-  селекция без владельца собирается без его CSS (ТЗ-1); селекция `components: 'imports'`
-  по импорту части владельца не берёт (ТЗ-1б);
 * `granumResolver` не резолвит части (ТЗ-2);
 * CSS приложения, подключённый строкой (`?raw`), проверке `unmatched` не виден — вопрос (ТЗ-5).
 

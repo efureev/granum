@@ -18,7 +18,7 @@
 | INV-CON-2 | Имя компонента уникально в провайдере и является валидным сегментом пути (`/^[A-Za-z][\w-]*$/`) | v1 §4, усилен | `./contract` | `DuplicateComponentNameError`, `InvalidComponentNameError`; unit; `contract.test.ts`, `vitePlugin.test.ts` |
 | INV-CON-3 | `contractVersion` сравнивается строго; большее значение — тоже ошибка | v1 §2 | `./contract` | `UnsupportedContractVersionError`; unit; `contract.test.ts` |
 | INV-CON-4 | `safelist` содержит только собственные классы, недоступные статике; пересечение со статикой фиксируется как `safelist-redundant` | v1 §4, усилен | `./build` | `buildPlugin.test.ts`; `fixtures/heavy-package/expected-manifest.mjs` (`safelist-redundant` у XhButton); `doctor` |
-| INV-CON-5 | Объявленный граф `dependencies` покрывает фактические импорты между директориями компонентов (включая через общие чанки) | v1 §4.1, усилен | `./build` | `UndeclaredDependencyError` по графу модулей; интеграционный тест на фикстуре с намеренно пропущенным ребром; `fixtures/extra-simple-package/expected-manifest.mjs`, `fixtures/heavy-package/expected-manifest.mjs` |
+| INV-CON-5 | Объявленный граф `dependencies` покрывает фактические импорты между директориями компонентов (включая через общие чанки); импорт части донора по её подпути — импорт директории её владельца | v1 §4.1, усилен | `./build` | `UndeclaredDependencyError` по графу модулей; интеграционный тест на фикстуре с намеренно пропущенным ребром; `fixtures/extra-simple-package/expected-manifest.mjs`, `fixtures/heavy-package/expected-manifest.mjs`; `buildGraph.test.ts`, `buildPlugin.test.ts` — часть донора |
 | INV-CON-6 | Общий модуль, лежащий ВНЕ `components/<Name>/`, ребром графа не является, сколько бы компонентов его ни брали; импорт файла из чужой директории компонента — ребро, даже если это хелпер или константа (на бандле их не отличить) | v1 §4.1, уточнён | `./build` | `buildGraph.test.ts`: фикстура `overlayZ` (общий модуль вне `components/`) не даёт ребра; `buildPlugin.test.ts`: импорт из `components/Card/` без объявления — `UndeclaredDependencyError` |
 | INV-CON-7 | Ключи токенов без `--`; префикс добавляет генератор | v1 §6.1, усилен | `./contract` | `InvalidTokenKeyError` при регистрации; unit; `contract.test.ts`, `manifest.test.ts` |
 | INV-CON-8 | Объявление зависимости провайдера не выбирает компоненты донора | v1 §3.2 | резолвер | `invariantsCoverage.test.ts` |
@@ -61,7 +61,7 @@
 | INV-SEL-2 | Транзитивное замыкание — post-order DFS: зависимости раньше зависящих; порядок нормативен для токенов и CSS | v1 §5.2 | резолвер | unit на порядок; снапшот порядка CSS; `expandProviders.test.ts`, `resolve.test.ts` |
 | INV-SEL-3 | Цикл в зависимостях компонентов или провайдеров — ошибка с полной цепочкой | v1 §5.2, §3.2 | резолвер | `CircularDependencyError`, `CircularProviderDependencyError`; unit; `expandProviders.test.ts`, `resolveSelection.test.ts` |
 | INV-SEL-4 | Короткая форма `'Name'` допустима только в `dependencies` компонента, не в селекции приложения | v1 §4.1 | резолвер | `InvalidComponentKeyError`; unit; `resolveSelection.test.ts` |
-| INV-SEL-5 | В режиме `components: 'imports'` селекция ⊇ множество компонентов, импортированных приложением; guard гарантирует ⊆ при `'error'` | new | `./vite` | интеграционный тест: импорт вне селекции при явном списке → ошибка; при `'imports'` → входит в селекцию; `vitePlugin.test.ts` |
+| INV-SEL-5 | В режиме `components: 'imports'` селекция ⊇ множество компонентов, импортированных приложением, включая владельцев импортированных частей; guard гарантирует ⊆ при `'error'` | new | `./vite` | интеграционный тест: импорт вне селекции при явном списке → ошибка; при `'imports'` → входит в селекцию; `vitePlugin.test.ts`; `autoImport.test.ts` — часть по импорту и тегу |
 
 ## Темы и токены (`INV-THM-*`, `INV-TOK-*`)
 
@@ -117,7 +117,7 @@
 | ID | Инвариант | Источник | Владелец | Проверка |
 |---|---|---|---|---|
 | INV-JS-1 | `virtual:granum/components` содержит только реэкспорты и не имеет побочных эффектов; невостребованные экспорты вырезаются | new | `./vite` | `vitePlugin.test.ts` на форму модуля; стенд `apps/app-components` на настоящей сборке: в селекции два компонента, импортирован один, в бандле один |
-| INV-JS-2 | При `guard: 'error'` ни один модуль приложения не импортирует директорию компонента вне селекции и не берёт компонент из корня пакета-провайдера | new | `./vite` | интеграционный тест; `vitePlugin.test.ts` и `viteDev.test.ts` — корень пакета |
+| INV-JS-2 | При `guard: 'error'` ни один модуль приложения не импортирует директорию компонента вне селекции — ни подпутём компонента, ни подпутём его части — и не берёт компонент или его часть из корня пакета-провайдера | new | `./vite` | интеграционный тест; `vitePlugin.test.ts` и `viteDev.test.ts` — корень пакета; `vitePlugin.test.ts` — часть составного компонента |
 | INV-JS-3 | Плагин не переписывает код провайдера и не меняет раскладку чанков приложения; при `guard: 'off'` и без виртуального модуля JS-бандл побайтно равен сборке без плагина | new | `./vite` | `scripts/compare-js.mjs` (AC-3) |
 
 ## Детерминизм и зависимости (`INV-DET-*`, `INV-DEP-*`)

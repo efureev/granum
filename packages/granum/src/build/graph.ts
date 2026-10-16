@@ -264,12 +264,15 @@ function basename(file: string): string {
 /**
  * Рёбра, не покрытые объявленным графом. Покрытие — транзитивное
  * замыкание `dependencies` внутри провайдера; кросс-провайдерные ключи
- * сравниваются как есть.
+ * сравниваются как есть, после `ownerOfEdge`: импорт части донора по её подпути
+ * (`@a/components/XcListItem`) — ребро на её владельца (`@a:XcList`), которого и
+ * объявляет зависящий компонент.
  */
 export function findUndeclaredEdges(
   providerId: string,
   descriptors: readonly GranumComponentDescriptor[],
   analysis: BundleAnalysis,
+  ownerOfEdge: (key: string) => string = key => key,
 ): (readonly [from: string, to: string])[] {
   const byName = new Map(descriptors.map(d => [d.name, d]))
   const closureOf = (root: string): Set<string> => {
@@ -301,7 +304,7 @@ export function findUndeclaredEdges(
       continue
     const covered = closureOf(descriptor.name)
     for (const edge of info.edges) {
-      const key = edge.includes(':') ? edge : `${providerId}:${edge}`
+      const key = edge.includes(':') ? ownerOfEdge(edge) : `${providerId}:${edge}`
       if (!covered.has(key))
         undeclared.push([descriptor.name, key])
     }

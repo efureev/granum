@@ -57,6 +57,24 @@ describe('scanObjectProvider', () => {
     expect(loaded.baseUrl).toBe(provider.baseUrl)
   })
 
+  /**
+   * Части составного компонента — как их записала бы сборка: по `exports`
+   * пакета, в котором лежит раскладка, если это пакет самого провайдера.
+   */
+  it('части составного компонента — из exports пакета провайдера; чужой package.json не в счёт', async () => {
+    const { root, dist } = distFixture()
+    const provider = defineGranumProvider({ id: '@x/kit', contractVersion: 1, baseUrl: `${pathToFileURL(dist).href}/`, components: [{ name: 'Card' }, { name: 'Table' }] })
+    const exports = { './components/Card': './kit-dist/components/Card/index.js', './components/CardPart': './kit-dist/components/Card/index.js' }
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@x/kit', exports }))
+    const own = (await scanObjectProvider(provider, testEngine()))!
+    expect(own.manifest.components.Card?.subcomponents).toEqual(['CardPart'])
+    expect(own.manifest.components.Table).not.toHaveProperty('subcomponents')
+
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'some-monorepo', exports }))
+    const foreign = (await scanObjectProvider(provider, testEngine()))!
+    expect(foreign.manifest.components.Card).not.toHaveProperty('subcomponents')
+  })
+
   it('baseUrl не каталог — undefined; в prepareApp остаётся provider-without-manifest', async () => {
     const fake = makeProvider('@x/fake', { components: [{ name: 'A' }] })
     expect(await scanObjectProvider(fake, testEngine())).toBeUndefined()

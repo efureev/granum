@@ -6,10 +6,11 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ownerOf, toProviderNode } from '../core/providerNode'
 import { scanAppSources } from '../node/appSources'
 import { granumExplain } from '../node/diagnostics/explain'
 import { clearManifestCache, loadPackageManifest, serializeManifest } from '../node/manifest'
-import { tagSelection } from '../node/prepare'
+import { importSelection, tagSelection } from '../node/prepare'
 import { buildComponentIndex, granumResolver } from '../vite/resolver'
 import { component as makeComponent, makeManifest, makeProvider, prepareTestApp } from './helpers'
 import { testEngine } from './testEngine'
@@ -84,6 +85,25 @@ describe('granumResolver', () => {
     const a = makeProvider('@x/a', { components: [makeComponent('Card'), makeComponent('Modal')] })
     const b = makeProvider('@x/b', { components: [makeComponent('Card')] })
     expect(tagSelection(['Card', 'Modal', 'Nope'], [a, b])).toEqual(['@x/a:Modal'])
+  })
+
+  it('часть составного компонента сводится к владельцу: ownerOf, тег, импорт', () => {
+    const list = makeManifest('@x/list', { XList: { subcomponents: ['XListItem'] }, XButton: {} })
+    const other = makeManifest('@x/other', { XListItem: {} })
+    const node = toProviderNode(list)
+    expect(ownerOf(node, 'XListItem')?.name).toBe('XList')
+    expect(ownerOf(node, 'XList')?.name).toBe('XList')
+    expect(ownerOf(node, 'Nope')).toBeUndefined()
+    expect(tagSelection(['XListItem'], [list])).toEqual(['@x/list:XList'])
+    // Компонент первичен: имя компонента у одного провайдера и части у другого —
+    // компонент. Резолвер авто-импорта знает только компоненты и подставит его.
+    expect(tagSelection(['XListItem'], [list, other])).toEqual(['@x/other:XListItem'])
+    // Часть с одним именем у двух провайдеров — неоднозначна.
+    const twin = makeManifest('@x/twin', { XGrid: { subcomponents: ['XListItem'] } })
+    expect(tagSelection(['XListItem'], [list, twin])).toEqual([])
+    expect(importSelection(['@x/list:XListItem', '@x/list:Nope'], [node])).toEqual(['@x/list:XList'])
+    // Владелец и его часть — один ключ.
+    expect(importSelection(['@x/list:XList', '@x/list:XListItem'], [node])).toEqual(['@x/list:XList'])
   })
 })
 

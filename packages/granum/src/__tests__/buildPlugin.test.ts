@@ -1,5 +1,5 @@
 import type { GranumManifest, GranumProvider } from '../contract'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -8,9 +8,11 @@ import { build, parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
-import { readManifestSync } from '../node/manifest'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidManifestError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { readManifestSync, writeManifestSync } from '../node/manifest'
+import { subcomponentsFromExports } from '../node/subcomponents'
 import { granum } from '../vite/plugin'
+import { makeManifest } from './helpers'
 import { TEST_DIALECT, testEngine } from './testEngine'
 
 /**
@@ -636,5 +638,167 @@ describe('встроенный контракт в dist провайдера', (
 
     const used = await bundle(`import { Card, cardConfig } from '@t/kit/components/Card'\nimport { Card as Card2 } from '@t/kit2/components/Card'\nconsole.log(Card, Card2, cardConfig.name)\n`)
     expect(used.split(CONTRACT_CODE)).toHaveLength(2)
+  })
+})
+
+/**
+ * Часть составного компонента — подпуть `./components/<Part>`, который ведёт в
+ * entry владельца. Сборка записывает её в манифест владельца: из манифеста её
+ * узнают guard, селекция и граф провайдера, читающего этот пакет донором.
+ */
+describe('части составного компонента из exports', () => {
+  const components = [
+    { name: 'Card', entries: ['dist/components/Card/index.js', 'src/components/Card/index.ts'] },
+    { name: 'Panel', entries: ['dist/components/Panel/index.js'] },
+  ]
+
+  it('алиас на entry владельца — часть; цели — все строковые листья, кроме types', () => {
+    expect(subcomponentsFromExports({
+      '.': './dist/index.js',
+      './components/Card': './dist/components/Card/index.js',
+      './components/CardItem': './dist/components/Card/index.js',
+      './components/CardHead': { types: './dist/types/CardHead.d.ts', import: './dist/components/Card/index.js' },
+      './components/CardFoot': { node: { import: './dist/components/Card/index.js' } },
+      './components/CardSide': ['./dist/components/Card/index.js'],
+      './components/CardDev': { development: './src/components/Card/index.ts', default: null },
+      './components/CardTypes': { types: './dist/components/Card/index.js' },
+      './components/Card*': './dist/components/Card/index.js',
+      './components/Card/styles.css': './dist/components/Card/styles.css',
+      './components/Loose': './dist/index.js',
+      './components/Both': ['./dist/components/Card/index.js', './dist/components/Panel/index.js'],
+    }, components)).toEqual({ byOwner: { Card: ['CardDev', 'CardFoot', 'CardHead', 'CardItem', 'CardSide'] }, ambiguous: ['Both'] })
+  })
+
+  it('exports не объект — частей нет', () => {
+    expect(subcomponentsFromExports('./dist/index.js', components)).toEqual({ byOwner: {}, ambiguous: [] })
+    expect(subcomponentsFromExports(undefined, components)).toEqual({ byOwner: {}, ambiguous: [] })
+  })
+
+  it('сборка пишет части в запись владельца; без алиасов поля нет', async () => {
+    const plain = await run(makeFixture())
+    expect(Object.values(plain.manifest.components).some(c => 'subcomponents' in c)).toBe(false)
+    const { manifest } = await run(makeFixture({
+      packageJson: {
+        exports: {
+          '.': './dist/index.js',
+          './granum.manifest.json': './dist/granum.manifest.json',
+          './components/Card': './dist/components/Card/index.js',
+          './components/CardPart': './dist/components/Card/index.js',
+          './components/Panel': './dist/components/Panel/index.js',
+        },
+      },
+    }))
+    expect(manifest.components.Card?.subcomponents).toEqual(['CardPart'])
+    expect(manifest.components.Panel).not.toHaveProperty('subcomponents')
+  })
+
+  /**
+   * Пакет за симлинком (`/var` → `/private/var` на macOS): Vite приводит корень
+   * к реальному пути, каталоги исходников приходят такими же, и цель на исходный
+   * entry сравнивается в одной форме.
+   */
+  it('цель на исходный entry находится и при корне через симлинк', async () => {
+    const fixture = makeFixture({
+      packageJson: {
+        exports: {
+          '.': './dist/index.js',
+          './granum.manifest.json': './dist/granum.manifest.json',
+          './components/Card': './dist/components/Card/index.js',
+          './components/CardDev': { development: './src/components/Card/index.ts' },
+          './components/Panel': './dist/components/Panel/index.js',
+        },
+      },
+    })
+    expect(realpathSync(fixture.root)).not.toBe(fixture.root)
+    const { manifest } = await run(fixture)
+    expect(manifest.components.Card?.subcomponents).toEqual(['CardDev'])
+  })
+
+  /** Пакет `@t/uses`, чей `Row` импортирует часть `DListItem` донора `@d/core` по её подпути. */
+  function donorFixture(): { root: string, build: () => Promise<GranumManifest> } {
+    const root = mkdtempSync(join(tmpdir(), 'granum-donor-part-'))
+    write(root, 'node_modules/@d/core/package.json', JSON.stringify({
+      name: '@d/core',
+      version: '1.0.0',
+      type: 'module',
+      exports: { './granum.manifest.json': './dist/granum.manifest.json', './components/DList': './dist/components/DList/index.js', './components/DListItem': './dist/components/DList/index.js' },
+    }))
+    const { hash: _hash, ...donor } = makeManifest('@d/core', { DList: { subcomponents: ['DListItem'] } }).manifest
+    writeManifestSync(join(root, 'node_modules/@d/core/dist/granum.manifest.json'), donor)
+    write(root, 'package.json', JSON.stringify({
+      name: '@t/uses',
+      version: '1.0.0',
+      type: 'module',
+      peerDependencies: { '@d/core': '^1.0.0' },
+      exports: { './granum.manifest.json': './dist/granum.manifest.json', './components/Row': './dist/components/Row/index.js' },
+    }))
+    write(root, 'src/components/Row/Row.vue', `<script setup lang="ts">\nimport { DListItem } from '@d/core/components/DListItem'\n</script>\n<template><DListItem class="p-2" /></template>\n`)
+    write(root, 'src/components/Row/index.ts', `export { default as Row } from './Row.vue'\n`)
+    const row = defineGranumComponent(pathToFileURL(join(root, 'src/components/Row/config.ts')).href, { name: 'Row', dependencies: ['@d/core:DList'] })
+    const provider = defineGranumProvider({ id: '@t/uses', contractVersion: 1, dependencies: ['@d/core'], components: [row] })
+    return {
+      root,
+      build: async () => {
+        await build({
+          root,
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [vue(), granumProvider({ provider, engine: testEngine(), indexEntry: false, log: () => {} })],
+          build: { minify: false, rolldownOptions: { external: id => id === 'vue' || id.startsWith('@d/core') } },
+        })
+        return JSON.parse(readFileSync(join(root, 'dist/granum.manifest.json'), 'utf8')) as GranumManifest
+      },
+    }
+  }
+
+  it('импорт части донора по её подпути — ребро на владельца: объявленный владелец его покрывает', async () => {
+    const manifest = await donorFixture().build()
+    expect(manifest.components.Row?.dependencies).toEqual(['@d/core:DList'])
+  })
+
+  it('битый манифест донора — ошибка, а не тихий пропуск сведения', async () => {
+    const donor = donorFixture()
+    const file = join(donor.root, 'node_modules/@d/core/dist/granum.manifest.json')
+    writeFileSync(file, readFileSync(file, 'utf8').replace('"DList"', '"DList2"'))
+    await expect(donor.build()).rejects.toBeInstanceOf(InvalidManifestError)
+  })
+
+  /**
+   * Свой подпуть части, вынесенный во внешние: части берутся из своих `exports`,
+   * а не из манифеста прошлой сборки, которого может и не быть.
+   */
+  it('свой подпуть части во внешних — ребро на своего владельца', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'granum-self-part-'))
+    write(root, 'package.json', JSON.stringify({
+      name: '@t/self',
+      version: '1.0.0',
+      type: 'module',
+      exports: {
+        './granum.manifest.json': './dist/granum.manifest.json',
+        './components/Card': './dist/components/Card/index.js',
+        './components/CardPart': './dist/components/Card/index.js',
+        './components/Row': './dist/components/Row/index.js',
+      },
+    }))
+    write(root, 'src/components/Card/Card.vue', `<template><div class="p-4"><slot /></div></template>\n`)
+    write(root, 'src/components/Card/CardPart.vue', `<template><span class="p-2"><slot /></span></template>\n`)
+    write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport { default as CardPart } from './CardPart.vue'\n`)
+    write(root, 'src/components/Row/Row.vue', `<script setup lang="ts">\nimport { CardPart } from '@t/self/components/CardPart'\n</script>\n<template><CardPart /></template>\n`)
+    write(root, 'src/components/Row/index.ts', `export { default as Row } from './Row.vue'\n`)
+    const url = (name: string): string => pathToFileURL(join(root, `src/components/${name}/config.ts`)).href
+    const provider = defineGranumProvider({
+      id: '@t/self',
+      contractVersion: 1,
+      components: [defineGranumComponent(url('Card'), { name: 'Card' }), defineGranumComponent(url('Row'), { name: 'Row', dependencies: ['Card'] })],
+    })
+    await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [vue(), granumProvider({ provider, engine: testEngine(), indexEntry: false, log: () => {} })],
+      build: { minify: false, rolldownOptions: { external: id => id === 'vue' || id.startsWith('@t/self/') } },
+    })
+    const manifest = JSON.parse(readFileSync(join(root, 'dist/granum.manifest.json'), 'utf8')) as GranumManifest
+    expect(manifest.components.Card?.subcomponents).toEqual(['CardPart'])
   })
 })

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Reproduction of the granularity spec of 2026-10-15: subcomponent subpaths, app CSS imported as a string.",
+  "description": "Reproduction of the granularity spec of 2026-10-15: resolver for subcomponents, app CSS imported as a string.",
   "dependencies": {
     "vue": "^3.5.40"
   },

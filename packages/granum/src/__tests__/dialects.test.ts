@@ -38,6 +38,7 @@ function fixture(options: {
   readonly vocabulary?: string | null
   readonly classes?: readonly string[]
   readonly module?: string | null
+  readonly subcomponents?: readonly string[]
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-dialect-'))
   const dist = join(root, 'node_modules/@x/kit/dist')
@@ -53,7 +54,7 @@ function fixture(options: {
   const dialect = options.dialect === undefined ? TEST_DIALECT : options.dialect
   const vocabulary = options.vocabulary === undefined ? TEST_ENGINE.vocabulary : options.vocabulary
   const loaded = makeManifest('@x/kit', {
-    Card: { classes: options.classes ?? ['flex', 'p-4'], files: ['components/Card/index.js'] },
+    Card: { classes: options.classes ?? ['flex', 'p-4'], files: ['components/Card/index.js'], ...(options.subcomponents ? { subcomponents: options.subcomponents } : {}) },
   }, {
     engine: { dialect, vocabulary, name: 'packager-engine', version: '1.0.0', module: options.module ?? null },
   })
@@ -87,6 +88,13 @@ describe('сверка диалектов и отпечатков', () => {
     expect(app.resolution.classes).toEqual(['flex', 'p-4', GAINED])
     const css = await emitCss(app)
     expect(css.layers.utilities).toContain(`.${GAINED}{color:red;}`)
+  })
+
+  it('пересчёт классов сохраняет части составного компонента', async () => {
+    const f = fixture({ vocabulary: 'fnv64-otherpackager0', subcomponents: ['CardPart'] })
+    const app = await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Card'] }, f.root)
+    expect(app.engineDecisions[0]).toMatchObject({ classes: 're-extracted' })
+    expect(app.resolution.registry.providers.get('@x/kit')?.subcomponents?.get('CardPart')).toBe('Card')
   })
 
   it('класс манифеста, которого движок приложения не знает, остаётся виден в unmatched', async () => {

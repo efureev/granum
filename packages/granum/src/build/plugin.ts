@@ -7,6 +7,7 @@
  */
 import type { Plugin, ResolvedConfig, Rolldown, UserConfig } from 'vite'
 import type { GranumComponentDescriptor, GranumManifest, GranumManifestWarning, GranumProvider } from '../contract'
+import type { ProviderNode } from '../core/providerNode'
 import type { GranumEngine } from '../engine/types'
 import type { BoundaryViolation, BundleAnalysis, BundleLike } from './graph'
 import { createHash } from 'node:crypto'
@@ -19,11 +20,14 @@ import { normalizePath } from 'vite'
 import { GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
-import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, ManifestNotFoundError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { ownerOf, toProviderNode } from '../core/providerNode'
+import { splitComponentKey } from '../core/registry'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { collectImportSpecifiers } from '../node/imports'
-import { MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
+import { loadPackageManifest, MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
 import { materializeProviderRefs } from '../node/materializeRefs'
+import { subcomponentsFromExports } from '../node/subcomponents'
 import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
@@ -315,10 +319,50 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       if (!analysis)
         return
 
+      const pkgPath = join(root, 'package.json')
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown>, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
+      // Части составных компонентов: подпути `exports`, что ведут в entry
+      // компонента под чужим именем. Нужны и графу ниже, и манифесту; от
+      // `exportsCheck` не зависят — это не проверка, а сведения для приложения.
+      const fromRoot = (path: string): string => relative(root, path).split(/[\\/]/).join('/')
+      const parts = subcomponentsFromExports(pkg.exports, sources().map(({ descriptor, entry }) => ({
+        name: descriptor.name,
+        entries: [fromRoot(join(outDir, componentEntryFileName(descriptor.name))), fromRoot(entry)],
+      })))
+      const ownParts = new Map(Object.entries(parts.byOwner).flatMap(([owner, names]) => names.map(name => [name, owner] as const)))
+
       // Проверки графа и границы — здесь, а не в `generateBundle`: ошибку из
       // хука генерации бандлер заворачивает в свою, а отсюда она доходит до
       // вызывающего как есть.
-      const undeclared = findUndeclaredEdges(provider.id, provider.components, analysis)
+      // Импорт части донора по её подпути — ребро на владельца: части знает
+      // манифест донора. Пакет без манифеста — не провайдер granum или донор не
+      // установлен: ребро остаётся как есть. Битый манифест донора — ошибка:
+      // молча он превратился бы в «частей нет».
+      const donors = new Map<string, ProviderNode | undefined>()
+      const ownerOfEdge = (key: string): string => {
+        const [providerId, name] = splitComponentKey(key)
+        // Свой подпуть, вынесенный во внешние: части — из своих `exports`, а не
+        // из манифеста прошлой сборки.
+        if (providerId === provider.id) {
+          const owner = ownParts.get(name)
+          return owner ? `${providerId}:${owner}` : key
+        }
+        if (!donors.has(providerId)) {
+          let donor: ProviderNode | undefined
+          try {
+            donor = toProviderNode(loadPackageManifest(providerId, root))
+          }
+          catch (error) {
+            if (!(error instanceof ManifestNotFoundError))
+              throw error
+          }
+          donors.set(providerId, donor)
+        }
+        const donor = donors.get(providerId)
+        const owner = donor ? ownerOf(donor, name) : undefined
+        return owner ? `${providerId}:${owner.name}` : key
+      }
+      const undeclared = findUndeclaredEdges(provider.id, provider.components, analysis, ownerOfEdge)
       if (undeclared.length > 0) {
         const error = new UndeclaredDependencyError(provider.id, undeclared)
         if ((options.dependencyCheck ?? 'error') === 'error')
@@ -518,8 +562,6 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
 
       // 5. exports пакета.
-      const pkgPath = join(root, 'package.json')
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown>, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
       if ((options.exportsCheck ?? 'error') !== 'off') {
         const required = [`./${manifestFile}`, ...provider.components.map(c => `./components/${c.name}`)]
         const missing = required.filter(key => !(pkg.exports && key in pkg.exports))
@@ -530,6 +572,15 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           else
             throw error
         }
+      }
+
+      // 5a. Части составных компонентов — в записи владельцев.
+      for (const name of parts.ambiguous)
+        log(`warning: exports './components/${name}' leads to the entries of several components — it is not recorded as a part of any`)
+      for (const [owner, names] of Object.entries(parts.byOwner)) {
+        const record = components[owner]
+        if (record)
+          components[owner] = { ...record, subcomponents: names }
       }
 
       // 5b. Кросс-провайдерные доноры без peerDependencies и granum, если `dist`

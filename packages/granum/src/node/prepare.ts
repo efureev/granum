@@ -6,6 +6,7 @@
  */
 import type { GranumConfig } from '../config'
 import type { GranumProvider, GranumProviderInput } from '../contract'
+import type { ProviderNode } from '../core/providerNode'
 import type { GranumResolution, GranumThemesInput } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
 import type { GranumAppThemeDefinition, ThemeFileFacts, ThemeFilesInput } from '../core/resolveThemes'
@@ -18,7 +19,8 @@ import { pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { sortedUnique } from '../core/dedupe'
 import { DuplicateProviderIdError, TokenRefError } from '../core/errors'
-import { toProviderNode } from '../core/providerNode'
+import { ownerOf, toProviderNode } from '../core/providerNode'
+import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE } from '../core/resolveThemes'
 import { scanAppSources } from './appSources'
@@ -191,43 +193,55 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
 /**
  * Теги разметки → ключи селекции: имя берётся, если ровно один
  * провайдер графа его объявляет; неоднозначное или чужое имя пропускается.
+ * Компонент первичен: к частям составных компонентов (тег части даёт её
+ * владельца) имя идёт, только если компонента с таким именем нет ни у кого —
+ * резолвер авто-импорта знает компоненты и подставил бы его.
  */
 export function tagSelection(tags: readonly string[], inputs: readonly GranumProviderInput[]): string[] {
   if (tags.length === 0)
     return []
-  const owners = new Map<string, string[]>()
+  const components = new Map<string, ProviderNode[]>()
+  const parts = new Map<string, ProviderNode[]>()
+  const declare = (into: Map<string, ProviderNode[]>, name: string, node: ProviderNode): void => {
+    into.set(name, [...(into.get(name) ?? []), node])
+  }
   for (const input of inputs) {
     const node = toProviderNode(input)
     for (const component of node.components)
-      owners.set(component.name, [...(owners.get(component.name) ?? []), node.id])
+      declare(components, component.name, node)
+    for (const part of node.subcomponents?.keys() ?? [])
+      declare(parts, part, node)
   }
   const out: string[] = []
   for (const tag of tags) {
-    const providers = owners.get(tag)
-    if (providers?.length === 1)
-      out.push(`${providers[0]}:${tag}`)
+    const providers = components.get(tag) ?? parts.get(tag)
+    const owner = providers?.length === 1 ? ownerOf(providers[0]!, tag) : undefined
+    if (owner)
+      out.push(`${owner.providerId}:${owner.name}`)
   }
   return out
 }
 
 /**
  * Импорты `<pkg>/components/<Name>` → ключи селекции: только те, чей
- * провайдер есть в графе и объявляет компонент. Путь вида
- * `~/components/AppHeader` — алиас приложения, а `vuetify/components/VBtn` —
- * чужой пакет: в селекцию они не идут и сборку не роняют.
+ * провайдер есть в графе и объявляет компонент; подпуть части даёт владельца.
+ * Путь вида `~/components/AppHeader` — алиас приложения, а
+ * `vuetify/components/VBtn` — чужой пакет: в селекцию они не идут и сборку не
+ * роняют.
  */
-export function importSelection(
-  imports: readonly string[],
-  providers: readonly { readonly id: string, readonly components: readonly { readonly name: string }[] }[],
-): string[] {
+export function importSelection(imports: readonly string[], providers: readonly ProviderNode[]): string[] {
   if (imports.length === 0)
     return []
-  const known = new Set<string>()
-  for (const provider of providers) {
-    for (const component of provider.components)
-      known.add(`${provider.id}:${component.name}`)
+  const byId = new Map(providers.map(provider => [provider.id, provider]))
+  const out: string[] = []
+  for (const key of imports) {
+    const [providerId, name] = splitComponentKey(key)
+    const provider = byId.get(providerId)
+    const owner = provider ? ownerOf(provider, name) : undefined
+    if (owner)
+      out.push(`${providerId}:${owner.name}`)
   }
-  return imports.filter(key => known.has(key))
+  return sortedUnique(out)
 }
 
 export async function prepareApp(config: GranumConfig, root: string): Promise<PreparedApp> {

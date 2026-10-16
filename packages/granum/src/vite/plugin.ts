@@ -16,6 +16,7 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { ComponentOutsideSelectionError, ComponentRootImportError, PluginInstanceReusedError } from '../core/errors'
+import { ownerOf } from '../core/providerNode'
 import { emitCss, LAYER_NAMES, layerOrderDeclaration, wrapLayer } from '../node/emit'
 import { findPackageRootImports } from '../node/imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCss'
@@ -425,26 +426,37 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     .sort(([a, x], [b, y]) => (x.client !== y.client ? (x.client ? -1 : 1) : a < b ? -1 : a > b ? 1 : 0))
     .map(([, entry]) => entry.css)
 
-  /** id провайдера → имена его компонентов; одна карта на резолюцию. */
+  /**
+   * id провайдера → имена его компонентов и частей составных компонентов; одна
+   * карта на резолюцию. Часть из корня пакета тянет корень так же, как компонент.
+   */
   const componentNames = new WeakMap<PreparedApp['resolution'], ReadonlyMap<string, ReadonlySet<string>>>()
   const componentsByProvider = (app: PreparedApp): ReadonlyMap<string, ReadonlySet<string>> => {
     let map = componentNames.get(app.resolution)
     if (!map) {
-      map = new Map([...app.resolution.registry.providers].map(([id, provider]) => [id, new Set(provider.components.map(c => c.name))]))
+      map = new Map([...app.resolution.registry.providers].map(([id, provider]) => [
+        id,
+        new Set([...provider.components.map(c => c.name), ...(provider.subcomponents?.keys() ?? [])]),
+      ]))
       componentNames.set(app.resolution, map)
     }
     return map
   }
 
-  const providerKeyOf = (app: PreparedApp, source: string): string | undefined => {
+  /**
+   * Компонент подпути `<pkg>/components/<Name>`: ключ владельца и часть, если
+   * подпуть — её. Часть живёт в модуле владельца, и судится владелец.
+   */
+  const componentOfSubpath = (app: PreparedApp, source: string): { readonly key: string, readonly part?: string } | undefined => {
     const m = /^(@[^/]+\/[^/]+|[^./@][^/]*)\/components\/([^/?#]+)$/.exec(source)
     if (!m)
       return undefined
     const [, pkg, name] = m
     const provider = app.resolution.registry.providers.get(pkg!)
-    if (!provider || !provider.components.some(c => c.name === name))
+    const owner = provider ? ownerOf(provider, name!) : undefined
+    if (!owner)
       return undefined
-    return `${pkg}:${name}`
+    return owner.name === name ? { key: `${pkg}:${name}` } : { key: `${pkg}:${owner.name}`, part: name! }
   }
 
   return {
@@ -554,10 +566,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       if (guard === 'off' || !importer || importer.startsWith('\0') || importer.includes('/node_modules/'))
         return null
       const app = await prepare()
-      const key = providerKeyOf(app, source)
-      if (key === undefined || app.resolution.selection.order.includes(key as never))
+      const found = componentOfSubpath(app, source)
+      if (found === undefined || app.resolution.selection.order.includes(found.key as never))
         return null
-      const error = new ComponentOutsideSelectionError(key, relative(root, importer), app.resolution.selection.order)
+      // Импортёр SFC приходит с запросом блока (`App.vue?vue&type=script…`): называем файл.
+      const error = new ComponentOutsideSelectionError(found.key, relative(root, importer.replace(/[?#].*$/, '')), app.resolution.selection.order, found.part)
       if (guard === 'error')
         throw error
       log(`warning: ${error.message}`)
@@ -579,7 +592,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       const app = await prepare()
       const source = MARKUP_RE.test(path) ? scriptBlocksOf(code) : code
       for (const found of findPackageRootImports(source, componentsByProvider(app))) {
-        const error = new ComponentRootImportError(found.providerId, found.components, found.whole, relative(root, path))
+        const parts = app.resolution.registry.providers.get(found.providerId)?.subcomponents
+        const error = new ComponentRootImportError(found.providerId, found.components, found.whole, relative(root, path), found.components.filter(name => parts?.has(name)))
         if (guard === 'error')
           throw error
         log(`warning: ${error.message}`)

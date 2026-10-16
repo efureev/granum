@@ -106,6 +106,16 @@ describe('findUndeclaredEdges', () => {
     expect(findUndeclaredEdges('@x/heavy', declared, await analyzeBundle(bundle, declared, engine))).toEqual([])
   })
 
+  it('ребро на часть донора сводится к владельцу: объявленный владелец его покрывает', async () => {
+    const declared = [
+      descriptors[0]!,
+      defineGranumComponent(`${root}/XhCard/config.ts`, { name: 'XhCard', dependencies: ['@feugene/simple-package:XTest'] }),
+      descriptors[2]!,
+    ]
+    const owner = (key: string): string => (key === '@feugene/simple-package:XTest1' ? '@feugene/simple-package:XTest' : key)
+    expect(findUndeclaredEdges('@x/heavy', declared, await analyzeBundle(bundle, declared, engine), owner)).toEqual([])
+  })
+
   it('импорт общего модуля вне components/ ребром не считается', async () => {
     const analysis = await analyzeBundle(bundle, descriptors, engine)
     expect(analysis.components.get('XhPanel')!.edges).not.toContain('chunks/overlayZ-a.js')

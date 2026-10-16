@@ -7,9 +7,9 @@
 на теме-файле работают, корневой импорт компонента ловит `ComponentRootImportError`. На
 трёх приложениях granularity — витрине ядра, портале (Astro 7, статика) и стендах
 `@feugene/astro-granularity` (`static`, `ssr`, `hybrid`) — нашлись места, где granum 2.0.0
-ведёт себя не так, как обещает его собственная документация. Ниже их четыре, по двум темам:
+ведёт себя не так, как обещает его собственная документация. Ниже их два, по двум темам:
 
-- **части составных компонентов** (ТЗ-1, ТЗ-1б, ТЗ-2): у ядра granularity 22 таких части
+- **части составных компонентов** (ТЗ-2): у ядра granularity 22 таких части
   (`GrListItem`, `GrTabPanel`, `GrDropdownMenuItem`…); у каждой свой подпуть в `exports`,
   ведущий в модуль родителя, — его заводит сам `granum codegen --subcomponents`;
 - **проверка `unmatched`** (ТЗ-5): ложные находки «класс без правила». Пока они
@@ -43,16 +43,12 @@ yarn workspace @granum-apps/tz-granularity repro
 Вывод на текущем коде (строки «ждём» опущены):
 
 ```
-✗ воспроизводится  ТЗ-1: подпуть части проходит мимо guard
-  сейчас: components/XcListItem при селекции [XcButton]: сборка прошла, CSS XcList нет; components/XcList — ComponentOutsideSelectionError; с XcList в селекции CSS есть
-✗ воспроизводится  ТЗ-1б: селекция из импортов не видит части
-  сейчас: components: 'imports', импорт components/XcListItem: селекция [], CSS XcList нет
 ✗ воспроизводится  ТЗ-2: granumResolver не резолвит части
   сейчас: XcList → @granum-fixtures/composite/components/XcList; XcListItem → undefined
 ✗ воспроизводится  ТЗ-5: CSS приложения через ?raw не виден проверке unmatched
   сейчас: unmatched: ["raw-note"] — правило .raw-note в src/raw.css, на страницу едет строкой
 
-4 из 4 воспроизводятся.
+2 из 2 воспроизводятся.
 ```
 
 **Общий критерий готовности:** `repro:expect` зелёный, у каждого исправления есть свой
@@ -62,66 +58,10 @@ yarn workspace @granum-apps/tz-granularity repro
 
 | ID | Что | Класс | Чем бьёт по granularity |
 |---|---|---|---|
-| ТЗ-1 | подпуть части проходит мимо guard | тихо неверный результат | селекция без `GrList` собирается без его CSS — список приезжает голым |
-| ТЗ-1б | селекция из импортов не видит части | тихо неверный результат | в `components: 'imports'` то же самое, только без всякого предупреждения |
 | ТЗ-2 | `granumResolver` не знает частей | дыра в возможности | авто-импорт `<GrListItem>` через granum не работает; granularity держит свой резолвер |
 | ТЗ-5 | CSS приложения строкой (`?raw`) не виден | вопрос | на портале 215 ложных находок из 267 |
 
 ---
-
-## ТЗ-1. Подпуть части проходит мимо guard
-
-**Документация** (`usage-in-apps.md`, `js.guard`): «импорт компонента вне селекции: ошибка».
-
-**Пример.** Селекция `[XcButton]`, приложение импортирует часть:
-
-```ts
-import { XcListItem } from '@granum-fixtures/composite/components/XcListItem'
-```
-
-Сборка проходит. `XcListItem` — модуль `XcList`, но `XcList` в селекции нет, и его CSS
-(`.xc-list`, утилита `divide-y`) в сборку не попадает. Тот же импорт через
-`components/XcList` даёт `ComponentOutsideSelectionError`. С `XcList` в селекции CSS на месте.
-
-**Причина.** `vite/plugin.ts`, `providerKeyOf`: спецификатор `<pkg>/components/<Name>`
-принимается, только если `<Name>` есть в `provider.components`. Частей там нет, функция
-возвращает `undefined`, и `resolveId` не проверяет импорт вовсе. Карту «часть → владелец»
-granum строит (`codegen/subcomponents.ts`, `collectGranumSubcomponents`), но кладёт её только в
-алиасы `package.json#exports` (`codegen/targets.ts`). В манифест она не попадает, и сборка
-приложения о частях не знает.
-
-**Что хотим увидеть.**
-
-- Импорт `components/XcListItem` при селекции без `XcList` — `ComponentOutsideSelectionError`
-  на `XcList`. В тексте ошибки названы и часть, и владелец, например:
-  `Component '@granum-fixtures/composite:XcList' is imported from 'src/main.ts' through its part 'XcListItem', but is not part of the granum selection […]`.
-- Владельца можно определить без правки контракта: подпуть части разрешается через
-  `exports` провайдера в тот же файл, что `entry` владельца в манифесте
-  (`components/XcList/index.js`). Если granum предпочтёт явное поле манифеста
-  (`subcomponents: { XcListItem: 'XcList' }`), granularity пересоберёт провайдеры. Выбор за
-  granum, важен результат.
-- Тест на `providerKeyOf` или его замену с подпутём части.
-- Абзац в `usage-in-apps.md` (en/ru) о частях: guard сводит их к владельцу.
-
-**Как поступит granularity.** Ничего не меняет у себя. Импорты частей у ядра уже ведут в
-подпуть родителя — ровно потому, что guard их не видит; после исправления это станет
-необязательным.
-
-**Если чинить не будете:** записать в `usage-in-apps.md`, что подпуть части guard не
-проверяет и части нужно импортировать из подпути владельца.
-
-## ТЗ-1б. Селекция из импортов не видит части
-
-**Пример.** `components: 'imports'`, приложение импортирует только
-`components/XcListItem`. Селекция пустая, CSS `XcList` нет. Импорт `components/XcList` даёт
-селекцию `[XcList]` и CSS.
-
-**Причина** та же, что у ТЗ-1. `node/appSources.ts` честно находит импорт
-`@granum-fixtures/composite:XcListItem` (`COMPONENT_IMPORT_RE`), но сверка с графом его
-отбрасывает: такого компонента нет.
-
-**Что хотим увидеть:** импорт части добавляет в селекцию владельца — то же правило
-сведения, что в ТЗ-1, в одном месте для guard, селекции и резолвера.
 
 ## ТЗ-2. `granumResolver` не резолвит части составных компонентов
 
@@ -137,7 +77,7 @@ granum строит (`codegen/subcomponents.ts`, `collectGranumSubcomponents`), 
 **Что хотим увидеть.**
 
 - `resolve('XcListItem')` → `{ name: 'XcListItem', from: '@granum-fixtures/composite/components/XcListItem' }`.
-  Подпуть части годится как есть: guard и селекция сводят его к владельцу (ТЗ-1, ТЗ-1б).
+  Подпуть части годится как есть: guard и селекция сводят его к владельцу.
 - Части есть в `names()`.
 - Правило неоднозначности распространяется и на них: часть с тем же именем у двух
   провайдеров не резолвится.

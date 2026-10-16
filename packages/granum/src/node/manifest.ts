@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
+import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION, isValidComponentName } from '../contract'
 import { InvalidManifestError, ManifestNotFoundError, UnsupportedContractVersionError, UnsupportedManifestVersionError } from '../core/errors'
 import { isDialect } from '../engine/dialect'
 
@@ -118,6 +118,9 @@ export function parseManifest(text: string, baseUrl: string, file?: string): Gra
     if (component.entry !== entry)
       throw new InvalidManifestError('entry-layout', `expected '${entry}', got '${component.entry}'`, `components.${name}.entry`, file)
   }
+
+  // После хеша, как раскладка entry: такое мог записать только писатель с ошибкой.
+  validateSubcomponents(manifest, file)
 
   validateTokenKeys(manifest.theme.tokenDefinitions, 'theme.tokenDefinitions', file)
   for (const [name, component] of Object.entries(manifest.components))
@@ -284,6 +287,12 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
     expectStringArray(tokens.consumes, `${p}.tokens.consumes`, file)
     expectStringArray(tokens.dynamic, `${p}.tokens.dynamic`, file)
     expectString(c.hash, `${p}.hash`, file)
+    if (c.subcomponents !== undefined) {
+      for (const [i, part] of expectStringArray(c.subcomponents, `${p}.subcomponents`, file).entries()) {
+        if (!isValidComponentName(part))
+          throw schema(`${p}.subcomponents.${i}`, `'${part}' is not a valid component name`, file)
+      }
+    }
   }
 
   return {
@@ -418,6 +427,23 @@ function validatePaths(manifest: GranumManifest, file?: string): void {
     check(component.entry, `components.${name}.entry`)
     component.files.forEach((p, i) => check(p, `components.${name}.files.${i}`))
     component.css.forEach((p, i) => check(p, `components.${name}.css.${i}`))
+  }
+}
+
+/** Часть — подпуть без собственного компонента, и владелец у неё один. */
+function validateSubcomponents(manifest: GranumManifest, file?: string): void {
+  const owners = new Map<string, string>()
+  for (const [name, component] of Object.entries(manifest.components)) {
+    for (const part of component.subcomponents ?? []) {
+      if (Object.hasOwn(manifest.components, part))
+        throw schema(`components.${name}.subcomponents`, `'${part}' is a component of its own, not a part of '${name}'`, file)
+      const other = owners.get(part)
+      if (other === name)
+        throw schema(`components.${name}.subcomponents`, `'${part}' is listed twice`, file)
+      if (other !== undefined)
+        throw schema(`components.${name}.subcomponents`, `'${part}' is listed as a part of both '${other}' and '${name}'`, file)
+      owners.set(part, name)
+    }
   }
 }
 

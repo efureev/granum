@@ -3,6 +3,7 @@ import type { ProviderNode } from './providerNode'
 import type { ComponentKey, ComponentRegistry, RegistryEntry } from './registry'
 import { sortedUnique } from './dedupe'
 import { CircularDependencyError, ComponentNotFoundError, InvalidComponentKeyError, ProviderNotRegisteredError } from './errors'
+import { ownerOf } from './providerNode'
 import { splitComponentKey, toComponentKey } from './registry'
 
 /**
@@ -119,7 +120,9 @@ export function resolveSelection(
       if (!registry.providers.has(providerId))
         throw new ProviderNotRegisteredError(providerId, referencedBy)
       const available = registry.getComponentsOfProvider(providerId).map(c => c.name)
-      throw new ComponentNotFoundError(providerId, componentName, available, referencedBy)
+      // Ключ части — не опечатка: компонент у неё есть, это её владелец.
+      const owner = ownerOf(registry.providers.get(providerId)!, componentName)
+      throw new ComponentNotFoundError(providerId, componentName, available, referencedBy, owner?.name)
     }
 
     resolving.add(key)

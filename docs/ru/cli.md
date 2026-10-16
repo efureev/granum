@@ -253,9 +253,10 @@ granum codegen --targets=barrel,exports --prefix=Xh
 `no-components-with-prefix` и ничего не пишет: опечатка в префиксе иначе
 вычистила бы все реестры. `--components-dir`, `--barrel`,
 `--registry` переопределяют пути; `--subcomponents` добавляет алиасы
-`exports` на части составных компонентов; `--exports=import` пишет строковые
-subpath без `types` (пакет без деклараций). Нестандартные цели (`markedBlock`)
-— через программный API `@feugene/granum/codegen`.
+`exports` на части составных компонентов — сборка провайдера записывает их в
+манифест владельца, и приложение судит по части владельца; `--exports=import`
+пишет строковые subpath без `types` (пакет без деклараций). Нестандартные цели
+(`markedBlock`) — через программный API `@feugene/granum/codegen`.
 
 ## Программный доступ
 

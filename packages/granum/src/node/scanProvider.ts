@@ -20,6 +20,7 @@ import { scanCssDeclarations } from './cssDeclarations'
 import { objectRulesAllowed } from './dialects'
 import { collectImportSpecifiers } from './imports'
 import { computeManifestHash } from './manifest'
+import { subcomponentsFromExports } from './subcomponents'
 import { extractRequiredTokenUses, scanTokenConsumption } from './tokenScan'
 
 export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
@@ -110,6 +111,35 @@ function dependencyKeys(descriptor: GranumComponentDescriptor, providerId: strin
 }
 
 /**
+ * Части составных компонентов — как их записала бы сборка провайдера: по
+ * `exports` пакета, в котором лежит раскладка. Берётся ближайший вверх от `dist`
+ * `package.json`, и только если это пакет самого провайдера: иначе он чужой
+ * (корень монорепо, приложение), и частей нет.
+ */
+function packageSubcomponents(distDir: string, provider: GranumProvider): Readonly<Record<string, readonly string[]>> {
+  for (let dir = distDir; ; dir = dirname(dir)) {
+    const file = join(dir, 'package.json')
+    if (existsSync(file)) {
+      let pkg: { name?: unknown, exports?: unknown }
+      try {
+        pkg = JSON.parse(readFileSync(file, 'utf8')) as typeof pkg
+      }
+      catch {
+        return {}
+      }
+      if (pkg.name !== provider.id)
+        return {}
+      return subcomponentsFromExports(pkg.exports, provider.components.map(component => ({
+        name: component.name,
+        entries: [posix(relative(dir, join(distDir, 'components', component.name, 'index.js')))],
+      }))).byOwner
+    }
+    if (dirname(dir) === dir)
+      return {}
+  }
+}
+
+/**
  * Синтетический манифест по `dist` объектного провайдера. `undefined`, если
  * `baseUrl` не указывает на существующий каталог — тогда остаётся объектная
  * форма с предупреждением `provider-without-manifest`.
@@ -191,6 +221,12 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       },
       hash: `sha256-${digest.digest('hex')}`,
     }
+  }
+
+  for (const [owner, parts] of Object.entries(packageSubcomponents(distDir, provider))) {
+    const record = components[owner]
+    if (record)
+      components[owner] = { ...record, subcomponents: parts }
   }
 
   const theme = provider.theme

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { InvalidManifestError, ManifestNotFoundError, UnsupportedContractVersionError, UnsupportedManifestVersionError } from '../core/errors'
+import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import {
   canonicalizeManifest,
@@ -236,6 +237,17 @@ describe('parseManifest — порядок проверок', () => {
       expect((e as InvalidManifestError).reason).toBe('hash-mismatch')
       expect((e as Error).message).toContain('rebuild the provider')
     }
+  })
+
+  it('части составного компонента: поле читается в узел; плохое — InvalidManifestError', () => {
+    const withParts = (parts: Record<string, unknown>): string => serializeManifest(draft({
+      components: Object.fromEntries(Object.entries(draft().components).map(([name, c]) => [name, parts[name] === undefined ? c : { ...c, subcomponents: parts[name] }])) as Draft['components'],
+    }))
+    const node = toProviderNode(parseManifest(withParts({ XhPanel: ['XhPanelItem'] }), BASE))
+    expect(node.subcomponents?.get('XhPanelItem')).toBe('XhPanel')
+    for (const bad of [{ XhPanel: 'XhPanelItem' }, { XhPanel: [42] }, { XhPanel: ['xh panel item'] }, { XhPanel: ['XhCard'] }, { XhPanel: ['Item'], XhCard: ['Item'] }])
+      expect(() => parseManifest(withParts(bad), BASE)).toThrow(InvalidManifestError)
+    expect(() => parseManifest(withParts({ XhPanel: ['Item', 'Item'] }), BASE)).toThrow(/'Item' is listed twice/)
   })
 
   it('6–7: раскладка entry и ключи токенов', () => {

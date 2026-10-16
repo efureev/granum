@@ -103,6 +103,17 @@ describe('resolveSelection', () => {
     }
   })
 
+  it('ключ части составного компонента — ошибка с подсказкой про владельца', () => {
+    const list = makeManifest('@x/list', { XList: { subcomponents: ['XListItem'] } })
+    expect(() => resolveSelection(reg(list), ['@x/list:XListItem'])).toThrow(/'XListItem' is a part of '@x\/list:XList'/)
+    try {
+      resolveSelection(reg(list), ['@x/list:XListItem'])
+    }
+    catch (e) {
+      expect(e).toMatchObject({ componentName: 'XListItem', partOf: 'XList' })
+    }
+  })
+
   it('детектит циклы с цепочкой', () => {
     const cyclic = makeProvider('c', { components: [{ name: 'A', dependencies: ['B'] }, { name: 'B', dependencies: ['A'] }] })
     try {
