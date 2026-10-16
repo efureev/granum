@@ -320,7 +320,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         return
 
       const pkgPath = join(root, 'package.json')
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: Record<string, unknown>, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string, exports?: unknown, dependencies?: Record<string, string>, peerDependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
       // Части составных компонентов: подпути `exports`, что ведут в entry
       // компонента под чужим именем. Нужны и графу ниже, и манифесту; от
       // `exportsCheck` не зависят — это не проверка, а сведения для приложения.
@@ -564,7 +564,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       // 5. exports пакета.
       if ((options.exportsCheck ?? 'error') !== 'off') {
         const required = [`./${manifestFile}`, ...provider.components.map(c => `./components/${c.name}`)]
-        const missing = required.filter(key => !(pkg.exports && key in pkg.exports))
+        // `exports` строкой или массивом — один корневой subpath, подпутей в нём нет.
+        const subpaths = typeof pkg.exports === 'object' && pkg.exports !== null && !Array.isArray(pkg.exports) ? pkg.exports : {}
+        const missing = required.filter(key => !(key in subpaths))
         if (missing.length > 0) {
           const error = new PackageExportsError(provider.id, missing)
           if (options.exportsCheck === 'warn')

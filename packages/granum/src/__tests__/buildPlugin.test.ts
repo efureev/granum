@@ -297,6 +297,13 @@ describe('granumProvider с настоящим Vite', () => {
     expect(logs.some(l => l.includes('Panel → @t/kit:Card'))).toBe(true)
   })
 
+  /** `exports` строкой — один корневой subpath: ни манифеста, ни компонентов в нём нет. */
+  it('exports строкой — PackageExportsError, а не TypeError', async () => {
+    await expect(run(makeFixture({ packageJson: { exports: './dist/index.js' } }))).rejects.toBeInstanceOf(PackageExportsError)
+    const { logs } = await run(makeFixture({ packageJson: { exports: './dist/index.js' } }), { exportsCheck: 'warn' })
+    expect(logs.some(l => l.startsWith('warning:') && l.includes('granum.manifest.json'))).toBe(true)
+  })
+
   it('exports без манифеста и subpath — PackageExportsError; exportsCheck: warn пропускает', async () => {
     await expect(run(makeFixture({ exportsOk: false }))).rejects.toBeInstanceOf(PackageExportsError)
     const { logs } = await run(makeFixture({ exportsOk: false }), { exportsCheck: 'warn' })
