@@ -1,124 +1,272 @@
-# ТЗ от granularity: переезд на granum 2.0 (2026-10-15)
+# ТЗ от granularity: части составных компонентов и проверка `unmatched` (granum 2.0.0)
 
-Ядро granularity и семь спутников переехали на granum 2.0.0 (ядро 1.1.0). Переезд
-прошёл: `dist` провайдеров больше не тянет granum, рецепты `tokenOverrides` и
-`define` на теме-файле работают, корневой импорт компонента ловит guard. Ниже —
-четыре места, где granum 2.0 ведёт себя не так, как обещает его же документация.
-granularity их не обходит и ждёт ответа: «чиним» или «правильно вот так».
+## Контекст
 
-Скрипты в `repro/` запускаются из корня монорепо granularity (там стоят granum
-2.0.0, движок и собранное ядро) — см. шапку каждого раздела.
+Ядро granularity и семь его спутников переехали на granum 2.0.0 (ядро 1.1.0, 2026-10-16).
+Переезд прошёл: `dist` провайдеров больше не тянет granum, рецепты `tokenOverrides` и `define`
+на теме-файле работают, корневой импорт компонента ловит `ComponentRootImportError`. На
+трёх приложениях granularity — витрине ядра, портале (Astro 7, статика) и стендах
+`@feugene/astro-granularity` (`static`, `ssr`, `hybrid`) — нашлись места, где granum 2.0.0
+ведёт себя не так, как обещает его собственная документация. Ниже их шесть, по двум темам:
 
-## ТЗ-1. Часть составного компонента проходит мимо guard
+- **части составных компонентов** (ТЗ-1, ТЗ-1б, ТЗ-2): у ядра granularity 22 таких части
+  (`GrListItem`, `GrTabPanel`, `GrDropdownMenuItem`…); у каждой свой подпуть в `exports`,
+  ведущий в модуль родителя, — его заводит сам `granum codegen --subcomponents`;
+- **проверка `unmatched`** (ТЗ-3, ТЗ-4, ТЗ-5): ложные находки «класс без правила». Пока они
+  есть, `granum report --strict` и `granum audit --strict` в CI включить нельзя, а настоящие
+  находки тонут среди ложных: на портале их 267, из них 52 настоящих.
 
-**Класс: тихо неверный результат.** Компонент, которого нет в селекции, импортом
-части проходит в сборку без своего CSS.
+granularity эти места не обходит и ждёт по каждому пункту одного из двух ответов:
+исправление в 2.0.x или запись ограничения в документации вместе со способом жить с ним.
+Чего ждём по каждому пункту, записано в разделе «Что хотим увидеть».
 
-- **Документация** (`usage-in-apps.md`, `js.guard`): «импорт компонента вне
-  селекции: ошибка». Guard в `resolveId` должен поймать любой подпуть компонента
-  провайдера, которого нет в селекции.
-- **Код:** `vite/plugin.ts` → `providerKeyOf` узнаёт компонент по
-  `provider.components`, а там только компоненты реестра. Части составных
-  компонентов ядра (`GrListItem`, `GrTabPanel`, `GrDropdownMenuItem` — 22 штуки)
-  в реестре не числятся, но у каждой есть свой подпуть в `exports`, ведущий в
-  модуль родителя: `./components/GrListItem` → `dist/components/GrList/index.js`.
-  Для такого спецификатора `providerKeyOf` отдаёт `undefined`, и guard молчит.
-- **Воспроизведение** (`repro/guard-subcomponent.mjs`): приложение с селекцией
-  `[GrButton]` импортирует `GrListItem` из `@feugene/granularity/components/GrListItem`
-  — сборка проходит, `GrList` в селекцию не попал, его CSS нет; тот же импорт из
-  `components/GrList` — `ComponentOutsideSelectionError`.
+## Как воспроизвести
 
-  ```
-  components/GrListItem: сборка прошла
-  components/GrList: ComponentOutsideSelectionError: Component '@feugene/granularity:GrList' is imported …
-  ```
+Все пункты воспроизводятся в этом репозитории на фикстурах granum, без пакетов granularity:
 
-- **Вопрос.** Знать части составных компонентов: манифест несёт карту «подпуть →
-  компонент-владелец» (её уже строит `collectGranumSubcomponents` в `./codegen`), или
-  guard сводит подпуть к владельцу по `exports` пакета. Либо записать, что подпуть
-  части guard не проверяет, и импортировать части только из подпути родителя.
-- **Готово, когда:** импорт `components/GrListItem` при селекции без `GrList` —
-  та же ошибка, что и `components/GrList`; либо ограничение записано в
-  `usage-in-apps.md` рядом с описанием guard.
+```bash
+yarn build
+yarn workspace @granum-fixtures/composite build
+yarn workspace @granum-apps/tz-granularity repro
+```
+
+- [`fixtures/composite-package`](../../fixtures/composite-package) — провайдер
+  `@granum-fixtures/composite` с составным `XcList`, его частью `XcListItem` и простым
+  `XcButton`. `exports` порождены `granum codegen --subcomponents`, поэтому
+  `./components/XcListItem` ведёт в `dist/components/XcList/index.js` — так же, как у ядра
+  granularity. Это первая фикстура с подпутями частей: у `XNested` фикстуры `simple` части
+  есть, но без подпутей.
+- [`apps/tz-granularity`](../../apps/tz-granularity) — стенд со случаями. `repro` печатает
+  «сейчас / ждём» по каждому пункту, `repro:expect` завершается кодом 1, пока хоть один пункт
+  воспроизводится. `build` и `verify` у стенда нет, и CI его пропускает.
+
+Вывод на `2.0.0` (`afe2c9a`):
+
+```
+✗ воспроизводится  ТЗ-1: подпуть части проходит мимо guard
+  сейчас: components/XcListItem при селекции [XcButton]: сборка прошла, CSS XcList нет; components/XcList — ComponentOutsideSelectionError; с XcList в селекции CSS есть
+✗ воспроизводится  ТЗ-1б: селекция из импортов не видит части
+  сейчас: components: 'imports', импорт components/XcListItem: селекция [], CSS XcList нет
+✗ воспроизводится  ТЗ-2: granumResolver не резолвит части
+  сейчас: XcList → @granum-fixtures/composite/components/XcList; XcListItem → undefined
+✗ воспроизводится  ТЗ-3: регэксп /class="…/ в .ts — ложный unmatched
+  сейчас: unmatched из src/markup-check.ts: ["&&","leading-6/.test(source)","source.includes('tabindex="]
+✗ воспроизводится  ТЗ-4: отчёт строится по CSS первого собранного окружения
+  сейчас: отчёт в dist/client; unmatched: ["app-note"] — правило .app-note лежит в src/app.css окружения client
+✗ воспроизводится  ТЗ-5: CSS приложения через ?raw не виден проверке unmatched
+  сейчас: unmatched: ["raw-note"] — правило .raw-note в src/raw.css, на страницу едет строкой
+
+6 из 6 воспроизводятся.
+```
+
+**Общий критерий готовности:** `repro:expect` зелёный, у каждого исправления есть свой
+тест в `packages/granum`, а `repro:expect` становится `verify` стенда.
+
+## Сводка
+
+| ID | Что | Класс | Чем бьёт по granularity |
+|---|---|---|---|
+| ТЗ-1 | подпуть части проходит мимо guard | тихо неверный результат | селекция без `GrList` собирается без его CSS — список приезжает голым |
+| ТЗ-1б | селекция из импортов не видит части | тихо неверный результат | в `components: 'imports'` то же самое, только без всякого предупреждения |
+| ТЗ-2 | `granumResolver` не знает частей | дыра в возможности | авто-импорт `<GrListItem>` через granum не работает; granularity держит свой резолвер |
+| ТЗ-3 | регэксп и код в `.ts` читаются как атрибут `class` | ложная находка | на витрине ядра `2 without a rule` от одного тестового файла |
+| ТЗ-4 | отчёт строится по CSS первого окружения | ложная находка | Astro с `output: 'server'`: каждый класс страницы — «без правила» |
+| ТЗ-5 | CSS приложения строкой (`?raw`) не виден | вопрос | на портале 215 ложных находок из 267 |
+
+---
+
+## ТЗ-1. Подпуть части проходит мимо guard
+
+**Документация** (`usage-in-apps.md`, `js.guard`): «импорт компонента вне селекции: ошибка».
+
+**Пример.** Селекция `[XcButton]`, приложение импортирует часть:
+
+```ts
+import { XcListItem } from '@granum-fixtures/composite/components/XcListItem'
+```
+
+Сборка проходит. `XcListItem` — модуль `XcList`, но `XcList` в селекции нет, и его CSS
+(`.xc-list`, утилита `divide-y`) в сборку не попадает. Тот же импорт через
+`components/XcList` даёт `ComponentOutsideSelectionError`. С `XcList` в селекции CSS на месте.
+
+**Причина.** `vite/plugin.ts`, `providerKeyOf`: спецификатор `<pkg>/components/<Name>`
+принимается, только если `<Name>` есть в `provider.components`. Частей там нет, функция
+возвращает `undefined`, и `resolveId` не проверяет импорт вовсе. Карту «часть → владелец»
+granum строит (`codegen/subcomponents.ts`, `collectGranumSubcomponents`), но кладёт её только в
+алиасы `package.json#exports` (`codegen/targets.ts`). В манифест она не попадает, и сборка
+приложения о частях не знает.
+
+**Что хотим увидеть.**
+
+- Импорт `components/XcListItem` при селекции без `XcList` — `ComponentOutsideSelectionError`
+  на `XcList`. В тексте ошибки названы и часть, и владелец, например:
+  `Component '@granum-fixtures/composite:XcList' is imported from 'src/main.ts' through its part 'XcListItem', but is not part of the granum selection […]`.
+- Владельца можно определить без правки контракта: подпуть части разрешается через
+  `exports` провайдера в тот же файл, что `entry` владельца в манифесте
+  (`components/XcList/index.js`). Если granum предпочтёт явное поле манифеста
+  (`subcomponents: { XcListItem: 'XcList' }`), granularity пересоберёт провайдеры. Выбор за
+  granum, важен результат.
+- Тест на `providerKeyOf` или его замену с подпутём части.
+- Абзац в `usage-in-apps.md` (en/ru) о частях: guard сводит их к владельцу.
+
+**Как поступит granularity.** Ничего не меняет у себя. Импорты частей у ядра уже ведут в
+подпуть родителя — ровно потому, что guard их не видит; после исправления это станет
+необязательным.
+
+**Если чинить не будете:** записать в `usage-in-apps.md`, что подпуть части guard не
+проверяет и части нужно импортировать из подпути владельца.
+
+## ТЗ-1б. Селекция из импортов не видит части
+
+**Пример.** `components: 'imports'`, приложение импортирует только
+`components/XcListItem`. Селекция пустая, CSS `XcList` нет. Импорт `components/XcList` даёт
+селекцию `[XcList]` и CSS.
+
+**Причина** та же, что у ТЗ-1. `node/appSources.ts` честно находит импорт
+`@granum-fixtures/composite:XcListItem` (`COMPONENT_IMPORT_RE`), но сверка с графом его
+отбрасывает: такого компонента нет.
+
+**Что хотим увидеть:** импорт части добавляет в селекцию владельца — то же правило
+сведения, что в ТЗ-1, в одном месте для guard, селекции и резолвера.
 
 ## ТЗ-2. `granumResolver` не резолвит части составных компонентов
 
-**Класс: дыра в документированной возможности.** `<GrListItem>` в шаблоне через
-резолвер granum не импортируется.
+**Документация** (`usage-in-apps.md`, «Auto-import»): «по имени компонента он отдаёт subpath
+провайдера».
 
-- **Документация** (`usage-in-apps.md`, «Auto-import»): «по имени компонента он
-  отдаёт subpath провайдера».
-- **Код:** `vite/resolver.ts` → `buildComponentIndex` строит индекс по
-  `registry.components` — та же причина, что в ТЗ-1: частей там нет.
-- **Воспроизведение** (`repro/resolver-subcomponents.mjs <каталог приложения>`):
+**Пример:** `resolve('XcList')` → `@granum-fixtures/composite/components/XcList`,
+`resolve('XcListItem')` → `undefined`. В шаблоне `<XcListItem>` не импортируется.
 
-  ```
-  GrList               {"name":"GrList","from":"@feugene/granularity/components/GrList"}
-  GrListItem           undefined
-  GrTabPanel           undefined
-  GrDropdownMenuItem   undefined
-  ```
+**Причина.** `vite/resolver.ts`, `buildComponentIndex` строит индекс по
+`registry.components` — частей там нет.
 
-- **Как сделал granularity.** Его резолвер (`@feugene/unplugin-granularity` 1.1.0)
-  строит индекс по `exports` установленных пакетов и ведёт часть в подпуть
-  родителя (`GrListItem` → `components/GrList`): так импорт виден селекции. Это
-  решение пакета, а не granum; если granum научится частям (ТЗ-1), резолвер
-  granularity сможет опереться на `granumResolver`.
-- **Готово, когда:** `granumResolver` резолвит части составных компонентов в подпуть,
-  который видит селекция, — или документация называет ограничение.
+**Что хотим увидеть.**
 
-## ТЗ-3. Регэксп в коде приложения читается как атрибут `class`
+- `resolve('XcListItem')` → `{ name: 'XcListItem', from: '@granum-fixtures/composite/components/XcListItem' }`.
+  Подпуть части годится как есть: guard и селекция сводят его к владельцу (ТЗ-1, ТЗ-1б).
+- Части есть в `names()`.
+- Правило неоднозначности распространяется и на них: часть с тем же именем у двух
+  провайдеров не резолвится.
 
-**Класс: ложная находка.** `granum report --strict` и `granum audit --strict` падают
-на «классах», которых в разметке нет.
+**Как поступит granularity.** `@feugene/unplugin-granularity` 1.1.0 сейчас строит свой индекс по
+`exports` установленных пакетов и ведёт часть в подпуть родителя. После исправления он
+сможет опереться на `granumResolver`.
 
-- **Документация** (CHANGELOG 2.0.0, «Класс разметки приложения без правила виден в
-  `unmatched`»): берётся «класс из атрибута разметки (`class`, `className`,
-  строковые литералы `:class`)»; «слова исходников в целом классами не считаются».
-- **Код:** `node/appSources.ts` → `collectClassAttributes` ищет `STATIC_CLASS_RE`
-  по всему тексту файла после `stripComments`. В `.ts` под него попадает регэксп
-  `/class="max-w-full px-4 leading-6/`, и значение «атрибута» тянется до следующей
-  двойной кавычки — через код.
-- **Воспроизведение** (`repro/regex-class-attribute.mjs` + `repro/markup-check.ts`
-  в `src/` приложения без своих классов):
+## ТЗ-3. Регэксп и код в `.ts` читаются как атрибут `class`
 
-  ```json
-  [
-    { "className": "&&", "sources": ["src/markup-check.ts"] },
-    { "className": "leading-6/.test(source)", "sources": ["src/markup-check.ts"] },
-    { "className": "source.includes('tabindex=", "sources": ["src/markup-check.ts"] }
-  ]
-  ```
+**Документация** (CHANGELOG 2.0.0, «Класс разметки приложения без правила виден в
+`unmatched`»): берётся «класс из атрибута разметки (`class`, `className`, строковые литералы
+`:class`)»; «слова исходников в целом классами не считаются».
 
-  На витрине granularity то же даёт `src/pages/__tests__/showcasePagesSmoke.test.ts`:
-  `2 without a rule` в строке сборки, без этого файла — `0`.
-- **Вопрос.** Атрибуты разметки искать только в разметке: в `<template>` SFC, в
-  HTML и в JSX-атрибутах; в JS/TS — по лексемам, как ищутся импорты (регэксп, шаблон
-  и код — не атрибут). Либо исключить из скана тесты и записать это в описании
-  `appSources`.
-- **Готово, когда:** регэксп, строка и код в `.ts` не дают находок `unmatched`;
-  тест на `collectClassAttributes` с регэкспом `/class="…/`.
+**Пример** — модуль без единого класса разметки:
 
-## ТЗ-4. В Astro-приложении стили страниц не видны проверке `unmatched`
+```ts
+export function check(source: string): boolean {
+  return /class="max-w-full px-4 leading-6/.test(source) && source.includes('tabindex="0"')
+}
+```
 
-**Класс: ложная находка.** Та же проверка, что в ТЗ-3, на хосте Astro числит «без правила»
-классы, у которых правило есть.
+даёт в `unmatched` `&&`, `leading-6/.test(source)` и `source.includes('tabindex=`. На витрине
+ядра granularity так же срабатывает `src/pages/__tests__/showcasePagesSmoke.test.ts`:
+`2 without a rule` в строке сборки, без этого файла — 0.
 
-- **Документация** (CHANGELOG 2.0.0): в `unmatched` идёт класс из атрибута разметки, «которого
-  нет ни у движка, ни в CSS собранного бандла».
-- **Факт.** Astro по умолчанию встраивает CSS страниц и компонентов в `<style>` прямо в HTML
-  (`build.inlineStylesheets: 'auto'`). Проверка видит только CSS-файлы бандла. Портал
-  granularity (Astro 7, `@feugene/astro-granularity`, `appSources: { dirs: ['src'] }`) на
-  ядре 1.1.0 и granum 2.0.0 пишет в строке сборки `266 without a rule`: 211 классов из
-  `.astro` и 57 из `.vue` — собственные BEM-классы сайта (`catalogue__count`,
-  `component__a11yCard`), у которых правило лежит во встроенном `<style>` страницы
-  (`dist/components/affix.html`: `.component__a11yCard {`). В CSS-файлах `dist` из них
-  нашлось 7. Стенды `@feugene/astro-granularity` на тех же версиях: `ssr` — 4 находки
-  (`skip-link`, `prose`, `theme-icon-dark`, `theme-icon-light` из `<style>` в `.astro`),
-  `static` и `hybrid` — 0: там те же стили уезжают CSS-файлом.
-- **Вопрос.** Учитывать встроенные стили страниц (Astro, SSG-хосты), дать приложению способ
-  объявить «эти классы стилизует мой CSS» — или записать, что на таких хостах проверка
-  `unmatched` для классов разметки не годится, и как её выключить.
-- **Готово, когда:** сборка портала не числит классы со встроенными правилами в
-  `unmatched`, либо документация называет ограничение и способ его обойти.
+**Причина.** `node/appSources.ts`, `collectClassAttributes`: `STATIC_CLASS_RE` ищется по всему
+тексту файла после `stripComments`, в любом расширении. В `.ts` регулярка находит `class="`
+внутри регэксп-литерала, и значение «атрибута» тянется до следующей двойной кавычки — через
+код.
 
+**Что хотим увидеть.**
+
+- В JS/TS атрибут ищется только внутри строковых литералов и статических частей шаблонных
+  строк и не выходит за границу литерала. Обход по лексемам у granum уже есть: `scanScript` из
+  `engine/extract` различает строки, шаблоны и регэксп-литералы.
+- HTML в строке остаётся находкой, это настоящая разметка: `'<p class="a b">'` даёт `a` и `b`.
+- В SFC (`<template>`), HTML и JSX (`className`) поведение не меняется.
+- Тест на `collectClassAttributes`: регэксп-литерал — ничего; строка с HTML — классы;
+  значение не пересекает границу литерала.
+
+**Если чинить не будете:** записать в описании `appSources`, что атрибуты ищутся по тексту
+файла целиком, и как исключить тесты из скана.
+
+## ТЗ-4. Отчёт строится по CSS первого собранного окружения
+
+**Документация** (CHANGELOG 2.0.0): в `unmatched` идёт класс из атрибута разметки, «которого
+нет ни у движка, ни в CSS собранного бандла».
+
+**Пример.** Builder Vite с двумя окружениями — как у Astro с `output: 'server'`:
+
+```js
+environments: {
+  server: { consumer: 'server', build: { outDir: 'dist/server', ssr: 'src/server.ts' } },  // без CSS
+  client: { consumer: 'client', build: { outDir: 'dist/client' } },                        // index.html + src/app.css
+}
+```
+
+В `unmatched` попадает `app-note`, хотя правило `.app-note` лежит в `src/app.css` и уезжает
+в CSS клиента. Если окружения поменять местами, находок ноль. Отчёт при этом пишется в
+`dist/client`, а данные в нём от `server`.
+
+**Где встретилось.** Стенд `ssr` `@feugene/astro-granularity` (Astro 7, адаптер Node) — 4 ложные
+находки (`skip-link`, `prose`, `theme-icon-dark`, `theme-icon-light`). У `static` и `hybrid` ноль.
+Минимальное Astro-приложение с двумя страницами и `<style>` в каждой: при `output: 'server'` обе
+страницы дают находку, в статике — ни одна. Astro собирает окружения в порядке
+`prerender` → `ssr` → `client`. В статике CSS страниц лежит в `prerender`, на сервере
+`prerender` пуст, и CSS приезжает в `ssr`.
+
+Прежняя формулировка этого пункта («Astro встраивает стили страниц в `<style>`») неверна.
+Встроенные стили granum видит: в статике находок ноль при встроенных стилях обеих страниц.
+
+**Причина.** `vite/plugin.ts`:
+
+- `generateBundle` **перезаписывает** `bundleCss` CSS-ассетами текущего окружения;
+- `closeBundle` строит отчёт один раз, на первом окружении (`reported = true`). Следующие
+  окружения лишь возвращают файл на место, если его стёр `emptyOutDir`;
+- каталог отчёта берётся из `configResolved`, то есть от последнего разрешённого окружения.
+
+**Что хотим увидеть.**
+
+- `unmatched` и размеры в отчёте учитывают CSS всех окружений сборки и не зависят от их
+  порядка.
+- Отчёт и строка сборки отражают итог по всем окружениям: например, CSS копится по окружениям,
+  отчёт перезаписывается на каждом `closeBundle`, а строка печатается заново, если итог
+  изменился. Как именно — решать granum.
+- Тест: builder с двумя окружениями в обоих порядках даёт один и тот же отчёт.
+
+**Как поступит granularity.** `@feugene/astro-granularity` уберёт из `troubleshooting` абзац
+про классы «без правила» на SSR.
+
+## ТЗ-5. CSS приложения, подключённый строкой (`?raw`), не виден проверке
+
+**Пример.** Лист приложения импортируется строкой и вставляется в `<style>`:
+
+```ts
+import css from './raw.css?raw'
+const style = document.createElement('style')
+style.textContent = css
+document.head.append(style)
+```
+
+`raw-note` из `index.html` — в `unmatched`, хотя правило `.raw-note` лежит в `src/raw.css`
+внутри `appSources`.
+
+**Где встретилось.** Портал granularity так подключает три листа
+(`catalogue-inline.css`, `component-inline.css`, `docs-inline.css`): строкой в
+`<style set:html>`: стили, нужные одной странице из шестисот, не должны ехать в общий лист
+сайта с его бюджетом. Из 267 находок портала 215 —
+классы с правилом в этих листах. Остальные 52 — классы без правила нигде, это настоящие
+находки, и портал разберёт их сам.
+
+**Причина.** По определению из CHANGELOG вердикт формально верен: такого CSS нет среди
+CSS-ассетов бандла, для бандлера это строка в JS. Но `.css`-файлы из `appSources` granum уже
+читает — ради токенов (`scanAppSources`, `scanTokenConsumption`), — а для классов не смотрит.
+
+**Что хотим увидеть** — один из двух ответов:
+
+1. **(Предпочтительно.)** Класс, объявленный в `.css`-файле из `appSources`, не идёт в
+   `unmatched`: правило у приложения есть, просто приходит не ассетом. Тест на случай `?raw`.
+2. Или ограничение записано в документации `report` и `appSources` вместе со способом его
+   снять. Например, опция с дополнительными источниками объявленных классов или список
+   исключений.
+
+**Как поступит granularity.** При варианте 1 у портала остаются 52 настоящие находки, он их
+исправит и включит `report --strict`. При варианте 2 портал подключит опцию.

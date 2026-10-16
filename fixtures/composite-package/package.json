@@ -1,0 +1,22 @@
+{
+  "name": "@granum-fixtures/composite",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "granum provider fixture with a composite component whose part has its own subpath.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/XcButton": "./dist/components/XcButton/index.js",
+    "./components/XcList": "./dist/components/XcList/index.js",
+    "./components/XcListItem": "./dist/components/XcList/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=X --subcomponents --exports=import"
+  }
+}
