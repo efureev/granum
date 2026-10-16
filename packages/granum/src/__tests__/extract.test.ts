@@ -255,4 +255,46 @@ describe('collectClassAttributes: классы из атрибутов разм�
     ].join('\n')
     expect(collectClassAttributes(code, 'App.vue')).toEqual([])
   })
+
+  it('регэксп-литерал и код в TS — не атрибут; значение не выходит за границу литерала', () => {
+    const check = `export function check(source: string): boolean {\n  return /class="max-w-full px-4 leading-6/.test(source) && source.includes('tabindex="0"')\n}\n`
+    expect(collectClassAttributes(check, 'src/markup-check.ts')).toEqual([])
+    expect(collectClassAttributes(`const html = '<p class="part-a' + tone + ' part-b">'\n`, 'src/a.ts')).toEqual([])
+  })
+
+  it('строки TS с HTML — разметка: кавычки любого вида, статические части шаблона, экранирование', () => {
+    const code = [
+      `export const a = '<p class="str-a str-b">x</p>'`,
+      `export const b = \`<i class="tpl-a" title="\${title}">\${body}</i>\``,
+      `export const c = "<b class=\\"esc-a\\">x</b>"`,
+      `export const d = \`<p class="dyn \${tone}">\``,
+    ].join('\n')
+    expect(collectClassAttributes(code, 'src/a.ts')).toEqual(['esc-a', 'str-a', 'str-b', 'tpl-a'])
+  })
+
+  it('<script> разметки и frontmatter Astro — по правилам кода; шаблон и блоки не-JS — разметка', () => {
+    const sfc = [
+      '<script setup lang="ts">',
+      `const ok = (s: string) => /class="vue-a vue-b/.test(s) && s.includes('x="1"')`,
+      `const html = '<p class="in-script">'`,
+      '</script>',
+      '<template><p class="p-4">{{ ok(html) }}</p></template>',
+    ].join('\n')
+    expect(collectClassAttributes(sfc, 'src/App.vue')).toEqual(['in-script', 'p-4'])
+
+    const astro = `---\nconst re = /class="fm-a/\nconst ok = re.test(x) && y\n---\n<p class="astro-own">x</p>\n`
+    expect(collectClassAttributes(astro, 'src/pages/index.astro')).toEqual(['astro-own'])
+
+    const html = [
+      `<script type="module">const re = /class="mod-a/; run(re && 1)</script>`,
+      `<script type="text/x-template" id="row"><li class="tpl-row">x</li></script>`,
+      `<p class="page-own">x</p>`,
+    ].join('\n')
+    expect(collectClassAttributes(html, 'index.html')).toEqual(['page-own', 'tpl-row'])
+  })
+
+  it('селектор [class="…"] — не атрибут: ни в строке TS, ни в стиле SFC', () => {
+    expect(collectClassAttributes(`document.querySelector('[class="sel-a"]')\n`, 'src/a.ts')).toEqual([])
+    expect(collectClassAttributes(`<template><p class="p-4">x</p></template>\n<style>[class="sel-b"] { color: red }</style>\n`, 'src/App.vue')).toEqual(['p-4'])
+  })
 })

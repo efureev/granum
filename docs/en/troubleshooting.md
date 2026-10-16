@@ -43,6 +43,12 @@ package CSS, the application's own CSS, SFC styles. A class assembled on the fly
 sources are not judged — use `granum why-css <class>` for them. `doctor` does not
 see the build's CSS and does not judge such classes.
 
+In JS/TS and in `<script>` blocks of markup the attribute is looked for only in
+strings and template strings: HTML in a string is judged, a regex `/class="…/`
+and the code around it are not. In `.jsx` and `.tsx` the markup is the code
+itself and the file text is searched, so such a regex gives a false finding
+there: write it as `/class=["]…/` or keep the test outside `appSources.dirs`.
+
 ## Why granum re-extracts package classes
 
 The class list in a manifest was filtered by the engine of the package build,

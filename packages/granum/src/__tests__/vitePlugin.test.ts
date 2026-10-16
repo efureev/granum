@@ -397,6 +397,23 @@ describe('granum() с настоящим Vite', async () => {
       const fromMarkup = app.report.classes.unmatched.filter((u: { sources: string[] }) => u.sources.includes('src/App.vue'))
       expect(fromMarkup.map((u: { className: string }) => u.className)).toEqual(['gap-zz'])
     })
+
+    it('регэксп и код в TS и в <script> SFC — не атрибут; HTML в строке — атрибут', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'granum-app-markup-'))
+      write(root, 'src/markup-check.ts', `export const check = (s: string): boolean => /class="max-w-full px-4 leading-6/.test(s) && s.includes('tabindex="0"')\nexport const row = '<li class="str-zz">x</li>'\n`)
+      const app = await buildApp(
+        providerRoot,
+        { components: ['@t/kit:Card'] },
+        `<script setup lang="ts">const ok = (s: string) => /class="vue-zz/.test(s) && s.length > 0</script>\n<template><div class="p-4 p-44x">{{ ok('') }}</div></template>\n`,
+        undefined,
+        root,
+      )
+      const fromApp = app.report.classes.unmatched.filter((u: { sources: string[] }) => u.sources.some(s => s.startsWith('src/')))
+      expect(fromApp).toEqual([
+        { className: 'p-44x', sources: ['src/App.vue'] },
+        { className: 'str-zz', sources: ['src/markup-check.ts'] },
+      ])
+    })
   })
 
   describe('компонент из корня пакета — ошибка guard', () => {

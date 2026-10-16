@@ -143,21 +143,24 @@ function skipQuoted(code: string, from: number): number {
   return code.length
 }
 
-/** Тело шаблонной строки с `from`: позиция за `` ` `` либо за `${` (тогда `expr`). */
-function skipTemplate(code: string, from: number): { end: number, expr: boolean } {
+/**
+ * Тело шаблонной строки с `from`: позиция за `` ` `` либо за `${` (тогда `expr`),
+ * `body` — где кончается статический текст.
+ */
+function skipTemplate(code: string, from: number): { end: number, body: number, expr: boolean } {
   let j = from
   while (j < code.length) {
     const ch = code[j]
     if (ch === '\\')
       j += 2
     else if (ch === '`')
-      return { end: j + 1, expr: false }
+      return { end: j + 1, body: j, expr: false }
     else if (ch === '$' && code[j + 1] === '{')
-      return { end: j + 2, expr: true }
+      return { end: j + 2, body: j, expr: true }
     else
       j++
   }
-  return { end: code.length, expr: false }
+  return { end: code.length, body: code.length, expr: false }
 }
 
 /** Регэксп-литерал с `from` (на `/`): позиция за флагами; `-1`, если до конца строки он не закрылся. */
@@ -198,14 +201,16 @@ export interface ScriptScanVisitor {
   readonly word?: (start: number, end: number) => void
   /** Строка в кавычках вместе с кавычками; обрывается на переводе строки, если не закрыта. */
   readonly string?: (start: number, end: number) => void
+  /** Статический текст шаблонной строки между `` ` ``, `${` и `}`, без них самих. */
+  readonly template?: (start: number, end: number) => void
   /** Прочий символ кода: скобка, точка, оператор. */
   readonly punct?: (at: number) => void
 }
 
 /**
- * Обход JS/TS-кода по лексемам. Строки, тела шаблонов и регэксп-литералы
- * пропускаются целиком, подстановки `${…}` — код. Незакрытый блочный
- * комментарий останавливает обход: его конец неизвестен.
+ * Обход JS/TS-кода по лексемам. Строки и статический текст шаблонов уходят
+ * посетителю целиком, регэксп-литералы пропускаются, подстановки `${…}` — код.
+ * Незакрытый блочный комментарий останавливает обход: его конец неизвестен.
  */
 export function scanScript(code: string, visitor: ScriptScanVisitor): void {
   /** Глубина `{` в каждом открытом `${…}` шаблонной строки. */
@@ -214,7 +219,8 @@ export function scanScript(code: string, visitor: ScriptScanVisitor): void {
   let lineHasCode = false
   let i = 0
   const template = (from: number): void => {
-    const { end, expr } = skipTemplate(code, from)
+    const { end, body, expr } = skipTemplate(code, from)
+    visitor.template?.(from, body)
     if (expr)
       templates.push(0)
     regexOk = expr

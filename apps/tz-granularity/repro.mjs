@@ -99,26 +99,6 @@ const quiet = { logLevel: 'silent', customLogger: undefined }
   )
 }
 
-// ── ТЗ-3. Регэксп в .ts читается как атрибут class ──────────────────────────
-{
-  const root = join(here, 'cases/regex')
-  await build({
-    root,
-    ...quiet,
-    plugins: [granum({ engine: windEngine(), providers: [PROVIDER], components: [], appSources: { dirs: ['src'] } })],
-  })
-  const found = reportOf(join(root, 'dist')).classes.unmatched
-    .filter(entry => entry.sources.includes('src/markup-check.ts'))
-    .map(entry => entry.className)
-  record(
-    'ТЗ-3',
-    'регэксп /class="…/ в .ts — ложный unmatched',
-    found.length ? `unmatched из src/markup-check.ts: ${JSON.stringify(found)}` : 'находок из src/markup-check.ts нет',
-    'регэксп, строки и код в .ts не дают находок unmatched',
-    found.length > 0,
-  )
-}
-
 // ── ТЗ-4. Отчёт строится по CSS первого собранного окружения ─────────────────
 {
   const root = join(here, 'cases/environments')

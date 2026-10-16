@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Reproduction of the granularity spec of 2026-10-15: subcomponent subpaths, class attributes in code, report across build environments.",
+  "description": "Reproduction of the granularity spec of 2026-10-15: subcomponent subpaths, report across build environments.",
   "dependencies": {
     "vue": "^3.5.40"
   },

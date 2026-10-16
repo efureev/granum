@@ -17,7 +17,6 @@ yarn workspace @granum-apps/tz-granularity repro:expect   # код 1, пока �
 |---|---|---|
 | ТЗ-1, ТЗ-1б | `cases/guard` | импорт `components/XcListItem` при селекции `[XcButton]` и при `components: 'imports'` |
 | ТЗ-2 | — | `granumResolver` по корню стенда |
-| ТЗ-3 | `cases/regex` | модуль с регэкспом `/class="…/` и без единого класса разметки |
 | ТЗ-4 | `cases/environments` | builder Vite с окружениями `server` (без CSS) → `client` |
 | ТЗ-5 | `cases/raw-css` | лист приложения, подключённый строкой через `?raw` |
 
