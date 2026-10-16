@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CssReadError, TokenRefError } from '../core/errors'
 import { emitCss, LAYER_NAMES, wrapLayer, wrapLayers } from '../node/emit'
-import { buildReport } from '../node/report'
+import { buildReport, buildReportFromBundles } from '../node/report'
 import { makeManifest, makeProvider, prepareTestApp, TEST_ENGINE } from './helpers'
 import { testEngine } from './testEngine'
 
@@ -295,6 +295,18 @@ describe('buildReport: класс разметки приложения без �
     const { app, css } = await markupApp()
     expect(fromMarkup(buildReport(app, css, { bundleCss: `${css.css}\n.not-a-rule-xyz{color:red}` }))).toEqual([])
     expect(fromMarkup(buildReport(app, css))).toEqual([])
+  })
+
+  it('несколько окружений: класс из CSS любого — не находка, копия слоёв не удваивает размеры, порядок не важен', async () => {
+    const { app, css } = await markupApp()
+    const own = '.not-a-rule-xyz{color:red}'
+    const single = buildReport(app, css, { bundleCss: css.css })
+    const multi = buildReportFromBundles(app, css, [css.css, css.css, own])
+    expect(fromMarkup(multi)).toEqual([])
+    expect(multi.sizesSource).toBe('bundle')
+    expect(multi.sizes).toEqual(single.sizes)
+    expect(buildReportFromBundles(app, css, [own, css.css, css.css])).toEqual(multi)
+    expect(fromMarkup(buildReportFromBundles(app, css, []))).toEqual([])
   })
 })
 

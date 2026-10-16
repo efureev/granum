@@ -126,7 +126,7 @@
 |---|---|---|---|---|
 | INV-DET-1 | Манифест канонически сериализован; повторная сборка без изменений даёт побайтно тот же файл | new | `./build` | `scripts/check-determinism.mjs` по фикстурам |
 | INV-DET-2 | CSS и отчёт приложения детерминированы при одинаковом входе | new | `./vite` | `scripts/check-determinism.mjs`: повторная сборка `bench-one` |
-| INV-DET-3 | Ни один вывод не зависит от порядка обхода FS или порядка ключей объектов конфига | new | все | сортировка на границах; тест с перемешанным порядком `providers` при одинаковом графе; `manifest.test.ts`, `resolve.test.ts` |
+| INV-DET-3 | Ни один вывод не зависит от порядка обхода FS или порядка ключей объектов конфига | new | все | сортировка на границах; тест с перемешанным порядком `providers` при одинаковом графе; `manifest.test.ts`, `resolve.test.ts`; `vitePlugin.test.ts` — отчёт при любом порядке окружений сборки |
 | INV-DEP-1 | `dependencies` пакета пусты; `peerDependencies` — только `vite`; `dist` не содержит импортов `unocss`, `@unocss/*`, `magic-string`, `css-tree` | new | пакет | тест на `package.json` и grep по `dist`; `scripts/check-dist-boundary.mjs`, `packageJson.test.ts` |
 
 ## Диагностика (`INV-DIAG-*`, `INV-ERR-*`)

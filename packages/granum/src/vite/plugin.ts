@@ -21,7 +21,7 @@ import { findPackageRootImports } from '../node/imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCss'
 import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
-import { buildReport } from '../node/report'
+import { buildReportFromBundles } from '../node/report'
 import { getThemeManifest } from '../node/themeManifest'
 import { validateGranumConfig } from './validateConfig'
 
@@ -161,6 +161,21 @@ function providerFilesOf(app: PreparedApp): string[] {
   return files
 }
 
+/**
+ * Каталог отчёта. Отдельная сборка — её `outDir`. Builder Vite разрешает конфиг
+ * каждого окружения, и последний разрешённый зависел бы от порядка их
+ * объявления; поэтому берётся клиентское окружение — его каталог постоянный, в
+ * отличие от временного у `prerender` Astro (`dist/.prerender/`, хост удаляет его
+ * после сборки). Клиентских нет или их несколько — первое по имени.
+ */
+function reportDirOf(resolved: ResolvedConfig): string {
+  if (!resolved.builder)
+    return resolved.build.outDir
+  const named = Object.entries(resolved.environments).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  const [, chosen] = named.find(([, env]) => env.consumer === 'client') ?? named[0] ?? []
+  return chosen?.build.outDir ?? resolved.build.outDir
+}
+
 /** Имя ассета слоя до присвоения хеша: по нему он потом находится в бандле. */
 function assetNameOf(layer: LayerName): string {
   return `granum.${layer}.css`
@@ -178,20 +193,29 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   let server: ViteDevServer | undefined
   let prepared: Promise<PreparedApp> | undefined
   let emitted: Promise<EmittedCss> | undefined
-  /** CSS-ассеты последнего бандла — источник размеров слоёв в отчёте. */
-  let bundleCss: string | undefined
   /**
-   * Отчёт уже написан в этой сборке.
+   * CSS-ассеты бандла каждого окружения сборки: объявленные классы и размеры
+   * слоёв в отчёте. Окружение без CSS-ассетов сюда не попадает — о CSS
+   * приложения его бандл ничего не знает.
+   */
+  const bundleCss = new Map<string, { readonly client: boolean, readonly css: string }>()
+  /** Окружение принесло CSS после последнего отчёта: отчёт надо пересчитать. */
+  let bundleCssChanged = false
+  /**
+   * Отчёт этой сборки уже построен.
    *
    * Хост вправе собрать несколько окружений Vite одним билдом — Astro строит
    * `prerender`, `ssr` и `client`, — и тогда финальные хуки срабатывают на
-   * каждое. Резолюция и эмиссия мемоизированы и от этого не страдают, а отчёт
-   * без флага писался бы столько раз, сколько окружений, и печатал бы столько
-   * же строк лога об одной и той же сборке.
+   * каждое. Резолюция и эмиссия мемоизированы и от этого не страдают. Отчёт
+   * пересчитывается, только когда окружение принесло CSS: итог считается по CSS
+   * всех окружений и не зависит от их порядка, а строка сборки печатается
+   * заново, лишь если итог изменился.
    */
   let reported = false
-  /** Написанный отчёт: окружение, собранное позже, может очистить его каталог (`emptyOutDir`). */
-  let reportWritten: { readonly target: string, readonly text: string } | undefined
+  /** Последний отчёт и его файл: окружение, собранное позже, может очистить каталог (`emptyOutDir`). */
+  let reportWritten: { readonly target: string | undefined, readonly text: string } | undefined
+  /** Последняя напечатанная строка сборки. */
+  let lastSummary: string | undefined
   /**
    * Этот инстанс уже начал сборку. Конфиг ещё одной сборки после этого — повтор
    * инстанса: окружения одного builder Vite разрешаются до первой из них.
@@ -372,15 +396,34 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     timings.prepare = 0
     timings.emit = 0
     timings.report = 0
-    bundleCss = undefined
+    bundleCss.clear()
+    bundleCssChanged = false
     reported = false
     reportWritten = undefined
+    lastSummary = undefined
     splitLayers = []
     splitLinked = false
     componentsWarned = false
     if (server)
       void refresh(server)
   }
+
+  /** Отчёт на месте: окружение, собранное позже, очищает свой каталог, и файл возвращается тем же текстом. */
+  const restoreReport = (): void => {
+    const target = reportWritten?.target
+    if (target === undefined || existsSync(target))
+      return
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, reportWritten!.text)
+  }
+
+  /**
+   * CSS окружений в порядке предпочтения для размеров слоёв: клиентские первыми,
+   * дальше по имени — не в порядке сборки.
+   */
+  const reportBundles = (): string[] => [...bundleCss]
+    .sort(([a, x], [b, y]) => (x.client !== y.client ? (x.client ? -1 : 1) : a < b ? -1 : a > b ? 1 : 0))
+    .map(([, entry]) => entry.css)
 
   /** id провайдера → имена его компонентов; одна карта на резолюцию. */
   const componentNames = new WeakMap<PreparedApp['resolution'], ReadonlyMap<string, ReadonlySet<string>>>()
@@ -419,9 +462,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       root = resolved.root
       // Каталог берётся из разрешённого конфига, а НЕ из `this.environment` в
       // финальных хуках: у многосредового хоста каталог окружения бывает
-      // временным (у Astro `prerender` это `dist/.prerender/`, который хост
-      // удаляет после сборки), и отчёт уехал бы вместе с ним.
-      outDir = resolved.build.outDir
+      // временным, и отчёт уехал бы вместе с ним.
+      outDir = reportDirOf(resolved)
       base = resolved.base
       isBuild = resolved.command === 'build'
       // Серверная сборка HTML не порождает, ссылки проставлять некуда: слои там
@@ -599,50 +641,60 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         if (item && item.type === 'asset' && name.endsWith('.css') && typeof item.source === 'string')
           parts.push(item.source)
       }
-      bundleCss = parts.join('\n')
+      // Серверный вход, который CSS не импортирует, судил бы разметку по пустому CSS.
+      if (parts.length === 0)
+        return
+      bundleCss.set(this.environment.name, { client: this.environment.config.consumer === 'client', css: parts.join('\n') })
+      bundleCssChanged = true
     },
 
     async closeBundle(): Promise<void> {
       if (!isBuild)
         return
-      if (reported) {
-        // Окружение, собранное позже, очищает свой каталог (`emptyOutDir`), и
-        // отчёт, если лежал там, пропал бы. Возвращается тот же текст, без новой
-        // строки лога: сборка одна.
-        if (reportWritten && !existsSync(reportWritten.target)) {
-          mkdirSync(dirname(reportWritten.target), { recursive: true })
-          writeFileSync(reportWritten.target, reportWritten.text)
-        }
+      if (reported && !bundleCssChanged) {
+        restoreReport()
         return
       }
-      reported = true
+      bundleCssChanged = false
       const app = await prepare()
       const css = await emit()
-      // Без HTML-точки входа ссылки проставить некуда, и CSS не приедет вовсе:
-      // это тихая поломка, поэтому говорим о ней громко.
-      if (splitting() && splitLayers.length > 0 && !splitLinked) {
-        log(
-          `warning: css.split is on, ${splitLayers.length} layer asset(s) were emitted, but no HTML entry was found to link them `
-          + `— the CSS will not load. Drop css.split or add an HTML entry.`,
-        )
+      if (!reported) {
+        reported = true
+        // Без HTML-точки входа ссылки проставить некуда, и CSS не приедет вовсе:
+        // это тихая поломка, поэтому говорим о ней громко.
+        if (splitting() && splitLayers.length > 0 && !splitLinked) {
+          log(
+            `warning: css.split is on, ${splitLayers.length} layer asset(s) were emitted, but no HTML entry was found to link them `
+            + `— the CSS will not load. Drop css.split or add an HTML entry.`,
+          )
+        }
       }
       const reportStarted = performance.now()
-      const report = buildReport(app, css, bundleCss !== undefined ? { bundleCss } : {})
+      const report = buildReportFromBundles(app, css, reportBundles())
+      const text = `${JSON.stringify(report, null, 2)}\n`
+      // Окружение принесло CSS, но итог тот же: ни записи, ни новой строки лога.
+      if (reportWritten?.text === text) {
+        restoreReport()
+        return
+      }
       const file = config.report?.file ?? 'granum-report.json'
-      if (file !== false) {
-        const target = join(resolve(root, outDir), file)
-        const text = `${JSON.stringify(report, null, 2)}\n`
+      const target = file !== false ? join(resolve(root, outDir), file) : undefined
+      if (target !== undefined) {
         mkdirSync(dirname(target), { recursive: true })
         writeFileSync(target, text)
-        reportWritten = { target, text }
       }
+      reportWritten = { target, text }
       timings.report = performance.now() - reportStarted
-      log(
-        `${report.selection.length} components, ${report.classes.matched} classes matched, `
+      const summary = `${report.selection.length} components, ${report.classes.matched} classes matched, `
         + `${report.classes.unmatched.length} without a rule, themes [${report.themes.names.join(', ')}]${
           report.prune ? `, prune: ${report.prune.removable.length} removable` : ''
-        }${splitting() && splitLayers.length > 0 ? `, css: ${splitLayers.length} layer assets` : ''}${file !== false ? ` → ${join(outDir, file)}` : ''}`,
-      )
+        }${splitting() && splitLayers.length > 0 ? `, css: ${splitLayers.length} layer assets` : ''}${file !== false ? ` → ${join(outDir, file)}` : ''}`
+      // Отчёт мог измениться в том, чего строка не называет (размеры слоёв):
+      // повторять ту же строку незачем.
+      if (summary === lastSummary)
+        return
+      lastSummary = summary
+      log(summary)
       // Время — отдельной строкой: её читает человек, ища медленную фазу, и
       // скрипт замера стендов, которому негде больше взять эти числа (в отчёте их нет).
       const ms = (n: number): number => Math.round(n)

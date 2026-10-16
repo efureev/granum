@@ -172,12 +172,19 @@ changes rarely; if the page is read once, the price is paid for nothing.
 A host may build several Vite environments in one build: Astro builds
 `prerender`, `ssr` and `client`, resolving the config of each one before the
 first build and calling the final hooks for every one of them. Resolution and
-emission do not suffer from that — they are memoized and happen once — and the
-report is written once, into the output directory of the resolved config. Of the
-config, not of the environment: an environment directory may be temporary (in
-Astro `prerender` is `dist/.prerender/`, which the host removes after the build),
-and the report would be deleted along with it. If an environment built later
-empties that directory (`emptyOutDir`), the report is put back.
+emission do not suffer from that — they are memoized and happen once. The report
+is computed from the CSS of all environments and does not depend on their order:
+a class with a rule in the client CSS is not in `unmatched` even if the server is
+built first. Layer sizes come from one environment (the client one when its CSS
+has granum layers), so a CSS copy in two environments is not counted twice, and
+an environment without CSS assets adds nothing.
+
+The report is written into the client environment directory, not into the one
+built last: an environment directory may be temporary (in Astro `prerender` is
+`dist/.prerender/`, which the host removes after the build). An environment
+built later may change the result — then the report is rewritten and the build
+line is printed again; if it empties the directory (`emptyOutDir`), the report
+is put back.
 
 A `granum()` instance serves one build with all its environments. Separate builds —
 say, a client and then an SSR build in one script — each need their own

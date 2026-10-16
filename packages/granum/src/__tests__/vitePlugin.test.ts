@@ -482,7 +482,7 @@ describe('granum() с настоящим Vite', async () => {
   describe('многосредовая сборка хоста', () => {
     interface Hooks {
       configResolved: (config: unknown) => void
-      generateBundle: (options: unknown, bundle: unknown) => void
+      generateBundle: (this: { environment: { name: string, config: { consumer: 'client' | 'server' } } }, options: unknown, bundle: unknown) => void
       closeBundle: () => Promise<void>
     }
 
@@ -562,9 +562,9 @@ describe('granum() с настоящим Vite', async () => {
         hooks.configResolved({ root, base: '/', command: 'build', build: { outDir, ssr: true } })
 
       // Первое окружение несёт CSS, второе — только JS.
-      hooks.generateBundle({}, { 'a.css': { type: 'asset', fileName: 'a.css', source: '@layer granum.utilities{.mx-auto{margin:0 auto}}' } })
+      hooks.generateBundle.call({ environment: { name: 'prerender', config: { consumer: 'server' } } }, {}, { 'a.css': { type: 'asset', fileName: 'a.css', source: '@layer granum.utilities{.mx-auto{margin:0 auto}}' } })
       await hooks.closeBundle()
-      hooks.generateBundle({}, { 'b.js': { type: 'chunk', fileName: 'b.js', code: '' } })
+      hooks.generateBundle.call({ environment: { name: 'ssr', config: { consumer: 'server' } } }, {}, { 'b.js': { type: 'chunk', fileName: 'b.js', code: '' } })
       await hooks.closeBundle()
 
       // Во временный каталог окружения отчёт не уезжает: хост его удаляет.
@@ -576,6 +576,60 @@ describe('granum() с настоящим Vite', async () => {
       // Две строки — итог и время, а не по паре на окружение.
       expect(logs).toHaveLength(2)
       expect(logs[0]).toMatch(/1 components/)
+    })
+
+    /**
+     * Порядок окружений задаёт хост: Astro с `output: 'server'` собирает сервер
+     * раньше клиента. Отчёт обязан быть одним и тем же при любом порядке.
+     */
+    it('отчёт не зависит от порядка окружений: CSS всех окружений, каталог клиента', async () => {
+      const texts: string[] = []
+      for (const order of [['ssr', 'client'], ['client', 'ssr']] as const) {
+        const root = appRoot()
+        write(root, 'src/App.vue', `<template><p class="app-note mx-auto"/></template>`)
+        write(root, 'src/app.css', `.app-note{color:teal}\n`)
+        write(root, 'src/main.ts', `import 'virtual:granum.css'\nimport './app.css'\nimport { createApp } from 'vue'\nimport App from './App.vue'\ncreateApp(App).mount('#app')\n`)
+        // Серверный вход без CSS: так выглядит первое окружение у Astro на сервере.
+        write(root, 'src/entry-server.ts', `export const html = '<p class="app-note">ok</p>'\n`)
+        const environments = {
+          // Имя `ssr`: окружение с ним заводит и плагин Vue, без входа оно не соберётся.
+          ssr: { consumer: 'server' as const, build: { minify: false, outDir: 'dist/server', ssr: true, rolldownOptions: { input: join(root, 'src/entry-server.ts') } } },
+          client: { consumer: 'client' as const, build: { minify: false, outDir: 'dist/client' } },
+        }
+        const logs: string[] = []
+        const builder = await createBuilder({
+          root,
+          configFile: false,
+          logLevel: 'silent',
+          plugins: [vue(), granum(appConfig, { log: line => logs.push(line) })],
+          environments: Object.fromEntries(order.map(name => [name, environments[name]])),
+          builder: {},
+        })
+        await builder.buildApp()
+
+        expect(existsSync(join(root, 'dist/server/granum-report.json'))).toBe(false)
+        const text = readFileSync(join(root, 'dist/client/granum-report.json'), 'utf8')
+        const report = JSON.parse(text)
+        expect(report.classes.unmatched.map((u: { className: string }) => u.className)).not.toContain('app-note')
+        expect(report.sizesSource).toBe('bundle')
+        // Строка сборки печатается заново, если итог изменился: последняя — итог.
+        expect(logs.filter(line => /without a rule/.test(line)).at(-1)).toContain(`${report.classes.unmatched.length} without a rule`)
+        texts.push(text)
+      }
+      expect(texts[1]).toBe(texts[0])
+    })
+
+    /**
+     * Серверный вход, который CSS не импортирует, даёт бандл без CSS-ассетов: о
+     * CSS приложения он ничего не знает, и судить разметку по нему нельзя.
+     */
+    it('отдельная сборка без CSS-ассетов классы разметки не судит', async () => {
+      const root = appRoot()
+      write(root, 'src/App.vue', `<template><div class="app-own mx-auto"/></template>\n<style>.app-own{color:red}</style>\n`)
+      write(root, 'src/entry-server.ts', `export const html = '<div class="app-own">ok</div>'\n`)
+      await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granum(appConfig, { log: () => {} })], build: { minify: false, ssr: 'src/entry-server.ts', outDir: 'dist/server' } })
+      const report = JSON.parse(readFileSync(join(root, 'dist/server/granum-report.json'), 'utf8'))
+      expect(report.classes.unmatched.map((u: { className: string }) => u.className)).not.toContain('app-own')
     })
   })
 })

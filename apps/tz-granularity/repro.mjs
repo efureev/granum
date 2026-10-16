@@ -10,13 +10,13 @@
  * У стенда нет `build` и `verify`, поэтому `build:apps` и `verify:apps` его
  * пропускают. Когда все пункты закрыты, `repro:expect` становится его `verify`.
  */
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 import { windEngine } from '@feugene/granum-engine-wind'
 import { granum, granumResolver } from '@feugene/granum/vite'
-import { build, createBuilder } from 'vite'
+import { build } from 'vite'
 
 const here = fileURLToPath(new URL('./', import.meta.url))
 const PROVIDER = '@granum-fixtures/composite'
@@ -96,45 +96,6 @@ const quiet = { logLevel: 'silent', customLogger: undefined }
     `XcList → ${got.XcList}; XcListItem → ${got.XcListItem}`,
     `XcListItem → ${PROVIDER}/components/XcListItem (подпуть, который guard сводит к XcList)`,
     got.XcListItem === undefined,
-  )
-}
-
-// ── ТЗ-4. Отчёт строится по CSS первого собранного окружения ─────────────────
-{
-  const root = join(here, 'cases/environments')
-  rmSync(join(root, 'dist'), { recursive: true, force: true })
-  const builder = await createBuilder({
-    root,
-    ...quiet,
-    plugins: [granum({
-      engine: windEngine(),
-      providers: [PROVIDER],
-      components: [],
-      appSources: { dirs: ['src', '.'], extensions: ['ts', 'html', 'css'] },
-    })],
-    // Порядок как у Astro с `output: 'server'`: сервер раньше клиента.
-    environments: {
-      server: { consumer: 'server', build: { outDir: 'dist/server', ssr: 'src/server.ts' } },
-      client: { consumer: 'client', build: { outDir: 'dist/client' } },
-    },
-    builder: {},
-  })
-  await builder.buildApp()
-  const where = ['dist/server', 'dist/client'].find(dir => {
-    try {
-      return Boolean(reportOf(join(root, dir)))
-    }
-    catch {
-      return false
-    }
-  })
-  const unmatched = where ? reportOf(join(root, where)).classes.unmatched.map(entry => entry.className) : []
-  record(
-    'ТЗ-4',
-    'отчёт строится по CSS первого собранного окружения',
-    `отчёт в ${where}; unmatched: ${JSON.stringify(unmatched)} — правило .app-note лежит в src/app.css окружения client`,
-    'отчёт учитывает CSS всех окружений сборки: .app-note не в unmatched',
-    unmatched.includes('app-note'),
   )
 }
 

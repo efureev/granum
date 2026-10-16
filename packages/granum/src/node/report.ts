@@ -116,13 +116,13 @@ function sizeOf(text: string, brotli: boolean): LayerSize {
  * само по себе не класс — экстрактор берёт всё подряд, — и не судится. Класс
  * из атрибута разметки судится, если его нет ни у движка, ни в CSS собранного
  * бандла (утилиты, CSS провайдеров, свой CSS приложения, стили SFC); без CSS
- * бандла собственный CSS приложения не виден, и вердикта нет.
+ * бандла собственный CSS приложения не виден, и вердикта нет (`declared` не задан).
  */
 function unmatchedClasses(
   app: PreparedApp,
   css: EmittedCss,
   sourcesOf: (className: string) => string[],
-  bundleCss: string | undefined,
+  declared: ReadonlySet<string> | undefined,
 ): { className: string, sources: string[] }[] {
   const out = new Map<string, string[]>()
   for (const className of css.engine.unmatched) {
@@ -130,8 +130,7 @@ function unmatchedClasses(
     if (known.length > 0)
       out.set(className, known)
   }
-  if (bundleCss !== undefined) {
-    const declared = declaredCssClasses(bundleCss)
+  if (declared !== undefined) {
     for (const [className, files] of Object.entries(app.appScan.classAttributes)) {
       if (css.engine.matched.has(className) || declared.has(className))
         continue
@@ -143,6 +142,20 @@ function unmatchedClasses(
 }
 
 export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildReportOptions = {}): GranumBuildReport {
+  return buildReportFromBundles(app, css, options.bundleCss === undefined ? [] : [options.bundleCss])
+}
+
+/**
+ * Отчёт по CSS бандлов всех окружений сборки: хост вправе собрать несколько
+ * окружений одним билдом. Классы, объявленные CSS, берутся со всех бандлов —
+ * правило в CSS клиента остаётся правилом, в каком бы порядке ни собирались
+ * окружения. Размеры слоёв — с одного бандла, первого в списке, где есть блоки
+ * granum: сумма посчитала бы слои дважды, если хост кладёт копию CSS в два
+ * окружения. Поэтому порядок списка — порядок предпочтения, и плагин ставит
+ * клиентские окружения первыми. Пустой список — CSS бандла нет, вердикта по
+ * разметке нет. Из `./node` не экспортируется: публичный вход — `buildReport`.
+ */
+export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundles: readonly string[]): GranumBuildReport {
   const { resolution, engine } = app
   /*
    * Индекс «класс → кто его объявил» строится один раз.
@@ -206,9 +219,14 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
     ...LAYER_NAMES.map(name => [name, sizeOf(css.layers[name], brotli)]),
     ['total', sizeOf(css.css, brotli)],
   ]) as Record<LayerName | 'total', LayerSize>
-  const fromBundle = options.bundleCss !== undefined && app.config.css?.layers !== false
-    ? bundleLayerSizes(options.bundleCss, app.config.css?.layerPrefix ?? 'granum', brotli)
-    : undefined
+  let fromBundle: Record<LayerName | 'total', LayerSize> | undefined
+  if (app.config.css?.layers !== false) {
+    for (const bundle of bundles) {
+      fromBundle = bundleLayerSizes(bundle, app.config.css?.layerPrefix ?? 'granum', brotli)
+      if (fromBundle)
+        break
+    }
+  }
 
   const warnings: string[] = []
   for (const w of app.warnings)
@@ -245,7 +263,7 @@ export function buildReport(app: PreparedApp, css: EmittedCss, options: BuildRep
     classes: {
       input: css.engineInput.length,
       matched: css.engine.matched.size,
-      unmatched: unmatchedClasses(app, css, sourcesOf, options.bundleCss),
+      unmatched: unmatchedClasses(app, css, sourcesOf, bundles.length > 0 ? declaredCssClasses(bundles.join('\n')) : undefined),
       safelistRedundant: css.safelistRedundant,
       app: [...appClasses].filter(className => packageClasses.has(className)).sort(),
     },
