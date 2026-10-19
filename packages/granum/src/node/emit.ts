@@ -11,6 +11,7 @@ import type { PreparedApp } from './prepare'
 import type { PrunableSection, TokenPrunePlan } from './tokenPrune'
 import { sortedUnique } from '../core/dedupe'
 import { CssReadError } from '../core/errors'
+import { themeFileSelector } from '../core/resolveThemes'
 import { readCss } from './css'
 import { resolveInlinedCssSources, resolveProviderPath } from './inlinedCss'
 import { pruneCssDeclarations } from './pruneCssDeclarations'
@@ -175,14 +176,18 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   // 2. Структурные блоки токенов тем — из общей раскладки слоёв.
   // Блок `:root` — слой tokens, остальные — themes: `:root` и `.dark`
   // равны по специфичности, и в одном слое тему решал бы порядок `names`.
+  // Исключение — тема, чей файл сам стоит под `:root`: её блоки продолжают
+  // файл и идут в themes после него. В слое tokens они проиграли бы файлу,
+  // хотя `granum tokens` называл бы их значение действующим.
   const rootBlocks: string[] = []
   const themeBlocks = new Map<string, string[]>()
   for (const themeName of resolution.themes.names) {
+    const fileSelector = themeFileSelector(resolution.themes.items, themeName)
     for (const block of resolution.tokenLayers.get(themeName) ?? []) {
       const css = serializeThemeBlock(block)
       if (css === undefined)
         continue
-      if (isRootSelector(block.selector))
+      if (isRootSelector(block.selector) && !(fileSelector !== undefined && isRootSelector(fileSelector)))
         rootBlocks.push(css)
       else
         themeBlocks.set(themeName, [...(themeBlocks.get(themeName) ?? []), css])

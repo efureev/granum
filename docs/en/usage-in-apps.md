@@ -113,6 +113,11 @@ The module holds the order statement and five layers:
 @layer granum.utilities { … }   /* the engine's utilities */
 ```
 
+A structural `:root` block goes to `granum.tokens`, with one exception: a theme
+whose file itself sits under `:root`. Its blocks — `tokenOverrides`, `define`,
+component tokens — continue the file and go to `granum.themes` after it,
+otherwise the file would override them.
+
 The engine input is the union of the static classes of selected components
 (from the manifests), their safelist and the classes extracted from
 `appSources`. One layer alone: `virtual:granum/layers/utilities.css` — with its
