@@ -50,7 +50,8 @@ describe('package.json', () => {
     expect(pkg.type).toBe('module')
     expect(pkg.sideEffects).toBe(false)
     expect(pkg.engines.node).toBe('>=22')
-    expect(pkg.bin).toEqual({ granum: './dist/bin.js' })
+    // Без `./`: npm при публикации нормализует путь и предупреждает, что поле «убрано».
+    expect(pkg.bin).toEqual({ granum: 'dist/bin.js' })
     expect(pkg.files).toContain('dist')
   })
 })

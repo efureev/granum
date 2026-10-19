@@ -37,7 +37,7 @@
   "type": "module",
   "types": "./dist/types/src/index.d.ts",
   "bin": {
-    "granum": "./dist/bin.js"
+    "granum": "dist/bin.js"
   },
   "files": [
     "client.d.ts",
