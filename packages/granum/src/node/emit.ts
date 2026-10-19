@@ -5,16 +5,15 @@
  * слоям (`virtual:granum/layers/<name>.css`); конкатенация срезов побайтно
  * равна целому.
  */
-import type { EffectiveThemeBlock } from '../core/tokenLayers'
 import type { EngineOutput } from '../engine/types'
 import type { PreparedApp } from './prepare'
 import type { PrunableSection, TokenPrunePlan } from './tokenPrune'
 import { sortedUnique } from '../core/dedupe'
 import { CssReadError } from '../core/errors'
-import { themeFileSelector } from '../core/resolveThemes'
 import { readCss } from './css'
 import { resolveInlinedCssSources, resolveProviderPath } from './inlinedCss'
 import { pruneCssDeclarations } from './pruneCssDeclarations'
+import { emitThemeCss } from './themeCss'
 import { planTokenPrune } from './tokenPrune'
 
 export const LAYER_NAMES = ['tokens', 'base', 'themes', 'components', 'utilities'] as const
@@ -32,22 +31,6 @@ export interface EmittedCss {
   readonly engineInput: readonly string[]
   /** Записи safelist, покрытые статикой манифестов: та же находка, что у сборки провайдера. */
   readonly safelistRedundant: readonly string[]
-}
-
-/** Один блок токенов темы в CSS — единственное место, где к имени дописывается `--`. */
-function isRootSelector(selector: string): boolean {
-  const s = selector.trim()
-  return s === '' || s === ':root'
-}
-
-export function serializeThemeBlock(block: EffectiveThemeBlock): string | undefined {
-  const lines = [...block.tokens.values()]
-    .filter(chain => chain.effective !== undefined)
-    .sort((a, b) => a.token.localeCompare(b.token, 'en'))
-    .map(chain => `  --${chain.token}: ${chain.effective};`)
-  if (lines.length === 0)
-    return undefined
-  return `${block.selector || ':root'} {\n${lines.join('\n')}\n}`
 }
 
 export interface LayerWrapOptions {
@@ -118,27 +101,6 @@ export function wrapLayer(
 }
 
 /**
- * Слой `themes` по темам в порядке `names`: файлы темы, затем её структурные
- * блоки. Так блоки компонентов, `define` и `tokenOverrides` идут после файла
- * своей темы и выигрывают у него при равной специфичности — приложение главнее
- * пакета, — а блоки одной темы не оказываются после файла следующей.
- * Файлы тем собраны по `items` активных тем (`resolveInlinedCssSources`), так
- * что тема каждого файла есть в `names`.
- */
-function themesLayer(
-  names: readonly string[],
-  files: readonly { readonly theme: string | undefined, readonly css: string }[],
-  blocks: ReadonlyMap<string, readonly string[]>,
-): string {
-  const parts: string[] = []
-  for (const name of names) {
-    parts.push(...files.filter(file => file.theme === name).map(file => file.css))
-    parts.push(...(blocks.get(name) ?? []))
-  }
-  return parts.join('\n')
-}
-
-/**
  * Утилиты движка: классы манифестов ∪ safelist ∪ приложение.
  *
  * `reextractLost` — классы выбранных компонентов, которые были в манифесте и не
@@ -151,50 +113,38 @@ function themesLayer(
 export async function generateEngineCss(app: PreparedApp): Promise<{ engineInput: string[], generated: EngineOutput }> {
   const { resolution } = app
   const engineInput = sortedUnique([...resolution.classes, ...resolution.safelist, ...app.appScan.classes, ...app.reextractLost])
+  const darkSelector = darkModesSelector(resolution)
   const generated = await app.engine.generate({
     classes: new Set(engineInput),
     ...app.engineContribution,
+    ...(darkSelector !== undefined ? { darkSelector } : {}),
   })
   return { engineInput, generated }
+}
+
+/** Пары режимов активной темы с `colorScheme: 'dark'` — селектор варианта `dark:` движка (E-20). */
+export function darkModesSelector(resolution: PreparedApp['resolution']): string | undefined {
+  const { attribute } = resolution.themes.activation
+  const dark = resolution.themes.modes.filter(mode => mode.colorScheme === 'dark')
+  return dark.length > 0 ? dark.map(mode => `[${attribute}="${mode.value}"]`).join(', ') : undefined
 }
 
 export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const { resolution, config } = app
   const byId = new Map(resolution.providers.map(p => [p.id, p]))
 
-  // 1. Инлайнимые файлы: tokens → base → файлы тем.
+  // 1. Инлайнимые файлы: tokens → base.
   const inlined = resolveInlinedCssSources(resolution)
   const sections: PrunableSection[] = await Promise.all(inlined.map(async (source) => {
     try {
       return { source, css: await readCss(source.path) }
     }
     catch (cause) {
-      throw new CssReadError(source.providerId, source.kind === 'theme' ? 'theme' : source.kind, source.theme ?? source.kind, source.path, { cause })
+      throw new CssReadError(source.providerId, source.kind, source.kind, source.path, { cause })
     }
   }))
 
-  // 2. Структурные блоки токенов тем — из общей раскладки слоёв.
-  // Блок `:root` — слой tokens, остальные — themes: `:root` и `.dark`
-  // равны по специфичности, и в одном слое тему решал бы порядок `names`.
-  // Исключение — тема, чей файл сам стоит под `:root`: её блоки продолжают
-  // файл и идут в themes после него. В слое tokens они проиграли бы файлу,
-  // хотя `granum tokens` называл бы их значение действующим.
-  const rootBlocks: string[] = []
-  const themeBlocks = new Map<string, string[]>()
-  for (const themeName of resolution.themes.names) {
-    const fileSelector = themeFileSelector(resolution.themes.items, themeName)
-    for (const block of resolution.tokenLayers.get(themeName) ?? []) {
-      const css = serializeThemeBlock(block)
-      if (css === undefined)
-        continue
-      if (isRootSelector(block.selector) && !(fileSelector !== undefined && isRootSelector(fileSelector)))
-        rootBlocks.push(css)
-      else
-        themeBlocks.set(themeName, [...(themeBlocks.get(themeName) ?? []), css])
-    }
-  }
-
-  // 3. CSS компонентов в порядке селекции, побайтно.
+  // 2. CSS компонентов в порядке селекции, побайтно.
   const componentCss = await Promise.all(resolution.componentCss.map(async (ref) => {
     const provider = byId.get(ref.providerId)
     const path = resolveProviderPath(ref.path, provider?.baseUrl)
@@ -206,43 +156,40 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     }
   }))
 
-  // 4. Утилиты движка.
+  // 3. Утилиты движка.
   const { engineInput, generated } = await generateEngineCss(app)
   const safelistRedundant = resolution.safelist.filter(c => resolution.classes.includes(c))
 
-  // 5. Обрезка: `off` не читает лишнего и не меняет ни байта.
+  // 4. Обрезка: `off` не читает лишнего и не меняет ни байта.
   const mode = config.pruneTokens?.mode ?? 'off'
   let prune: TokenPrunePlan | undefined
   let tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => s.css)
-  const themeFileSections = sections.filter(s => s.source.kind === 'theme')
-  let themeFileText = (s: PrunableSection): string => s.css
   if (mode !== 'off') {
     prune = planTokenPrune({
       resolution,
       options: config.pruneTokens,
-      tokenOverrides: config.themes?.tokenOverrides,
       inlined: sections,
       componentCss,
       appConsumes: app.appScan.consumes,
       engineCss: [generated.css, generated.preflight ?? ''],
     })
-    if (mode === 'on') {
-      const cut = (s: PrunableSection): string => (s.source.kind === 'base' ? s.css : pruneCssDeclarations(s.css, prune!.isKept).css)
-      tokensSections = sections.filter(s => s.source.kind === 'tokens').map(cut)
-      themeFileText = cut
-    }
+    if (mode === 'on')
+      tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => pruneCssDeclarations(s.css, prune!.isKept).css)
   }
+
+  // 5. Темы: блоки активной темы и превью из резолюции; при `on` — без обрезанных токенов (T-14).
+  const themeCss = emitThemeCss(resolution, mode === 'on' && prune ? prune.isKept : undefined)
 
   // Preflight движка — базового уровня, поэтому уезжает в `base` и **первым**:
   // инициализация `--un-*` и reset обязаны действовать до стилей компонентов, а
   // не после них. Слой выбирает сборщик, движок про слои не знает.
   const enginePreflight = generated.preflight?.trim()
-  const baseSections = sections.filter(s => s.source.kind === 'base').map(s => s.css)
+  const baseSections = [...sections.filter(s => s.source.kind === 'base').map(s => s.css), ...themeCss.base]
 
   const layers: Record<LayerName, string> = {
-    tokens: [...tokensSections, ...rootBlocks].join('\n'),
+    tokens: [...tokensSections, ...(themeCss.tokens !== undefined ? [themeCss.tokens] : [])].join('\n'),
     base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
-    themes: themesLayer(resolution.themes.names, themeFileSections.map(s => ({ theme: s.source.theme, css: themeFileText(s) })), themeBlocks),
+    themes: themeCss.themes.join('\n'),
     components: componentCss.join('\n'),
     utilities: generated.css,
   }

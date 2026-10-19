@@ -3,14 +3,14 @@
  * `defineGranumProvider`, и `expandProviders` — рукописный объект без хелпера
  * проходит те же проверки.
  */
-import type { GranumComponentDescriptor, GranumProvider, GranumTokenSet } from './types'
+import type { GranumComponentDescriptor, GranumProvider } from './types'
 import {
   DuplicateComponentNameError,
   InvalidComponentNameError,
   InvalidProviderError,
-  InvalidTokenKeyError,
   UnsupportedContractVersionError,
 } from '../core/errors'
+import { isThemeId } from '../core/themeData'
 import { isDialect } from '../engine/dialect'
 import { GRANUM_CONTRACT_VERSION } from './types'
 
@@ -30,8 +30,7 @@ export function validateProvider(provider: GranumProvider): void {
     )
   }
 
-  if (provider.contractVersion !== GRANUM_CONTRACT_VERSION)
-    throw new UnsupportedContractVersionError(provider.id, provider.contractVersion, GRANUM_CONTRACT_VERSION)
+  validateContractVersion(provider)
 
   if (provider.baseUrl !== undefined)
     validateBaseUrl(provider.id, provider.baseUrl)
@@ -79,10 +78,87 @@ export function validateProvider(provider: GranumProvider): void {
       }
     }
 
-    validateTokenSets(provider.id, descriptor.tokenDefinitions, descriptor.name)
+    validateComponentThemes(provider.id, descriptor)
   }
 
-  validateTokenSets(provider.id, provider.theme?.tokenDefinitions)
+  validateThemeContribution(provider)
+}
+
+/** Ключи вклада в темы контракта 1: их место заняли каталог и `themesDir` (C-38). */
+const LEGACY_THEME_KEYS = ['themes', 'defaultThemes', 'tokenDefinitions', 'tokenDefinitionsRef'] as const
+const LEGACY_COMPONENT_KEYS = ['tokenDefinitions', 'tokenDefinitionsRef'] as const
+
+function hasThemes(provider: GranumProvider): boolean {
+  const theme = provider.theme
+  return Boolean(theme?.catalog || theme?.registry || theme?.defaultTheme)
+    || provider.components.some(descriptor => descriptor.themesDir !== undefined)
+}
+
+/**
+ * Контракт 2; `1` — только у провайдера без тем: так читается манифест
+ * формата 2 спутника, которому темы не нужны (C-2, M-11).
+ */
+function validateContractVersion(provider: GranumProvider): void {
+  const version = provider.contractVersion as unknown
+  if (version === GRANUM_CONTRACT_VERSION)
+    return
+  if (version === 1 && Array.isArray(provider.components) && !hasThemes(provider))
+    return
+  throw new UnsupportedContractVersionError(provider.id, version, GRANUM_CONTRACT_VERSION)
+}
+
+function validateComponentThemes(providerId: string, descriptor: GranumComponentDescriptor): void {
+  for (const key of LEGACY_COMPONENT_KEYS) {
+    if ((descriptor as unknown as Record<string, unknown>)[key] !== undefined) {
+      throw new InvalidProviderError(
+        providerId,
+        'legacy-token-definitions',
+        `'${key}' was removed in contract 2: put the component tokens into a 'themesDir' folder `
+        + `(<dir>/<theme>/root.json and <dir>/<theme>/modes/<mode>.json) and pass 'themesDir' to defineGranumComponent.`,
+        descriptor.name,
+      )
+    }
+  }
+  if (descriptor.themesDir !== undefined && (typeof descriptor.themesDir !== 'string' || descriptor.themesDir.length === 0))
+    throw new InvalidProviderError(providerId, 'invalid-theme-dir', `'themesDir' must be a non-empty path (got ${JSON.stringify(descriptor.themesDir)}).`, descriptor.name)
+}
+
+/** Каталог: id — slug, родитель и тема по умолчанию — из того же каталога, без циклов. */
+function validateThemeContribution(provider: GranumProvider): void {
+  const theme = provider.theme
+  if (theme === undefined)
+    return
+  for (const key of LEGACY_THEME_KEYS) {
+    if ((theme as unknown as Record<string, unknown>)[key] !== undefined) {
+      throw new InvalidProviderError(
+        provider.id,
+        'legacy-token-definitions',
+        `'theme.${key}' was removed in contract 2: a theme is data — declare it in 'theme.catalog' `
+        + `({ <id>: { title, data: 'themes/<id>.json' } }) with its modes inside the JSON, and set 'theme.defaultTheme'.`,
+      )
+    }
+  }
+  const catalog = theme.catalog ?? {}
+  for (const [id, entry] of Object.entries(catalog)) {
+    if (!isThemeId(id))
+      throw new InvalidProviderError(provider.id, 'invalid-theme-id', `catalog id '${id}' must be a slug /^[a-z][a-z0-9-]*$/.`)
+    if (typeof entry?.title !== 'string' || entry.title.length === 0)
+      throw new InvalidProviderError(provider.id, 'invalid-theme-data', `'theme.catalog.${id}.title' must be a non-empty string.`)
+    if (typeof entry.data !== 'string' || entry.data.length === 0)
+      throw new InvalidProviderError(provider.id, 'invalid-theme-data', `'theme.catalog.${id}.data' must be a path to the theme JSON.`)
+    if (entry.extends !== undefined && !Object.hasOwn(catalog, entry.extends))
+      throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `theme '${id}' extends '${entry.extends}', which is not in the catalog.`)
+  }
+  for (const id of Object.keys(catalog)) {
+    const chain: string[] = []
+    for (let current: string | undefined = id; current !== undefined; current = catalog[current]?.extends) {
+      if (chain.includes(current))
+        throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `catalog themes extend each other in a cycle: ${[...chain, current].join(' -> ')}.`)
+      chain.push(current)
+    }
+  }
+  if (theme.defaultTheme !== undefined && !Object.hasOwn(catalog, theme.defaultTheme))
+    throw new InvalidProviderError(provider.id, 'invalid-theme-id', `'theme.defaultTheme' '${theme.defaultTheme}' is not in the catalog (${Object.keys(catalog).join(', ') || 'empty'}).`)
 }
 
 /**
@@ -137,24 +213,9 @@ export function validateBaseUrl(providerId: string, baseUrl: string): void {
   }
 }
 
-function validateTokenSets(
-  providerId: string,
-  sets: Readonly<Record<string, GranumTokenSet>> | undefined,
-  componentName?: string,
-): void {
-  if (!sets)
-    return
-  for (const [theme, set] of Object.entries(sets)) {
-    for (const token of Object.keys(set.tokens)) {
-      if (token.startsWith('--'))
-        throw new InvalidTokenKeyError(providerId, token, theme, componentName)
-    }
-  }
-}
-
 /** Проверка одного дескриптора вне провайдера — для `defineGranumComponent`. */
 export function assertComponentDescriptor(descriptor: GranumComponentDescriptor): void {
   if (!isValidComponentName(descriptor.name))
     throw new InvalidComponentNameError('(unbound)', String(descriptor.name))
-  validateTokenSets('(unbound)', descriptor.tokenDefinitions, descriptor.name)
+  validateComponentThemes('(unbound)', descriptor)
 }

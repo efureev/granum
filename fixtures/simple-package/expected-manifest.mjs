@@ -23,9 +23,9 @@ export default function ({ manifest, distDir, check }) {
   check(!manifest.warnings.some(w => w.code === 'safelist-redundant'), `warnings: ${JSON.stringify(manifest.warnings)}`)
   check(c.XTokenized.classes.includes('space-y-2xl') && c.XTokenized.classes.includes('border-green'), `XTokenized.classes: ${c.XTokenized.classes}`)
 
-  // Ссылки на токены материализованы; обе формы.
-  check(c.XTokenized.tokens.declares.light?.tokens['x-tokenized'] === 'red', 'XTokenized light tokens')
-  check(c.XTokenized.tokens.declares.dark?.selector === '.dark, [data-theme="dark"]', 'XTokenized dark selector')
+  // Папка themesDir материализована; обе формы файла.
+  check(c.XTokenized.tokens.themes?.paper?.modes.light?.['x-tokenized'] === 'red', 'XTokenized paper/light (CSS)')
+  check(c.XTokenized.tokens.themes?.paper?.modes.dark?.['x-tokenized'] === 'yellow', 'XTokenized paper/dark (JSON)')
   check(c.XTokenized.tokens.consumes.includes('--x-tokenized'), `XTokenized.consumes: ${c.XTokenized.tokens.consumes}`)
   check(c.XTest1.tokens.consumes.includes('--brd'), `XTest1.consumes: ${c.XTest1.tokens.consumes}`)
 

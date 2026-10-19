@@ -55,10 +55,19 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   writeFileSync(join(root, 'node_modules/@x/kit/package.json'), JSON.stringify({ name: '@x/kit', version: '1.0.0', exports: { './granum.manifest.json': './dist/granum.manifest.json' } }))
   writeFileSync(join(dist, 'components/Card/styles.css'), '.card{padding:var(--space)}\n')
   writeFileSync(join(dist, 'components/Card/index.js'), 'export const Card = 1\n')
+  mkdirSync(join(dist, 'themes'), { recursive: true })
+  writeFileSync(join(dist, 'themes/kit.json'), JSON.stringify({ id: 'kit', title: 'Kit', root: { space: '8px' }, modes: { light: { colorScheme: 'light', tokens: {} } } }))
   const { manifest } = makeManifest('@x/kit', {
-    Card: { classes: ['p-4'], css: ['components/Card/styles.css'], safelist: ['no-such-rule'], tokens: { declares: {}, consumes: ['--space'], dynamic: [] } },
+    Card: { classes: ['p-4'], css: ['components/Card/styles.css'], safelist: ['no-such-rule'], tokens: { consumes: ['--space'], dynamic: [] } },
   }, {
-    theme: { themes: {}, defaultThemes: [], tokenDefinitions: { light: { tokens: { space: '8px' } } }, declares: ['--space'] },
+    theme: {
+      defaultTheme: 'kit',
+      catalog: {
+        kit: { title: 'Kit', docs: 'https://example.com/kit', data: 'themes/kit.json', modes: ['light'], defaultMode: 'light' },
+        night: { title: 'Night', extends: 'kit', data: 'themes/night.json', modes: ['light', 'dark'], defaultMode: 'light' },
+      },
+      declares: ['--space'],
+    },
     // Пакет собран тем же движком, что стоит в конфиге: отпечатки совпадают,
     // классы берутся из манифеста без пересчёта.
     engine: { dialect: 'granum-tests/mini@1', vocabulary: 'fnv64-clitestengine01', name: 'cli-test-engine', module: null },
@@ -69,7 +78,7 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   writeFileSync(join(root, 'dist/granum-report.json'), JSON.stringify({
     generatedBy: '@feugene/granum@test',
     selection: [{ key: '@x/kit:Card', dependencies: [] }],
-    themes: { names: ['light'], namesSource: 'fallback' },
+    themes: { theme: 'kit', themeSource: 'default', modes: ['light'], modesSource: 'theme', previews: [] },
     classes: { input: 2, matched: 1, unmatched: [{ className: 'no-such-rule', sources: ['safelist:@x/kit:Card'] }], safelistRedundant: [] },
     tokens: { undefined: [] },
     prune: null,
@@ -251,8 +260,23 @@ describe('granum cli: вызов и коды выхода', () => {
     expect(await runGranumCli(['why-css', 'granum.config.mjs', 'm-1'], whyMiss.io)).toBe(1)
   })
 
+  it('themes: каталог по индексу манифеста, без чтения данных; --json', async () => {
+    const root = appDir()
+    const t = io(root)
+    expect(await runGranumCli(['themes', 'granum.config.mjs'], t.io)).toBe(0)
+    const text = t.out.join('\n')
+    expect(text).toContain('Catalog: @x/kit (2 theme(s), default: kit)')
+    expect(text).toContain('• kit — Kit [active]')
+    expect(text).toContain('• night — Night (extends kit)')
+    expect(text).toContain('modes: light, dark (default: light)')
+    expect(text).toContain('docs: https://example.com/kit')
+    const json = io(root)
+    expect(await runGranumCli(['themes', 'granum.config.mjs', '--json'], json.io)).toBe(0)
+    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ owner: '@x/kit', defaultTheme: 'kit', active: 'kit', themes: [{ id: 'kit' }, { id: 'night', extends: 'kit' }] })
+  })
+
   it('prune: 0 всегда, 1 с --strict при наличии удаляемых', async () => {
-    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], themes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], modes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
     const t = io(root)
     expect(await runGranumCli(['prune', 'granum.config.mjs', '--json'], t.io)).toBe(0)
     expect(JSON.parse(t.out[0]!).mode).toBe('off')

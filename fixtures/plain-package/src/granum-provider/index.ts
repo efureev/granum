@@ -12,7 +12,7 @@ export const PROVIDER_ID = '@granum-fixtures/plain'
  */
 export const plainProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   components: [
     // <granum:components:registry>
     plCardConfig,
@@ -21,8 +21,6 @@ export const plainProvider = defineGranumProvider({
   ],
   theme: {
     tokensCss: 'styles/tokens.css',
-    themes: { light: 'styles/light.css' },
-    defaultThemes: ['light'],
   },
 })
 

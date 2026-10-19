@@ -11,15 +11,15 @@
  *
  *   1. `@feugene/granum/runtime` живёт в Node без DOM. Точка входа объявлена
  *      браузерной, но «браузерная» не значит «падает на сервере»:
- *      контроллер тем обязан конструироваться и отвечать на вопросы, просто
- *      применять ему нечего.
- *   2. Тему выбирает сервер, и выбор виден в разметке. Знание о селекторах тем
- *      есть только у сборки, и приезжает оно манифестом `virtual:granum/themes`
- *      — тем же, из которого потом работает браузер.
- *   3. Первый клиентский кадр совпадает с серверным. Клиент не выбирает тему
- *      заново, а читает уже применённую: `readActiveTheme` + контроллер поверх
- *      неё оставляют корень ровно в том состоянии, в каком его отдал сервер.
- *      Это и есть отсутствие вспышки чужой темы, проверенное без браузера.
+ *      контроллер режимов обязан конструироваться и отвечать на вопросы,
+ *      просто применять ему нечего.
+ *   2. Режим выбирает сервер — из запроса или cookie — и пишет пару на корень.
+ *      Значения пар есть только у сборки, и приезжают они манифестом
+ *      `virtual:granum/themes` — тем же, из которого потом работает браузер.
+ *   3. Первый клиентский кадр совпадает с серверным. Клиент не выбирает режим
+ *      заново: контроллер узнаёт выставленную пару и оставляет корень ровно в
+ *      том состоянии, в каком его отдал сервер. Это и есть отсутствие вспышки
+ *      чужого режима, проверенное без браузера.
  *   4. Весь CSS приложения — один ассет с пятью слоями. Для SSR это важнее, чем
  *      кажется: собирать стили по отрендеренным модулям не нужно, достаточно
  *      ссылки из шаблона.
@@ -92,19 +92,13 @@ catch (error) {
   process.exit(1)
 }
 check(granumFromProvider.length === 0, `dist провайдера импортирует granum в рантайме: ${granumFromProvider.join('; ')}`)
-for (const name of ['render', 'ROOT_TAG', 'themeManifest', 'readActiveTheme', 'rootAttributes'])
+for (const name of ['render', 'ROOT_TAG', 'themeManifest', 'readActiveMode', 'rootAttributes'])
   check(ssr[name] !== undefined, `серверный бандл не экспортирует ${name}`)
 
 const manifest = ssr.themeManifest
-check(
-  manifest.themes.map(t => t.name).join(',') === expected.themes.join(','),
-  `темы манифеста: ${manifest.themes.map(t => t.name)}, ожидались ${expected.themes}`,
-)
-for (const theme of manifest.themes) {
-  const want = expected.manifest[theme.name]
-  const got = { selectors: theme.selectors, activation: theme.activation }
-  check(JSON.stringify(got) === JSON.stringify(want), `тема ${theme.name} в манифесте: ${JSON.stringify(got)}, ожидалось ${JSON.stringify(want)}`)
-}
+check(manifest.theme.id === expected.theme, `тема манифеста: ${manifest.theme.id}, ожидалась ${expected.theme}`)
+const pairs = Object.fromEntries(manifest.modes.map(mode => [mode.name, mode.value]))
+check(JSON.stringify(pairs) === JSON.stringify(expected.modes), `режимы манифеста: ${JSON.stringify(pairs)}, ожидались ${JSON.stringify(expected.modes)}`)
 
 // 2. Шаблон и подстановка ------------------------------------------------------
 
@@ -118,12 +112,12 @@ check(template.includes('<!--app-html-->'), 'в шаблоне нет места
 // 3. Рендер ---------------------------------------------------------------------
 
 const rendered = {}
-for (const [key, url] of Object.entries(expected.render))
-  rendered[key] = await ssr.render(url)
+for (const [key, request] of Object.entries(expected.render))
+  rendered[key] = await ssr.render(request.url, request.cookie)
 
 for (const [key, want] of Object.entries(expected.expectRender)) {
   const got = rendered[key]
-  check(got.theme === want.theme, `${key}: активная тема ${got.theme}, ожидалась ${want.theme}`)
+  check(got.mode === want.mode, `${key}: активный режим ${got.mode}, ожидался ${want.mode}`)
   check(got.rootTag === want.rootTag, `${key}: корневой тег ${JSON.stringify(got.rootTag)}, ожидался ${JSON.stringify(want.rootTag)}`)
   for (const fragment of want.html ?? [])
     check(got.html.includes(fragment), `${key}: в разметке нет ${JSON.stringify(fragment)}`)
@@ -133,7 +127,7 @@ for (const [key, want] of Object.entries(expected.expectRender)) {
 
 // Детерминизм: тот же запрос даёт ту же разметку. Без этого кеш ответов и
 // сравнение снапшотов бессмысленны.
-const again = await ssr.render(expected.render.light)
+const again = await ssr.render(expected.render.light.url)
 check(again.html === rendered.light.html, 'повторный рендер того же URL дал другую разметку')
 check(again.rootTag === rendered.light.rootTag, 'повторный рендер дал другой корневой тег')
 
@@ -169,13 +163,13 @@ for (const [key, want] of Object.entries(expected.expectRender)) {
   const root = makeRoot(rendered[key].rootTag)
   const before = JSON.stringify([...root.attributes].sort())
 
-  // Ровно то, что делает `entry-client.ts`: читает применённую тему и
-  // поднимает контроллер поверх неё.
-  const read = ssr.readActiveTheme(manifest, root)
-  check(read === want.theme, `${key}: клиент прочитал бы тему ${read}, сервер отдал ${want.theme}`)
+  // Ровно то, что делает `entry-client.ts`: контроллер поднимается поверх
+  // уже выставленной пары и узнаёт её сам.
+  const read = ssr.readActiveMode(manifest, root)
+  check(read === want.mode, `${key}: клиент прочитал бы режим ${read}, сервер отдал ${want.mode}`)
 
-  const controller = createThemeController(manifest, { target: root, storage: null, initial: read })
-  check(controller.get() === want.theme, `${key}: контроллер стартовал с темой ${controller.get()}, а не ${want.theme}`)
+  const controller = createThemeController(manifest, { target: root, storage: null })
+  check(controller.mode === want.mode, `${key}: контроллер стартовал с режимом ${controller.mode}, а не ${want.mode}`)
   check(
     JSON.stringify([...root.attributes].sort()) === before,
     `${key}: старт контроллера изменил корень — это и есть вспышка чужой темы при гидрации`,
@@ -183,13 +177,13 @@ for (const [key, want] of Object.entries(expected.expectRender)) {
 
   // И наоборот: переключение действительно меняет состояние, то есть проверка
   // выше не проходит просто потому, что контроллер ничего не умеет.
-  const other = manifest.themes.map(t => t.name).find(name => name !== want.theme)
-  controller.set(other)
+  const other = manifest.modes.map(m => m.name).find(name => name !== want.mode)
+  controller.setMode(other)
   check(
     JSON.stringify([...root.attributes].sort()) !== before,
     `${key}: переключение на ${other} не изменило корень`,
   )
-  check(ssr.readActiveTheme(manifest, root) === other, `${key}: после переключения корень не читается как ${other}`)
+  check(ssr.readActiveMode(manifest, root) === other, `${key}: после переключения корень не читается как ${other}`)
 }
 
 // 5. Один ассет CSS и его содержимое --------------------------------------------

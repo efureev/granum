@@ -3,6 +3,7 @@
  * в неё приносит — по той же резолюции, из которой эмитится CSS.
  */
 import type { ComponentKey, ComponentRegistry } from '../../core/registry'
+import type { TokenChain } from '../../core/tokenLayers'
 import type { PreparedApp } from '../prepare'
 import { resolveComponentTarget, splitComponentKey } from '../../core/registry'
 import { normalizeDependency, normalizeSelection } from '../../core/resolveSelection'
@@ -10,9 +11,10 @@ import { normalizeDependency, normalizeSelection } from '../../core/resolveSelec
 export type ExplainReason = 'selected' | 'dependency' | 'not-selected' | 'unknown'
 
 export interface ExplainTokenContribution {
-  readonly theme: string
-  readonly selector: string
-  readonly tokens: readonly { readonly name: string, readonly value: string, readonly effective: string, readonly overridden: boolean }[]
+  /** Режим активной темы или `root`. */
+  readonly mode: string
+  /** `from` — тема и режим, чей файл компонента дал значение (`paper/dark`). */
+  readonly tokens: readonly { readonly name: string, readonly value: string, readonly from: string, readonly effective: string, readonly overridden: boolean }[]
 }
 
 export interface ExplainReport {
@@ -120,20 +122,21 @@ export function granumExplain(app: PreparedApp, target: string): ExplainReport {
   const chain = included && !isSeed ? shortestChain(registry, seeds, key) : (isSeed ? [key] : [])
   const requiredBy = resolution.selection.order.filter(other => other !== key && directDependencies(registry, other).includes(key))
 
+  // Токены компонента по теме и режиму: значение, которое он дал, и итог после слоёв приложения.
   const tokens: ExplainTokenContribution[] = []
-  for (const item of resolution.themes.items) {
-    if (item.componentName !== name || item.providerId !== providerId || !item.tokenDefinition)
-      continue
-    const selector = item.tokenDefinition.selector ?? resolution.themes.tokenRegistry[item.themeName]?.blocks[0]?.selector ?? ':root'
-    const block = resolution.tokenLayers.get(item.themeName)?.find(b => b.selector === selector)
-    tokens.push({
-      theme: item.themeName,
-      selector,
-      tokens: Object.entries(item.tokenDefinition.tokens).map(([tokenName, value]) => {
-        const effective = block?.tokens.get(tokenName)?.effective ?? value
-        return { name: tokenName, value, effective, overridden: effective !== value }
-      }),
-    })
+  const active = resolution.tokens.active
+  const scopes: [string, ReadonlyMap<string, TokenChain>][] = active ? [['root', active.root], ...active.modes] : []
+  for (const [mode, chains] of scopes) {
+    const own: ExplainTokenContribution['tokens'][number][] = []
+    for (const chain of chains.values()) {
+      const layer = [...chain.layers].reverse().find(l => l.source === 'component' && l.componentKey === key)
+      if (!layer)
+        continue
+      const effective = chain.effective ?? layer.value
+      own.push({ name: chain.token, value: layer.value, from: `${layer.theme}/${layer.mode}`, effective, overridden: effective !== layer.value })
+    }
+    if (own.length > 0)
+      tokens.push({ mode, tokens: own.sort((a, b) => a.name.localeCompare(b.name, 'en')) })
   }
 
   const files = provider.form === 'manifest' && 'manifest' in provider.source
@@ -199,11 +202,11 @@ export function formatExplainReport(report: ExplainReport): string {
   push(`  css (${report.css.length}): ${report.css.join(', ') || '—'}`)
   push(`  files (${report.files.length}): ${report.files.join(', ') || '—'}`)
   push(`  consumes tokens (${report.consumes.length}): ${report.consumes.join(' ') || '—'}`)
-  push(`  tokens (${report.tokens.length} theme(s)):${report.tokens.length ? '' : ' —'}`)
+  push(`  tokens (${report.tokens.length} mode(s)):${report.tokens.length ? '' : ' —'}`)
   for (const c of report.tokens) {
-    push(`    • [${c.theme}] ${c.selector}`)
+    push(`    • [${c.mode}]`)
     for (const t of c.tokens)
-      push(`        --${t.name}: ${t.value}${t.overridden ? ` (overridden → ${t.effective})` : ''}`)
+      push(`        --${t.name}: ${t.value} (from ${t.from})${t.overridden ? ` (overridden → ${t.effective})` : ''}`)
   }
   if (report.group)
     push(`  group: ${report.group}`)

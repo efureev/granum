@@ -1,164 +1,282 @@
 /**
  * Единственный источник правды о значениях токенов: какие
- * слои писали каждый токен, в каком порядке и что уедет в CSS. Из него
- * сериализуется CSS и считаются отчёты — расходиться им негде.
+ * слои писали каждый токен в каждом режиме, в каком порядке и что уедет в
+ * CSS (T-7). Из него сериализуется CSS и считаются отчёты, `granum tokens` и
+ * обрезка — расходиться им негде.
  */
-import type { ResolvedThemeItem, ResolvedThemes } from './resolveThemes'
-import { themeFileSelector } from './resolveThemes'
+import type { ComponentNode } from './providerNode'
+import type { GranumModesInput, ResolvedMode, ResolvedTheme, ResolvedThemes } from './resolveThemes'
+import { APP_THEME_SOURCE, componentModeSequence } from './resolveThemes'
+import { DEFAULT_MODE, modeChain } from './themeData'
 
-/** Форма `themes.tokenOverrides`: строка — плоская запись в первичный селектор, объект — по селектору. */
-export type ThemeTokenOverrides = Partial<Record<
-  string,
-  Readonly<Record<string, string | Readonly<Record<string, string>>>>
->>
+/**
+ * Слой значения, по порядку применения: данные темы, токены компонента,
+ * тема-объект приложения, режим `define`, override приложения.
+ */
+export type TokenLayerSource = 'theme' | 'component' | 'app-theme' | 'app-mode' | 'app-override'
 
 export interface TokenLayerValue {
-  /** `provider:<id>` | `component:<Name>` | `app-theme` | `app-override`. */
-  readonly source: string
+  readonly source: TokenLayerSource
   readonly value: string
-  /** Квалифицированный ключ компонента-автора — только у `component:*`. */
+  /** Тема, из данных или токенов компонента которой пришло значение. */
+  readonly theme?: string
+  /**
+   * Режим, из которого взято значение: сам режим, предок по `extends`, режим по
+   * умолчанию (T-10) или `root` — режимонезависимое.
+   */
+  readonly mode?: string
+  /** Квалифицированный ключ компонента-автора — только у `component`. */
   readonly componentKey?: string
   /** Слой написан, но отброшен `strictTokens` и в CSS не уехал. */
   readonly skipped?: 'strict-tokens'
 }
 
 export interface TokenChain {
-  readonly theme: string
-  readonly selector: string
   readonly token: string
+  /** Режим или `root`. */
+  readonly scope: string
   /** Все написанные слои в порядке применения, включая пропущенные. */
   readonly layers: TokenLayerValue[]
   /** Значение последнего непропущенного слоя; `undefined` — токена в CSS нет. */
   effective?: string
 }
 
-export interface EffectiveThemeBlock {
-  readonly selector: string
+export interface FallbackBlock {
+  readonly supports: string
   readonly tokens: Map<string, TokenChain>
 }
 
-export interface CollectTokenLayersOptions {
-  readonly strictTokens?: boolean
-  readonly onSkippedOverride?: (theme: string, token: string) => void
+/** Значения одной темы: режимонезависимые и по режимам в порядке эмиссии. */
+export interface ThemeTokenSet {
+  readonly themeId: string
+  readonly root: Map<string, TokenChain>
+  readonly modes: Map<string, Map<string, TokenChain>>
+  readonly fallbacks: Map<string, readonly FallbackBlock[]>
 }
 
-function sourceOf(item: ResolvedThemeItem): { source: string, componentKey?: string } {
-  if (item.appDefined)
-    return { source: 'app-theme' }
-  if (item.componentName)
-    return { source: `component:${item.componentName}`, componentKey: `${item.providerId}:${item.componentName}` }
-  return { source: `provider:${item.providerId}` }
+export interface ResolvedTokens {
+  readonly active: ThemeTokenSet | undefined
+  readonly previews: readonly ThemeTokenSet[]
+}
+
+export interface CollectTokenLayersOptions {
+  readonly tokenOverrides?: GranumModesInput['tokenOverrides']
+  readonly define?: GranumModesInput['define']
+  readonly strictTokens?: boolean
+  readonly onSkippedOverride?: (scope: string, token: string) => void
+}
+
+function push(map: Map<string, TokenChain>, scope: string, token: string, layer: TokenLayerValue): void {
+  let chain = map.get(token)
+  if (!chain) {
+    chain = { token, scope, layers: [] }
+    map.set(token, chain)
+  }
+  chain.layers.push(layer)
+  if (!layer.skipped)
+    chain.effective = layer.value
+}
+
+function ensure<K, V>(map: Map<K, V>, key: K, create: () => V): V {
+  let value = map.get(key)
+  if (value === undefined) {
+    value = create()
+    map.set(key, value)
+  }
+  return value
+}
+
+/** Итоговые токены режима темы с режимом-источником каждого значения. */
+function modeValues(theme: ResolvedTheme, mode: string): Map<string, { value: string, mode: string }> {
+  const out = new Map<string, { value: string, mode: string }>()
+  for (const name of [...modeChain(theme.data, mode).names].reverse()) {
+    for (const [token, value] of Object.entries(theme.data.modes[name]?.tokens ?? {}))
+      out.set(token, { value, mode: name })
+  }
+  return out
+}
+
+/**
+ * Данные темы: `root`, затем каждый режим по цепочке `extends` и недостающее —
+ * из режима по умолчанию (T-10). Недостающее — запасной вариант: значение,
+ * которое режиму уже дал другой слой (токены компонента под темой-объектом
+ * приложения), им не перекрывается.
+ */
+function applyThemeData(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[], source: 'theme' | 'app-theme'): void {
+  for (const [token, value] of Object.entries(theme.data.root))
+    push(set.root, 'root', token, { source, value, theme: theme.id, mode: 'root' })
+  const defaults = modeValues(theme, theme.data.defaultMode ?? DEFAULT_MODE)
+  for (const mode of modeNames) {
+    const target = ensure(set.modes, mode, () => new Map())
+    const own = modeValues(theme, mode)
+    for (const [token, found] of defaults) {
+      if (!own.has(token) && !target.has(token))
+        push(target, mode, token, { source, value: found.value, theme: theme.id, mode: found.mode })
+    }
+    for (const [token, found] of own)
+      push(target, mode, token, { source, value: found.value, theme: theme.id, mode: found.mode })
+  }
+}
+
+/**
+ * Токены компонентов для темы (A-24): по каждому токену — первый найденный
+ * в последовательности режимов [режим, предки по `extends`, режим по умолчанию],
+ * внутри режима — по цепочке тем [тема, предки по каталогу].
+ */
+function applyComponentTokens(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[], components: readonly ComponentNode[]): void {
+  const chain = theme.chain
+  for (const component of components) {
+    const tokens = component.themeTokens
+    if (!chain.some(id => tokens[id] !== undefined))
+      continue
+    const componentKey = `${component.providerId}:${component.name}`
+    const rootNames = new Set(chain.flatMap(id => Object.keys(tokens[id]?.root ?? {})))
+    for (const token of rootNames) {
+      const id = chain.find(themeId => tokens[themeId]?.root?.[token] !== undefined)!
+      push(set.root, 'root', token, { source: 'component', value: tokens[id]!.root![token]!, theme: id, mode: 'root', componentKey })
+    }
+    const modeTokenNames = new Set(chain.flatMap(id => Object.values(tokens[id]?.modes ?? {}).flatMap(values => Object.keys(values))))
+    for (const mode of modeNames) {
+      const target = ensure(set.modes, mode, () => new Map())
+      const pairs = componentModeSequence(theme.data, mode).flatMap(from => chain.map(id => ({ id, from })))
+      for (const token of modeTokenNames) {
+        const hit = pairs.find(({ id, from }) => tokens[id]?.modes[from]?.[token] !== undefined)
+        if (hit)
+          push(target, mode, token, { source: 'component', value: tokens[hit.id]!.modes[hit.from]![token]!, theme: hit.id, mode: hit.from, componentKey })
+      }
+    }
+  }
+}
+
+function applyFallbacks(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[]): void {
+  for (const mode of modeNames) {
+    const blocks: FallbackBlock[] = []
+    for (const name of [...modeChain(theme.data, mode).names].reverse()) {
+      for (const fallback of theme.data.modes[name]?.fallbacks ?? []) {
+        const tokens = new Map<string, TokenChain>()
+        for (const [token, value] of Object.entries(fallback.tokens))
+          push(tokens, mode, token, { source: theme.providerId === APP_THEME_SOURCE ? 'app-theme' : 'theme', value, theme: theme.id, mode: name })
+        blocks.push({ supports: fallback.supports, tokens })
+      }
+    }
+    if (blocks.length > 0)
+      set.fallbacks.set(mode, blocks)
+  }
+}
+
+/** Значения темы без режимов `define` и override: данные, компоненты, тема-объект приложения. */
+function collectThemeTokens(theme: ResolvedTheme, components: readonly ComponentNode[]): ThemeTokenSet {
+  const set: ThemeTokenSet = { themeId: theme.id, root: new Map(), modes: new Map(), fallbacks: new Map() }
+  const modeNames = Object.keys(theme.data.modes)
+  // Тема-объект приложения — слой после токенов компонентов (A-27): приложение
+  // вправе перекрасить компонент провайдера своими данными.
+  if (theme.providerId === APP_THEME_SOURCE) {
+    applyComponentTokens(set, theme, modeNames, components)
+    applyThemeData(set, theme, modeNames, 'app-theme')
+  }
+  else {
+    applyThemeData(set, theme, modeNames, 'theme')
+    applyComponentTokens(set, theme, modeNames, components)
+  }
+  applyFallbacks(set, theme, modeNames)
+  return set
+}
+
+function copyChains(from: ReadonlyMap<string, TokenChain>, scope: string): Map<string, TokenChain> {
+  const out = new Map<string, TokenChain>()
+  for (const [token, chain] of from) {
+    out.set(token, { token, scope, layers: [...chain.layers], ...(chain.effective !== undefined ? { effective: chain.effective } : {}) })
+  }
+  return out
+}
+
+/** Оставляет режимы набора в его порядке. */
+function selectModes(set: ThemeTokenSet, modes: readonly ResolvedMode[]): ThemeTokenSet {
+  const ordered = new Map<string, Map<string, TokenChain>>()
+  const fallbacks = new Map<string, readonly FallbackBlock[]>()
+  for (const mode of modes) {
+    ordered.set(mode.name, set.modes.get(mode.name) ?? new Map())
+    const blocks = set.fallbacks.get(mode.name)
+    if (blocks)
+      fallbacks.set(mode.name, blocks)
+  }
+  return { themeId: set.themeId, root: set.root, modes: ordered, fallbacks }
 }
 
 export function collectTokenLayers(
   themes: ResolvedThemes,
-  tokenOverrides: ThemeTokenOverrides | undefined,
+  components: readonly ComponentNode[],
   options: CollectTokenLayersOptions = {},
-): Map<string, EffectiveThemeBlock[]> {
-  const strict = !!options.strictTokens
-  const result = new Map<string, EffectiveThemeBlock[]>()
+): ResolvedTokens {
+  const previews = themes.previews.map(preview => selectModes(collectThemeTokens(preview.theme, components), preview.modes))
+  if (!themes.theme)
+    return { active: undefined, previews }
 
-  for (const themeName of themes.names) {
-    const entry = themes.tokenRegistry[themeName]
-    const overrides = tokenOverrides?.[themeName]
-    if (!entry && !overrides)
-      continue
+  const set = collectThemeTokens(themes.theme, components)
 
-    const blocks = entry?.blocks ?? []
-    // Тема, которую провайдер поставил файлом: блоки без своего селектора
-    // встают под селектор файла (как в `resolveThemes`). `:root` — селектор
-    // светлой темы, и override тёмной лёг бы в неё.
-    const primarySelector = themeFileSelector(themes.items, themeName) ?? blocks[0]?.selector ?? ':root'
-
-    // Провенанс по паре (селектор, токен); запасной — по имени токена, потому
-    // что `define` со `extends` переписывает блок под новым селектором.
-    const bySelectorToken = new Map<string, TokenLayerValue[]>()
-    const byToken = new Map<string, TokenLayerValue[]>()
-    for (const item of themes.items) {
-      if (item.themeName !== themeName || !item.tokenDefinition)
-        continue
-      const selector = item.tokenDefinition.selector ?? primarySelector
-      const { source, componentKey } = sourceOf(item)
-      for (const [token, value] of Object.entries(item.tokenDefinition.tokens)) {
-        const layer: TokenLayerValue = componentKey === undefined ? { source, value } : { source, value, componentKey }
-        push(bySelectorToken, `${selector}\0${token}`, layer)
-        push(byToken, token, layer)
-      }
-    }
-
-    const order: string[] = []
-    const bySelector = new Map<string, Map<string, TokenChain>>()
-    const ensure = (selector: string): Map<string, TokenChain> => {
-      let tokens = bySelector.get(selector)
-      if (!tokens) {
-        tokens = new Map()
-        bySelector.set(selector, tokens)
-        order.push(selector)
-      }
-      return tokens
-    }
-
-    // `known` — имена по ВСЕЙ теме, поверх всех селекторов: override в другой
-    // селектор той же темы обязан проходить.
-    const known = new Set<string>()
-    // Токены файла темы — тоже пакетный слой: `strictTokens` их не отбрасывает.
-    for (const item of themes.items) {
-      if (item.themeName === themeName && item.file)
-        item.file.tokens.forEach(token => known.add(token))
-    }
-    for (const block of blocks) {
-      const target = ensure(block.selector)
-      for (const [token, value] of Object.entries(block.tokens)) {
-        const layers = bySelectorToken.get(`${block.selector}\0${token}`)
-          ?? byToken.get(token)
-          ?? [{ source: 'app-theme', value }]
-        target.set(token, { theme: themeName, selector: block.selector, token, layers: [...layers], effective: value })
-        known.add(token)
-      }
-    }
-
-    const applyOverride = (target: Map<string, TokenChain>, selector: string, token: string, value: string): void => {
-      const dropped = strict && !known.has(token)
-      const layer: TokenLayerValue = dropped
-        ? { source: 'app-override', value, skipped: 'strict-tokens' }
-        : { source: 'app-override', value }
-      const chain = target.get(token)
-      if (chain) {
-        chain.layers.push(layer)
-        if (!dropped)
-          chain.effective = value
-      }
-      else {
-        target.set(token, { theme: themeName, selector, token, layers: [layer], ...(dropped ? {} : { effective: value }) })
-      }
-      if (dropped)
-        options.onSkippedOverride?.(themeName, token)
-    }
-
-    if (overrides) {
-      for (const [key, value] of Object.entries(overrides)) {
-        if (typeof value === 'string') {
-          applyOverride(ensure(primarySelector), primarySelector, key, value)
-          continue
-        }
-        // `ensure` ДО цикла: селектор с полностью отброшенными токенами всё
-        // равно занимает место в порядке.
-        const target = ensure(key)
-        for (const [token, tokenValue] of Object.entries(value))
-          applyOverride(target, key, token, tokenValue)
-      }
-    }
-
-    result.set(themeName, order.map(selector => ({ selector, tokens: bySelector.get(selector)! })))
+  for (const mode of themes.definitions) {
+    const base = set.modes.get(mode.extends!) ?? new Map()
+    const target = copyChains(base, mode.name)
+    const definition = options.define?.[mode.name]
+    for (const [token, value] of Object.entries(definition?.tokens ?? {}))
+      push(target, mode.name, token, { source: 'app-mode', value, mode: mode.name })
+    set.modes.set(mode.name, target)
+    const blocks = set.fallbacks.get(mode.extends!)
+    if (blocks)
+      set.fallbacks.set(mode.name, blocks)
   }
 
-  return result
+  const known = new Set(set.root.keys())
+  for (const tokens of set.modes.values()) {
+    for (const token of tokens.keys())
+      known.add(token)
+  }
+  for (const [scope, tokens] of Object.entries(options.tokenOverrides ?? {})) {
+    const target = scope === 'root' ? set.root : set.modes.get(scope)
+    if (!target)
+      continue
+    for (const [token, value] of Object.entries(tokens)) {
+      const dropped = options.strictTokens === true && !known.has(token)
+      push(target, scope, token, dropped ? { source: 'app-override', value, mode: scope, skipped: 'strict-tokens' } : { source: 'app-override', value, mode: scope })
+      if (dropped)
+        options.onSkippedOverride?.(scope, token)
+    }
+  }
+
+  return { active: selectModes(set, themes.modes), previews }
 }
 
-function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
-  const list = map.get(key)
-  if (list)
-    list.push(value)
-  else
-    map.set(key, [value])
+/** Значение токена в режиме темы: режимное, иначе режимонезависимое. */
+export function tokenValueIn(set: ThemeTokenSet | undefined, mode: string, token: string): string | undefined {
+  return set?.modes.get(mode)?.get(token)?.effective ?? set?.root.get(token)?.effective
+}
+
+/** Все цепочки темы: корень, режимы, фолбэки — для отчётов и обрезки. */
+export function* allTokenChains(set: ThemeTokenSet | undefined): Generator<TokenChain> {
+  if (!set)
+    return
+  yield* set.root.values()
+  for (const tokens of set.modes.values())
+    yield* tokens.values()
+  for (const blocks of set.fallbacks.values()) {
+    for (const block of blocks)
+      yield* block.tokens.values()
+  }
+}
+
+/** Слой значения для человека: `theme ink/dark`, `component @p:XhButton (paper/light)`, `app-override`. */
+export function describeLayer(layer: TokenLayerValue): string {
+  const from = [layer.theme, layer.mode].filter(Boolean).join('/')
+  switch (layer.source) {
+    case 'theme':
+      return `theme ${from}`
+    case 'component':
+      return `component ${layer.componentKey} (${from})`
+    case 'app-theme':
+      return `app theme ${from}`
+    case 'app-mode':
+      return `app mode ${layer.mode}`
+    case 'app-override':
+      return `app override${layer.skipped ? ' (dropped by strictTokens)' : ''}`
+  }
 }

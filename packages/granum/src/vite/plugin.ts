@@ -9,8 +9,8 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 import type { GranumConfig } from '../config'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
-import type { GranumThemeManifestOptions } from '../node/themeManifest'
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import type { GranumThemeScriptOptions } from '../runtime/script'
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
@@ -24,6 +24,7 @@ import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
 import { buildReportFromBundles } from '../node/report'
 import { getThemeManifest } from '../node/themeManifest'
+import { createThemeScript } from '../runtime/script'
 import { validateGranumConfig } from './validateConfig'
 
 export const VIRTUAL_CSS = 'virtual:granum.css'
@@ -54,8 +55,12 @@ const VIRTUAL_SPLIT_PREFIX = 'virtual:granum/split/'
 const RESOLVED_SPLIT_PREFIX = `\0${VIRTUAL_SPLIT_PREFIX}`
 
 export interface GranumPluginOptions {
-  /** Опции манифеста тем для `virtual:granum/themes`. */
-  readonly themeManifest?: GranumThemeManifestOptions
+  /**
+   * Вставить в `<head>` HTML-точки входа скрипт, который ставит пару режима до
+   * первого кадра (`createThemeScript`). `true` — с ключом хранилища по
+   * умолчанию. SSR-приложение вставляет скрипт само.
+   */
+  readonly themeScript?: boolean | Omit<GranumThemeScriptOptions, 'manifest'>
   readonly log?: (line: string) => void
 }
 
@@ -163,7 +168,21 @@ function providerFilesOf(app: PreparedApp): string[] {
     files.push(source.path)
   for (const ref of resolution.componentCss)
     files.push(resolveProviderPath(ref.path, byId.get(ref.providerId)?.baseUrl))
+  // Данные активной темы и превью: правка JSON темы у провайдера-воркспейса.
+  for (const theme of [resolution.themes.theme, ...resolution.themes.previews.map(p => p.theme)]) {
+    const provider = theme ? byId.get(theme.providerId) : undefined
+    const entry = provider && theme ? provider.theme.catalog[theme.id] : undefined
+    if (provider && entry)
+      files.push(resolveProviderPath(entry.data, provider.baseUrl))
+  }
   return files
+}
+
+/** Файлы, из которых приложение собрало тему-объект (A-33): их правка перезагружает конфиг. */
+function themeSourcesOf(config: GranumConfig, root: string): string[] {
+  return [config.theme, ...(config.previews ?? [])]
+    .flatMap(choice => (typeof choice === 'object' && choice !== null ? choice.sources ?? [] : []))
+    .map(file => resolve(root, file))
 }
 
 /**
@@ -363,7 +382,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     }
     if (id === RESOLVED_THEMES) {
       const app = await prepare()
-      return `export default ${JSON.stringify(getThemeManifest(app.resolution, options.themeManifest ?? {}))}\n`
+      return `export default ${JSON.stringify(getThemeManifest(app.resolution))}\n`
     }
     return null
   }
@@ -393,6 +412,19 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       if (after !== before)
         void devServer.reloadModule(mod)
     }
+  }
+
+  /** Ранний скрипт режима — первым в `<head>`, до стилей: пара должна стоять раньше первого кадра. */
+  const themeScriptTags = async (): Promise<{ tag: string, attrs?: Record<string, string>, children: string, injectTo: 'head-prepend' }[]> => {
+    if (!options.themeScript)
+      return []
+    const manifest = getThemeManifest((await prepare()).resolution)
+    if (manifest.modes.length === 0)
+      return []
+    const script = createThemeScript({ manifest, ...(options.themeScript === true ? {} : options.themeScript) })
+    const match = /^<script([^>]*)>([\s\S]*)<\/script>$/.exec(script)!
+    const nonce = /nonce="([^"]*)"/.exec(match[1]!)?.[1]
+    return [{ tag: 'script', ...(nonce !== undefined ? { attrs: { nonce } } : {}), children: match[2]!, injectTo: 'head-prepend' }]
   }
 
   const invalidate = (): void => {
@@ -495,7 +527,18 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     configureServer(devServer: ViteDevServer): void {
       server = devServer
       const dirs = (config.appSources?.dirs ?? []).map(d => resolve(root, d))
+      // Тема-объект живёт в конфиге, а конфиг читается один раз на процесс
+      // Vite: правку её файлов подхватывает только перезапуск сервера (A-33).
+      const themeSources = themeSourcesOf(config, root)
+      const sourceDirs = themeSources.filter(file => existsSync(file) && statSync(file).isDirectory())
+      if (themeSources.length > 0)
+        devServer.watcher.add(themeSources)
       const onChange = (file: string): void => {
+        if (themeSources.includes(file) || sourceDirs.some(dir => file.startsWith(`${dir}/`) || file.startsWith(`${dir}\\`))) {
+          log(`theme source changed: ${relative(root, file)} — restarting to reload the config`)
+          void devServer.restart()
+          return
+        }
         if (dirs.some(dir => file.startsWith(`${dir}/`) || file.startsWith(`${dir}\\`)))
           invalidate()
         else if (providerFiles.has(file) || file.endsWith('granum.manifest.json'))
@@ -618,9 +661,10 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
      */
     transformIndexHtml: {
       order: 'post' as const,
-      handler(html: string, ctx: { bundle?: Record<string, unknown> }) {
+      async handler(html: string, ctx: { bundle?: Record<string, unknown> }) {
+        const scriptTags = await themeScriptTags()
         if (!splitting() || splitLayers.length === 0)
-          return html
+          return scriptTags.length > 0 ? scriptTags : html
         // Имя с хешем присваивает бандлер, поэтому берём его из самого бандла по
         // имени, под которым ассет эмитился: ссылка по `ref` в этом хуке не
         // типизирована, а бандл — типизирован и уже собран.
@@ -638,16 +682,16 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           .map(layer => byName.get(assetNameOf(layer)))
           .filter((fileName): fileName is string => fileName !== undefined)
         if (links.length !== splitLayers.length)
-          return html
+          return scriptTags.length > 0 ? scriptTags : html
         splitLinked = true
         // База обязательна: приложение может жить не в корне домена, и Vite
         // проставляет её своим ссылкам — наши не имеют права отличаться.
         const prefix = base.endsWith('/') ? base : `${base}/`
-        return links.map(href => ({
+        return [...scriptTags, ...links.map(href => ({
           tag: 'link',
           attrs: { rel: 'stylesheet', href: `${prefix}${href}` },
           injectTo: 'head' as const,
-        }))
+        }))]
       },
     },
 
@@ -703,7 +747,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       reportWritten = { target, text }
       timings.report = performance.now() - reportStarted
       const summary = `${report.selection.length} components, ${report.classes.matched} classes matched, `
-        + `${report.classes.unmatched.length} without a rule, themes [${report.themes.names.join(', ')}]${
+        + `${report.classes.unmatched.length} without a rule, theme ${report.themes.theme ?? '—'} [${report.themes.modes.join(', ')}]${
           report.prune ? `, prune: ${report.prune.removable.length} removable` : ''
         }${splitting() && splitLayers.length > 0 ? `, css: ${splitLayers.length} layer assets` : ''}${file !== false ? ` → ${join(outDir, file)}` : ''}`
       // Отчёт мог измениться в том, чего строка не называет (размеры слоёв):

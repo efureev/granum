@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { CssReadError, TokenRefError } from '../core/errors'
+import { resolveTokenValue } from '../core/resolve'
 import { emitCss, LAYER_NAMES, wrapLayer, wrapLayers } from '../node/emit'
 import { buildReport, buildReportFromBundles } from '../node/report'
 import { makeManifest, makeProvider, prepareTestApp, TEST_ENGINE } from './helpers'
@@ -20,14 +21,21 @@ function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } 
   mkdirSync(join(dist, 'components/Panel'), { recursive: true })
   writeFileSync(join(dist, 'theme/tokens.css'), ':root {\n  --space: 8px;\n  --unused: 1px;\n  --derived: calc(var(--space) * 2);\n}\n')
   writeFileSync(join(dist, 'theme/base.css'), 'body { margin: var(--space) }\n')
-  writeFileSync(join(dist, 'theme/dark.css'), '.dark {\n  --bg: #000;\n  --dark-unused: 1;\n}\n')
+  mkdirSync(join(dist, 'themes'), { recursive: true })
+  writeFileSync(join(dist, 'themes/kit.json'), JSON.stringify({ id: 'kit', title: 'Kit', root: { accent: 'red' }, modes: { light: { colorScheme: 'light', tokens: { bg: '#fff' } }, dark: { colorScheme: 'dark', tokens: { 'bg': '#000', 'dark-unused': '1' } } } }))
   writeFileSync(join(dist, 'components/Card/styles.css'), '.card{padding:var(--derived);background:var(--bg)}\n')
   writeFileSync(join(dist, 'components/Panel/styles.css'), '.panel{display:flex}\n')
   const loaded = makeManifest('@x/kit', {
-    Card: { classes: ['p-4', 'flex'], css: ['components/Card/styles.css'], tokens: { declares: {}, consumes: ['--derived'], dynamic: [] } },
+    Card: { classes: ['p-4', 'flex'], css: ['components/Card/styles.css'], tokens: { consumes: ['--derived'], dynamic: [] } },
     Panel: { classes: ['gap-2'], css: ['components/Panel/styles.css'], dependencies: ['Card'], safelist: ['p-4', 'shadow-legacy'] },
   }, {
-    theme: { tokensCss: 'theme/tokens.css', baseCss: 'theme/base.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light', 'dark'], tokenDefinitions: { light: { tokens: { accent: 'red' } } }, declares: ['--space', '--unused', '--derived', '--bg', '--dark-unused', '--accent'] },
+    theme: {
+      tokensCss: 'theme/tokens.css',
+      baseCss: 'theme/base.css',
+      defaultTheme: 'kit',
+      catalog: { kit: { title: 'Kit', data: 'themes/kit.json', modes: ['light', 'dark'], defaultMode: 'light' } },
+      declares: ['--space', '--unused', '--derived', '--bg', '--dark-unused', '--accent'],
+    },
   })
   const manifest = { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` }
   return { root, manifest }
@@ -47,40 +55,26 @@ describe('emitCss: слои и порядок; utilities позже components',
     expect(order.every((pos, i) => pos > 0 && (i === 0 || pos > order[i - 1]!))).toBe(true)
     expect(css.layers.tokens).toContain('--space: 8px')
     expect(css.layers.base).toContain('body { margin')
-    // Структурный `:root` — в слое tokens после файлов токенов, блоки остальных тем — в themes.
+    // Литералы root темы — в слое tokens после файлов токенов, режимы — в themes.
     expect(css.layers.tokens).toContain(':root {\n  --accent: red;\n}')
     expect(css.layers.tokens.indexOf('--space: 8px')).toBeLessThan(css.layers.tokens.indexOf('--accent: red'))
-    expect(css.layers.themes).not.toContain(':root')
-    expect(css.layers.themes).toContain('.dark {')
+    expect(css.layers.themes).toContain('[data-theme="kit-dark"] {')
     // Компоненты — в порядке селекции: зависимость раньше зависящего.
     expect(css.layers.components.indexOf('.card')).toBeLessThan(css.layers.components.indexOf('.panel'))
     expect(css.layers.utilities).toContain('.p-4{padding:1rem;}')
     expect(css.layers.utilities).toContain('.gap-2{gap:0.5rem;}')
   })
 
-  it('тема `:root` не перекрывает тему с селектором при любом порядке names', async () => {
-    // `:root` и `.dark` равны по специфичности: в одном слое победил бы стоящий
-    // позже, и при `names: ['dark', 'light']` тёмная тема не включалась бы никогда.
-    const loaded = makeManifest('@x/kit', { Card: {} }, {
-      theme: {
-        themes: {},
-        defaultThemes: ['light', 'dark'],
-        tokenDefinitions: { light: { tokens: { bg: 'white' } }, dark: { selector: '.dark', tokens: { bg: 'black' } } },
-        declares: ['--bg'],
-      },
-    })
-    const root = mkdtempSync(join(tmpdir(), 'granum-emit-'))
-    const app = await prepareTestApp({ providers: [loaded], components: ['@x/kit:Card'], themes: { names: ['dark', 'light'] } }, root)
-    const css = await emitCss(app)
-
-    expect(css.layers.tokens).toContain(':root {\n  --bg: white;\n}')
-    expect(css.layers.themes).toContain('.dark {\n  --bg: black;\n}')
-    expect(css.layers.themes).not.toContain(':root')
+  it('режим по умолчанию первым при любом порядке modes.names', async () => {
+    // `:root` и `[data-theme]` равны по специфичности: стоящий позже победил бы,
+    // и при `names: ['dark', 'light']` светлый режим перекрыл бы тёмный на острове.
+    const { css } = await run({ components: ['@x/kit:Card'], modes: { names: ['dark', 'light'] } })
+    expect(css.layers.themes.indexOf(':root, [data-theme="kit-light"] {')).toBeLessThan(css.layers.themes.indexOf('[data-theme="kit-dark"] {'))
   })
 
-  it('тема приложения из одних tokens — в слое themes под своим селектором', async () => {
-    const { css } = await run({ components: ['@x/kit:Card'], themes: { names: ['light', 'brand'], define: { brand: { tokens: { bg: 'red' } } } } })
-    expect(css.layers.themes).toContain('[data-theme="brand"] {\n  --bg: red;\n}')
+  it('режим приложения — в слое themes под своей парой', async () => {
+    const { css } = await run({ components: ['@x/kit:Card'], modes: { define: { brand: { extends: 'light', tokens: { bg: 'red' } } } } })
+    expect(css.layers.themes).toContain('[data-theme="kit-brand"] {\n  color-scheme: light;\n  --bg: red;\n}')
     expect(css.layers.tokens).not.toContain('--bg: red')
   })
 
@@ -174,7 +168,7 @@ describe('emitCss: обрезка токенов', () => {
     const off = await run({ components: ['@x/kit:Card'] })
     const report = await run({ components: ['@x/kit:Card'], pruneTokens: { mode: 'report' } })
     expect(report.css.css).toBe(off.css.css)
-    expect(report.css.prune?.removable).toEqual(['dark-unused', 'unused'])
+    expect(report.css.prune?.removable).toEqual(['accent', 'dark-unused', 'unused'])
     const on = await run({ components: ['@x/kit:Card'], pruneTokens: { mode: 'on' } })
     expect(on.css.layers.tokens).not.toContain('--unused')
     expect(on.css.layers.tokens).toContain('--space: 8px')
@@ -221,13 +215,13 @@ describe('buildReport', () => {
     const report = buildReport(app, css)
     expect(report.selection.map(s => s.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.selection[1]!.dependencies).toEqual(['@x/kit:Card'])
-    expect(report.themes).toEqual({ names: ['light', 'dark'], namesSource: 'provider-defaults' })
+    expect(report.themes).toEqual({ theme: 'kit', themeSource: 'default', modes: ['light', 'dark'], modesSource: 'theme', previews: [] })
     expect(report.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@x/kit:Panel'] }])
     expect(report.classes.safelistRedundant).toEqual(['p-4'])
     // `--ghost` потребляет разметка приложения, а не компонент: вердикт — тот же,
     // что у доктора, и токены приложения в него не входят.
     expect(report.tokens.undefined).toEqual([])
-    expect(report.prune?.removable).toEqual(['dark-unused', 'unused'])
+    expect(report.prune?.removable).toEqual(['accent', 'dark-unused', 'unused'])
     expect(report.sizes.total.raw).toBe(Buffer.byteLength(css.css))
     expect(report.sizes.utilities.gzip).toBeGreaterThan(0)
   })
@@ -310,20 +304,19 @@ describe('buildReport: класс разметки приложения без �
   })
 })
 
-describe('prepareApp: tokensRef тем приложения', () => {
-  it('значения читаются из CSS относительно корня, литералы важнее, as → селектор; битая ссылка — TokenRefError', async () => {
+describe('prepareApp: tokensRef режимов приложения', () => {
+  it('значения читаются из CSS относительно корня, литералы важнее; битая ссылка — TokenRefError', async () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src/themes'), { recursive: true })
     writeFileSync(join(root, 'src/themes/crimson.css'), ':root{--app-bg:#111;--app-fg:#eee}')
     const app = await prepareTestApp({
       providers: [manifest],
-      themes: { define: { crimson: { tokensRef: { url: 'src/themes/crimson.css', as: '.crimson' }, tokens: { 'app-fg': '#fff' } } } },
+      modes: { define: { crimson: { extends: 'dark', tokensRef: { url: 'src/themes/crimson.css' }, tokens: { 'app-fg': '#fff' } } } },
     }, root)
-    const blocks = app.resolution.tokenLayers.get('crimson')!
-    expect(blocks[0]!.selector).toBe('.crimson')
-    expect(blocks[0]!.tokens.get('app-bg')!.effective).toBe('#111')
-    expect(blocks[0]!.tokens.get('app-fg')!.effective).toBe('#fff')
-    await expect(prepareTestApp({ providers: [manifest], themes: { define: { x: { tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
+    expect(resolveTokenValue(app.resolution, 'crimson', 'app-bg')).toBe('#111')
+    expect(resolveTokenValue(app.resolution, 'crimson', 'app-fg')).toBe('#fff')
+    expect(resolveTokenValue(app.resolution, 'crimson', 'bg')).toBe('#000')
+    await expect(prepareTestApp({ providers: [manifest], modes: { define: { x: { extends: 'light', tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
   })
 })
 

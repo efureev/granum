@@ -8,8 +8,8 @@
 
 Ответить на вопрос «что из пакета осталось в собранном приложении» так, чтобы
 ответ можно было проверить глазами и гейтом. Пакет объявляет два компонента,
-две темы и десять токенов; приложение берёт **один** компонент и **одну**
-тему. Всё остальное обязано исчезнуть:
+тему с двумя режимами и десять токенов; приложение берёт **один** компонент и
+**один** режим. Всё остальное обязано исчезнуть:
 
 | Что | Чем вырезается | Как видно |
 |---|---|---|
@@ -17,7 +17,7 @@
 | классы и CSS `XxBadge` | селекция granum | их нет в CSS: в слои попадает только выбранное |
 | токены только бейджа (`--xxx-accent`, `--xxx-accent-fg`, `--xxx-space-1`) | `pruneTokens: 'on'` | нет в слое тем |
 | мёртвый груз шкалы (`--xxx-font-sm`, `--xxx-muted`) | `pruneTokens: 'on'` | нет ни в одном блоке |
-| тёмная тема целиком | `themes: { names: ['light'] }` | в CSS нет ни селектора `[data-theme=dark]`, ни её значений |
+| тёмный режим целиком | `modes: { names: ['light'] }` | в CSS нет ни пары `[data-theme=mini-dark]`, ни её значений |
 
 Компонент импортируется из своего подпути `@granum-fixtures/mini-ds/components/XxCard`:
 импорт компонента из корня пакета guard granum отвергает, потому что корень тянет
@@ -39,18 +39,19 @@ yarn workspace @granum-apps/dist-audit verify
 ## Что печатает аудит
 
 ```
-КОМПОНЕНТЫ
-  XxBadge    НЕ выбран   JS: 0/4 классов · CSS: 0/4 · свой CSS: 0/0
-  XxCard     в селекции  JS: 2/2 классов · CSS: 2/2 · свой CSS: 1/1
+Components (js — information: the chunk layout is the bundler's call, granum does not touch JS):
+  @granum-fixtures/mini-ds:XxBadge  NOT selected  js: 0/4  css: 0/4  own css: 0/0
+  @granum-fixtures/mini-ds:XxCard   selected      js: 2/2  css: 2/2  own css: 1/1
 
-ТОКЕНЫ ПАКЕТА
-  объявлено пакетом:           10
-  доехало в дистрибутив:       5 — --xxx-bg --xxx-fg --xxx-line --xxx-radius --xxx-space-2
-  вырезано обрезкой:           5 — --xxx-accent --xxx-accent-fg --xxx-font-sm --xxx-muted --xxx-space-1
-  мёртвый груз в дистрибутиве: 0 — —
+Package tokens:
+  declared by packages:  10
+  in the dist:           5
+  cut by pruning:        5
+  unreachable in dist:   0
+  declared elsewhere:    2 (application CSS)
 ```
 
-Отдельной строкой идёт preflight движка (`--un-*`, 26 переменных): к пакету и
+Отдельной строкой идёт preflight движка (`--un-*`, 50 переменных): к пакету и
 его обрезке он отношения не имеет, это фиксированная цена preset-mini. Снять
 её можно `engine: { preflight: false }`, но тогда перестанут работать утилиты,
 которые на эти переменные ссылаются.
@@ -59,14 +60,15 @@ yarn workspace @granum-apps/dist-audit verify
 
 ```
 tokens         64     80
-base          151    137
-themes         78     87
+base         1190    442
+themes        172    144
 components    114    109
-utilities     866    386
-всего        1273    550
+utilities     235    167
+всего        1775    693
 ```
 
-Две трети веса — preflight движка внутри слоя `utilities`. Сама дизайн-система
-после обрезки занимает в дистрибутиве 407 байт: пять токенов, базовый слой,
-светлая тема и CSS одного компонента. Включение второй темы добавляет к этому
-77 байт — разницу видно, если поменять `themes.names` в `granum.config.ts`.
+Больше половины веса — preflight движка внутри слоя `base` (1039 байт). Сама
+дизайн-система после обрезки занимает в дистрибутиве 501 байт: пять токенов,
+свой базовый слой, светлый режим и CSS одного компонента. Включение второго
+режима добавляет к слою `themes` 145 байт — разницу видно, если поменять
+`modes.names` в `granum.config.ts`.

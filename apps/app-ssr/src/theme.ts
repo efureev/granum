@@ -1,80 +1,49 @@
 import type { GranumThemeManifest } from '@feugene/granum/runtime'
 import type { InjectionKey } from 'vue'
+import { modeFromCookie, resolveThemeActivation, themeRootAttributes } from '@feugene/granum/runtime'
 
 /**
- * Активная тема, которую разметка получает одинаково на сервере и в браузере.
+ * Активный режим, который разметка получает одинаково на сервере и в браузере.
  *
- * Контроллер тем из `@feugene/granum/runtime` — вещь браузерная: он приводит DOM
- * в состояние, при котором нужный блок токенов начинает совпадать. На сервере
- * DOM нет, а разметка обязана получиться той же, иначе гидрация поедет. Поэтому
- * компоненты берут не контроллер, а вот этот минимальный интерфейс: имя
- * активной темы плюс способ её сменить. На сервере смена — пустая операция.
+ * Контроллер режимов из `@feugene/granum/runtime` — вещь браузерная: он ставит
+ * пару в атрибут корня. На сервере DOM нет, а разметка обязана получиться той
+ * же, иначе гидрация поедет. Поэтому компоненты берут не контроллер, а этот
+ * минимальный интерфейс: имя активного режима плюс способ его сменить. На
+ * сервере смена — пустая операция.
  */
-export interface GranumActiveTheme {
+export interface GranumActiveMode {
   readonly name: string
   readonly list: readonly string[]
   readonly set: (name: string) => void
 }
 
-export const activeThemeKey = Symbol('granum:active-theme') as InjectionKey<GranumActiveTheme>
+export const activeModeKey = Symbol('granum:active-mode') as InjectionKey<GranumActiveMode>
 
 /**
- * Имя темы из запроса, сверенное с манифестом сборки.
- *
- * Сверка обязательна: список тем задаёт `themes.names` конфига, и в CSS есть
- * только они. Имя не из манифеста означает, что блока токенов под него не
- * эмитировано, и активировать нечего — в такой ситуации отдаём тему по
- * умолчанию, а не пустой экран без токенов.
+ * Режим ответа: из запроса, иначе из cookie (`createCookieStorage` на клиенте),
+ * иначе режим по умолчанию. Имя сверяется с манифестом: блоки CSS есть только у
+ * режимов сборки, и неизвестное имя не должно дать страницу без токенов.
  */
-export function pickTheme(manifest: GranumThemeManifest, requested: string | null | undefined): string {
-  const known = manifest.themes.some(theme => theme.name === requested)
-  return known && requested ? requested : manifest.defaultTheme
+export function pickMode(manifest: GranumThemeManifest, requested: string | null | undefined, cookieHeader?: string | null): string {
+  if (requested && manifest.modes.some(mode => mode.name === requested))
+    return requested
+  return modeFromCookie(manifest, cookieHeader)?.name ?? manifest.defaultMode
 }
 
-/** Минимум от корневого элемента, нужный для чтения активной темы. */
-export interface GranumThemeRoot {
+/** Минимум от корневого элемента, нужный для чтения режима. */
+export interface GranumModeRoot {
   readonly getAttribute: (name: string) => string | null
-  readonly classList: { readonly contains: (token: string) => boolean }
 }
 
 /**
- * Какая тема уже активна на корне документа.
- *
- * Это обратная операция к {@link rootAttributes}: сервер записал активацию в
- * разметку, браузер читает её обратно. Так клиент не выбирает тему заново, а
- * поднимает контроллер поверх уже применённого состояния — первый клиентский
- * кадр совпадает с серверным, и вспышки чужой темы не бывает.
+ * Какой режим уже выставлен на корне документа — обратная операция к
+ * {@link rootAttributes}: сервер записал пару, браузер читает её обратно.
  */
-export function readActiveTheme(manifest: GranumThemeManifest, root: GranumThemeRoot): string {
-  for (const theme of manifest.themes) {
-    const { activation } = theme
-    if (activation.type === 'attribute' && root.getAttribute(activation.name) === activation.value)
-      return theme.name
-    if (activation.type === 'class' && root.classList.contains(activation.value))
-      return theme.name
-  }
-  return manifest.defaultTheme
+export function readActiveMode(manifest: GranumThemeManifest, root: GranumModeRoot): string {
+  return resolveThemeActivation(manifest, root.getAttribute(manifest.activation.attribute))?.name ?? manifest.defaultMode
 }
 
-/**
- * Атрибуты корневого элемента, при которых тема активна.
- *
- * Знание о селекторах живёт в манифесте, который собрал granum из той же
- * резолюции, из которой эмитил CSS. Здесь оно превращается в строку для
- * серверного шаблона.
- *
- * Тема с активацией `root` не требует ничего: её токены эмитированы под
- * `:root`, и она активна, пока не активирована другая. Это не «нет темы», а
- * полноценное состояние — поэтому пустая строка здесь законный результат.
- */
+/** Атрибуты корневого элемента для режима — строкой для серверного шаблона. */
 export function rootAttributes(manifest: GranumThemeManifest, name: string): string {
-  const theme = manifest.themes.find(entry => entry.name === name)
-  if (!theme)
-    return ''
-  const { activation } = theme
-  if (activation.type === 'attribute')
-    return ` ${activation.name}="${activation.value}"`
-  if (activation.type === 'class')
-    return ` class="${activation.value}"`
-  return ''
+  return Object.entries(themeRootAttributes(manifest, name)).map(([attribute, value]) => ` ${attribute}="${value}"`).join('')
 }

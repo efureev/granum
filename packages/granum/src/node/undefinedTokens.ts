@@ -9,12 +9,14 @@
  * (`--un-*`). Разметка самого приложения в вердикт не входит: её токены — дело
  * приложения, и чаще всего их объявляет его же CSS.
  *
- * «Объявлено» — любым слоем granum: структурные цепочки со значением,
- * `declares` и `tokenDefinitions` провайдеров и компонентов, объявления в
- * инлайнимых файлах (у объектного провайдера `declares` пуст).
+ * «Объявлено» — любым слоем granum в активной теме: значение хоть в одном
+ * режиме или в `root` (данные темы, токены компонентов, значения приложения) и
+ * объявления в инлайнимых файлах. Другие темы каталога сюда не входят: в CSS
+ * приложения их нет (T-5, T-6).
  */
 import type { ComponentKey } from '../core/registry'
 import type { GranumResolution } from '../core/resolve'
+import { allTokenChains } from '../core/tokenLayers'
 import { readCssSync } from './css'
 import { scanCssDeclarations } from './cssDeclarations'
 import { resolveInlinedCssSources } from './inlinedCss'
@@ -27,13 +29,9 @@ export interface UndefinedToken {
 
 export function findUndefinedTokens(resolution: GranumResolution): UndefinedToken[] {
   const defined = new Set<string>()
-  for (const blocks of resolution.tokenLayers.values()) {
-    for (const block of blocks) {
-      for (const chain of block.tokens.values()) {
-        if (chain.effective !== undefined)
-          defined.add(`--${chain.token}`)
-      }
-    }
+  for (const chain of allTokenChains(resolution.tokens.active)) {
+    if (chain.effective !== undefined)
+      defined.add(`--${chain.token}`)
   }
   for (const source of resolveInlinedCssSources(resolution)) {
     let css: string
@@ -46,20 +44,6 @@ export function findUndefinedTokens(resolution: GranumResolution): UndefinedToke
     }
     for (const decl of scanCssDeclarations(css))
       defined.add(`--${decl.token}`)
-  }
-  for (const provider of resolution.providers) {
-    for (const token of provider.theme.declares)
-      defined.add(token)
-    for (const set of Object.values(provider.theme.tokenDefinitions)) {
-      for (const token of Object.keys(set.tokens))
-        defined.add(`--${token}`)
-    }
-    for (const component of provider.components) {
-      for (const set of Object.values(component.tokenDefinitions)) {
-        for (const token of Object.keys(set.tokens))
-          defined.add(`--${token}`)
-      }
-    }
   }
 
   const out: UndefinedToken[] = []

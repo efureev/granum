@@ -6,6 +6,8 @@ export type { ExplainReason, ExplainReport, ExplainTokenContribution } from './e
 export { formatExplainReport, granumExplain } from './explain'
 export type { TokenPruneFileReport, TokenPruneReport } from './prune'
 export { formatTokenPruneReport, granumTokenPrune } from './prune'
+export type { ThemesCatalogEntry, ThemesReport } from './themes'
+export { formatThemesReport, granumThemes } from './themes'
 export type { TokenOrigin, TokensDeclaration, TokensReport, TokensUsage, TokensValueChain } from './tokens'
 export { formatTokensReport, granumTokens } from './tokens'
 export type { WhyCssHit, WhyCssReport, WhyCssVia } from './whyCss'

@@ -1,7 +1,22 @@
 /**
- * Точка входа `./runtime`: переключение тем в браузере. Только типы,
- * чистый парсер селекторов и контроллер над DOM: ни FS, ни зависимостей.
+ * Точка входа `./runtime`: режимы активной темы в браузере. Только типы,
+ * чистые функции и контроллер над DOM: ни FS, ни зависимостей.
  * Пара к нему — `virtual:granum/themes` плагина приложения.
  */
-export { createThemeController, type GranumThemeController, type GranumThemeControllerOptions, type GranumThemeStorage, type GranumThemeTarget } from './runtime/controller'
-export { type GranumThemeActivation, type GranumThemeEntry, type GranumThemeManifest, resolveThemeActivation, splitSelectorList } from './runtime/manifest'
+export {
+  createThemeController,
+  DEFAULT_THEME_STORAGE_KEY,
+  type GranumThemeController,
+  type GranumThemeControllerOptions,
+  type GranumThemeStorage,
+  type GranumThemeTarget,
+} from './runtime/controller'
+export { type GranumModeEntry, type GranumThemeManifest, resolveThemeActivation } from './runtime/manifest'
+export {
+  createCookieStorage,
+  createThemeScript,
+  type GranumCookieStorageOptions,
+  type GranumThemeScriptOptions,
+  modeFromCookie,
+  themeRootAttributes,
+} from './runtime/script'

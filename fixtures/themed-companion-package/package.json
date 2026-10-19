@@ -1,0 +1,23 @@
+{
+  "name": "@granum-fixtures/themed-companion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Companion without a catalog: tokens for one theme of the design system, plus a folder of a theme nobody declares.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/TcChart": "./dist/components/TcChart/index.js"
+  },
+  "dependencies": {
+    "@granum-fixtures/themed-ds": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=Tc --exports=import"
+  }
+}

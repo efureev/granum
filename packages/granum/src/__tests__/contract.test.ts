@@ -5,12 +5,11 @@ import {
   GranumError,
   InvalidComponentNameError,
   InvalidProviderError,
-  InvalidTokenKeyError,
   UnsupportedContractVersionError,
 } from '../core/errors'
 
 describe('defineGranumProvider — проверки при регистрации', () => {
-  const base = { contractVersion: 1 as const, components: [] }
+  const base = { contractVersion: 2 as const, components: [] }
 
   it('возвращает тот же объект: identity держит дедупликацию графа', () => {
     const p = { id: 'p', ...base }
@@ -27,12 +26,43 @@ describe('defineGranumProvider — проверки при регистраци�
     }
   })
 
-  it('чужая версия контракта, включая БОЛЬШУЮ, — ошибка', () => {
-    for (const version of [0, 2, '1']) {
+  it('чужая версия контракта, включая БОЛЬШУЮ, — ошибка; 1 — только без тем', () => {
+    for (const version of [0, 3, '2']) {
       const bad = { id: 'p', contractVersion: version, components: [] } as unknown as Parameters<typeof defineGranumProvider>[0]
       expect(() => defineGranumProvider(bad)).toThrow(UnsupportedContractVersionError)
     }
-    expect(GRANUM_CONTRACT_VERSION).toBe(1)
+    expect(GRANUM_CONTRACT_VERSION).toBe(2)
+    expect(() => defineGranumProvider({ id: 'p', contractVersion: 1, components: [] })).not.toThrow()
+    expect(() => defineGranumProvider({ id: 'p', contractVersion: 1, components: [], theme: { defaultTheme: 'x', catalog: { x: { title: 'X', data: 'x.json' } } } }))
+      .toThrow(UnsupportedContractVersionError)
+  })
+
+  it('каталог: id — slug, родитель и тема по умолчанию — из каталога, без циклов', () => {
+    const reasonOf = (theme: NonNullable<Parameters<typeof defineGranumProvider>[0]['theme']>): string | undefined => {
+      try {
+        defineGranumProvider({ id: 'p', ...base, theme })
+      }
+      catch (e) {
+        return (e as InvalidProviderError).reason
+      }
+      return undefined
+    }
+    const entry = { title: 'T', data: 'themes/t.json' }
+    expect(reasonOf({ catalog: { Slate: entry } })).toBe('invalid-theme-id')
+    expect(reasonOf({ catalog: { slate: entry }, defaultTheme: 'clay' })).toBe('invalid-theme-id')
+    expect(reasonOf({ catalog: { clay: { ...entry, extends: 'slate' } } })).toBe('theme-extends-unknown')
+    expect(reasonOf({ catalog: { a: { ...entry, extends: 'b' }, b: { ...entry, extends: 'a' } } })).toBe('theme-extends-unknown')
+    expect(reasonOf({ catalog: { slate: { title: '', data: 'x.json' } } })).toBe('invalid-theme-data')
+    expect(reasonOf({ catalog: { slate: entry, clay: { ...entry, extends: 'slate' } }, defaultTheme: 'slate' })).toBeUndefined()
+  })
+
+  it('ключи тем контракта 1 — legacy-token-definitions с подсказкой', () => {
+    for (const theme of [{ themes: { light: 'l.css' } }, { defaultThemes: ['light'] }, { tokenDefinitions: {} }, { tokenDefinitionsRef: {} }]) {
+      expect(() => defineGranumProvider({ id: 'p', ...base, theme } as unknown as Parameters<typeof defineGranumProvider>[0]))
+        .toThrow(expect.objectContaining({ reason: 'legacy-token-definitions' }))
+    }
+    expect(() => defineGranumProvider({ id: 'p', ...base, components: [{ name: 'Card', tokenDefinitions: {} }] } as unknown as Parameters<typeof defineGranumProvider>[0]))
+      .toThrow(/themesDir/)
   })
 
   it('baseUrl не URL или без завершающего слеша — ошибка с подсказкой', () => {
@@ -54,7 +84,7 @@ describe('defineGranumProvider — проверки при регистраци�
   })
 
   it('components не массив — ошибка', () => {
-    const bad = { id: 'p', contractVersion: 1, components: {} } as unknown as Parameters<typeof defineGranumProvider>[0]
+    const bad = { id: 'p', contractVersion: 2, components: {} } as unknown as Parameters<typeof defineGranumProvider>[0]
     expect(() => defineGranumProvider(bad)).toThrow(InvalidProviderError)
   })
 
@@ -70,30 +100,6 @@ describe('defineGranumProvider — проверки при регистраци�
   it('дубль имени компонента — ошибка сразу', () => {
     expect(() => defineGranumProvider({ id: 'p', ...base, components: [{ name: 'A' }, { name: 'A' }] }))
       .toThrow(DuplicateComponentNameError)
-  })
-
-  it('ключ токена с `--` — ошибка регистрации, а не молчаливое `----x`', () => {
-    expect(() => defineGranumProvider({
-      id: 'p',
-      ...base,
-      theme: { tokenDefinitions: { light: { tokens: { '--brand': '#fff' } } } },
-    })).toThrow(InvalidTokenKeyError)
-
-    try {
-      defineGranumProvider({
-        id: 'p',
-        ...base,
-        components: [{ name: 'Card', tokenDefinitions: { dark: { tokens: { '--bg': '#000' } } } }],
-      })
-      throw new Error('should have thrown')
-    }
-    catch (e) {
-      const err = e as InvalidTokenKeyError
-      expect(err).toBeInstanceOf(InvalidTokenKeyError)
-      expect(err.token).toBe('--bg')
-      expect(err.theme).toBe('dark')
-      expect(err.componentName).toBe('Card')
-    }
   })
 
   it('cssFiles за пределами components/<Name>/ — ошибка', () => {
@@ -155,23 +161,18 @@ describe('defineGranumComponent', () => {
     expect(() => defineGranumComponent(url, { name: 'X', cssFiles: ['./'] })).toThrow(TypeError)
   })
 
-  it('tokenDefinitionsRef: строка → объект с абсолютным url', () => {
-    const d = defineGranumComponent(url, {
-      name: 'X',
-      tokenDefinitionsRef: { light: './themes/light.css', dark: { url: '../shared/dark.css', as: '.dark', strict: false } },
-    })
-    expect(d.tokenDefinitionsRef).toEqual({
-      light: { url: 'file:///pkg/src/components/XhPanel/themes/light.css' },
-      dark: { url: 'file:///pkg/src/components/shared/dark.css', as: '.dark', strict: false },
-    })
+  it('themesDir нормализуется к пути от корня раскладки; выход за компонент — ошибка', () => {
+    const d = defineGranumComponent(url, { name: 'X', group: 'data', themesDir: './themes' })
+    expect(d.group).toBe('data')
+    expect(d.themesDir).toBe('components/X/themes')
+    expect(() => defineGranumComponent(url, { name: 'X', themesDir: '../../themes' })).toThrow(TypeError)
   })
 
-  it('group и tokenDefinitions проходят как есть; ключ с `--` — ошибка', () => {
-    const d = defineGranumComponent(url, { name: 'X', group: 'data', tokenDefinitions: { light: { tokens: { a: '1' } } } })
-    expect(d.group).toBe('data')
-    expect(d.tokenDefinitions).toEqual({ light: { tokens: { a: '1' } } })
-    expect(() => defineGranumComponent(url, { name: 'X', tokenDefinitions: { light: { tokens: { '--a': '1' } } } }))
-      .toThrow(InvalidTokenKeyError)
+  it('tokenDefinitions и tokenDefinitionsRef — legacy-token-definitions', () => {
+    for (const legacy of [{ tokenDefinitions: { light: { tokens: { a: '1' } } } }, { tokenDefinitionsRef: { light: './light.css' } }]) {
+      expect(() => defineGranumComponent(url, { name: 'X', ...legacy } as unknown as Parameters<typeof defineGranumComponent>[1]))
+        .toThrow(expect.objectContaining({ reason: 'legacy-token-definitions' }))
+    }
   })
 
   it('пустой importMetaUrl и невалидное имя — ошибки', () => {

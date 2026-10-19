@@ -3,7 +3,7 @@
  * Node-only: `node:crypto` для хеша, `node:fs` для файлов, `node:module` для
  * поиска манифеста через `exports` пакета.
  */
-import type { GranumLoadedManifest, GranumManifest, GranumManifestEngine, GranumTokenSet } from '../contract'
+import type { GranumComponentThemeTokens, GranumLoadedManifest, GranumManifest, GranumManifestEngine } from '../contract'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION, isValidComponentName } from '../contract'
 import { InvalidManifestError, ManifestNotFoundError, UnsupportedContractVersionError, UnsupportedManifestVersionError } from '../core/errors'
+import { isModeName, isThemeId } from '../core/themeData'
 import { isDialect } from '../engine/dialect'
 
 export const MANIFEST_FILE_NAME = 'granum.manifest.json'
@@ -30,8 +31,11 @@ const ROOT_KEY_ORDER = [
   'warnings',
 ] as const
 
-/** Массивы, чей порядок семантичен и не сортируется. */
-const ORDERED_ARRAYS = new Set(['css', 'defaultThemes', 'warnings'])
+/**
+ * Массивы, чей порядок семантичен и не сортируется. `defaultThemes` — поле
+ * формата 2: хеш манифеста спутника сверяется в его собственной канонизации.
+ */
+const ORDERED_ARRAYS = new Set(['css', 'defaultThemes', 'modes', 'warnings'])
 
 const collator = new Intl.Collator('en')
 
@@ -92,18 +96,33 @@ export function parseManifest(text: string, baseUrl: string, file?: string): Gra
   if (!isRecord(raw))
     throw new InvalidManifestError('schema', 'root must be an object', undefined, file)
 
-  if (raw.granum !== GRANUM_MANIFEST_VERSION)
+  const legacy = raw.granum === 2
+  if (legacy) {
+    const themed = legacyThemes(raw)
+    if (themed !== undefined) {
+      throw new UnsupportedManifestVersionError(
+        raw.granum,
+        GRANUM_MANIFEST_VERSION,
+        file,
+        `It ships themes (${themed}), and format 2 themes are CSS files that granum 3 no longer reads — rebuild the provider with @feugene/granum 3.`,
+      )
+    }
+  }
+  else if (raw.granum !== GRANUM_MANIFEST_VERSION) {
     throw new UnsupportedManifestVersionError(raw.granum, GRANUM_MANIFEST_VERSION, file)
+  }
 
-  const manifest = validateSchema(raw, file)
+  const manifest = legacy ? validateLegacySchema(raw, file) : validateSchema(raw, file)
 
-  if (manifest.contractVersion !== GRANUM_CONTRACT_VERSION)
-    throw new UnsupportedContractVersionError(manifest.id, manifest.contractVersion, GRANUM_CONTRACT_VERSION)
+  const contractVersion = legacy ? 1 : GRANUM_CONTRACT_VERSION
+  if (manifest.contractVersion !== contractVersion)
+    throw new UnsupportedContractVersionError(manifest.id, manifest.contractVersion, contractVersion)
 
   validatePaths(manifest, file)
   validateDialectScope(manifest, file)
 
-  const expected = computeManifestHash(manifest)
+  // Хеш — от файла как он есть: у формата 2 своя форма, приведение к форме 3 идёт после.
+  const expected = computeManifestHash(raw as unknown as GranumManifest)
   if (manifest.hash !== expected) {
     throw new InvalidManifestError(
       'hash-mismatch',
@@ -122,14 +141,32 @@ export function parseManifest(text: string, baseUrl: string, file?: string): Gra
   // После хеша, как раскладка entry: такое мог записать только писатель с ошибкой.
   validateSubcomponents(manifest, file)
 
-  validateTokenKeys(manifest.theme.tokenDefinitions, 'theme.tokenDefinitions', file)
   for (const [name, component] of Object.entries(manifest.components))
-    validateTokenKeys(component.tokens.declares, `components.${name}.tokens.declares`, file)
+    validateComponentThemeKeys(component.tokens.themes ?? {}, `components.${name}.tokens.themes`, file)
 
   if (!baseUrl.endsWith('/'))
     throw new TypeError(`parseManifest: baseUrl must end with '/', got '${baseUrl}'`)
 
   return { manifest, baseUrl }
+}
+
+/**
+ * Темы манифеста формата 2: CSS-файлы, структурные блоки, токены компонентов по
+ * темам. Без них манифест спутника читается (M-11); с ними — нет.
+ */
+function legacyThemes(raw: Record<string, unknown>): string | undefined {
+  const theme = isRecord(raw.theme) ? raw.theme : {}
+  const found: string[] = []
+  if (isRecord(theme.themes) && Object.keys(theme.themes).length > 0)
+    found.push(`theme.themes: ${Object.keys(theme.themes).join(', ')}`)
+  if (isRecord(theme.tokenDefinitions) && Object.keys(theme.tokenDefinitions).length > 0)
+    found.push(`theme.tokenDefinitions: ${Object.keys(theme.tokenDefinitions).join(', ')}`)
+  for (const [name, component] of Object.entries(isRecord(raw.components) ? raw.components : {})) {
+    const declares = isRecord(component) && isRecord(component.tokens) && isRecord(component.tokens.declares) ? component.tokens.declares : {}
+    if (Object.keys(declares).length > 0)
+      found.push(`components.${name}.tokens.declares`)
+  }
+  return found.length > 0 ? found.join('; ') : undefined
 }
 
 export function readManifestSync(file: string): GranumLoadedManifest {
@@ -233,15 +270,27 @@ function expectStringRecord(value: unknown, path: string, file?: string): Record
   return record as Record<string, string>
 }
 
-function expectTokenSets(value: unknown, path: string, file?: string): Record<string, GranumTokenSet> {
+function expectOptionalString(value: unknown, path: string, file?: string): void {
+  if (value !== undefined)
+    expectString(value, path, file)
+}
+
+function expectComponentThemes(value: unknown, path: string, file?: string): Record<string, GranumComponentThemeTokens> {
   const record = expectRecord(value, path, file)
-  for (const [theme, set] of Object.entries(record)) {
-    const s = expectRecord(set, `${path}.${theme}`, file)
-    if (s.selector !== undefined)
-      expectString(s.selector, `${path}.${theme}.selector`, file)
-    expectStringRecord(s.tokens, `${path}.${theme}.tokens`, file)
+  for (const [theme, entry] of Object.entries(record)) {
+    const at = `${path}.${theme}`
+    if (!isThemeId(theme))
+      throw schema(at, `theme id '${theme}' must be a slug /^[a-z][a-z0-9-]*$/`, file)
+    const tokens = expectRecord(entry, at, file)
+    if (tokens.root !== undefined)
+      expectStringRecord(tokens.root, `${at}.root`, file)
+    for (const [mode, values] of Object.entries(expectRecord(tokens.modes, `${at}.modes`, file))) {
+      if (!isModeName(mode))
+        throw schema(`${at}.modes.${mode}`, `mode name '${mode}' must match /^[a-z][a-z0-9]*$/ and not be 'root'`, file)
+      expectStringRecord(values, `${at}.modes.${mode}`, file)
+    }
   }
-  return record as unknown as Record<string, GranumTokenSet>
+  return record as unknown as Record<string, GranumComponentThemeTokens>
 }
 
 function describe(value: unknown): string {
@@ -252,7 +301,7 @@ function describe(value: unknown): string {
   return typeof value
 }
 
-function validateSchema(raw: Record<string, unknown>, file?: string): GranumManifest {
+function validateCommon(raw: Record<string, unknown>, file?: string): { id: string, theme: Record<string, unknown>, components: Record<string, unknown>, engine: GranumManifestEngine } {
   const id = expectString(raw.id, 'id', file)
   const theme = expectRecord(raw.theme, 'theme', file)
   const components = expectRecord(raw.components, 'components', file)
@@ -261,53 +310,118 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
     throw schema('warnings', `expected an array, got ${describe(raw.warnings)}`, file)
   for (const [i, warning] of raw.warnings.entries())
     expectString(expectRecord(warning, `warnings.${i}`, file).code, `warnings.${i}.code`, file)
+  expectOptionalString(theme.tokensCss, 'theme.tokensCss', file)
+  expectOptionalString(theme.baseCss, 'theme.baseCss', file)
+  return { id, theme, components, engine }
+}
 
-  if (theme.tokensCss !== undefined)
-    expectString(theme.tokensCss, 'theme.tokensCss', file)
-  if (theme.baseCss !== undefined)
-    expectString(theme.baseCss, 'theme.baseCss', file)
-  expectStringRecord(theme.themes, 'theme.themes', file)
-  expectStringArray(theme.defaultThemes, 'theme.defaultThemes', file)
-  expectTokenSets(theme.tokenDefinitions, 'theme.tokenDefinitions', file)
-  expectStringArray(theme.declares, 'theme.declares', file)
-
-  for (const [name, value] of Object.entries(components)) {
-    const p = `components.${name}`
-    const c = expectRecord(value, p, file)
-    expectString(c.entry, `${p}.entry`, file)
-    expectStringArray(c.files, `${p}.files`, file)
-    expectStringArray(c.css, `${p}.css`, file)
-    if (c.group !== null)
-      expectString(c.group, `${p}.group`, file)
-    expectStringArray(c.dependencies, `${p}.dependencies`, file)
-    expectStringArray(c.classes, `${p}.classes`, file)
-    expectStringArray(c.safelist, `${p}.safelist`, file)
-    const tokens = expectRecord(c.tokens, `${p}.tokens`, file)
-    expectTokenSets(tokens.declares, `${p}.tokens.declares`, file)
-    expectStringArray(tokens.consumes, `${p}.tokens.consumes`, file)
-    expectStringArray(tokens.dynamic, `${p}.tokens.dynamic`, file)
-    expectString(c.hash, `${p}.hash`, file)
-    if (c.subcomponents !== undefined) {
-      for (const [i, part] of expectStringArray(c.subcomponents, `${p}.subcomponents`, file).entries()) {
-        if (!isValidComponentName(part))
-          throw schema(`${p}.subcomponents.${i}`, `'${part}' is not a valid component name`, file)
-      }
+function validateComponentCommon(c: Record<string, unknown>, p: string, file?: string): Record<string, unknown> {
+  expectString(c.entry, `${p}.entry`, file)
+  expectStringArray(c.files, `${p}.files`, file)
+  expectStringArray(c.css, `${p}.css`, file)
+  if (c.group !== null)
+    expectString(c.group, `${p}.group`, file)
+  expectStringArray(c.dependencies, `${p}.dependencies`, file)
+  expectStringArray(c.classes, `${p}.classes`, file)
+  expectStringArray(c.safelist, `${p}.safelist`, file)
+  const tokens = expectRecord(c.tokens, `${p}.tokens`, file)
+  expectStringArray(tokens.consumes, `${p}.tokens.consumes`, file)
+  if (tokens.requires !== undefined)
+    expectStringArray(tokens.requires, `${p}.tokens.requires`, file)
+  expectStringArray(tokens.dynamic, `${p}.tokens.dynamic`, file)
+  expectString(c.hash, `${p}.hash`, file)
+  if (c.subcomponents !== undefined) {
+    for (const [i, part] of expectStringArray(c.subcomponents, `${p}.subcomponents`, file).entries()) {
+      if (!isValidComponentName(part))
+        throw schema(`${p}.subcomponents.${i}`, `'${part}' is not a valid component name`, file)
     }
   }
+  return tokens
+}
 
+function manifestRoot(raw: Record<string, unknown>, file: string | undefined, rest: Pick<GranumManifest, 'granum' | 'theme' | 'engine' | 'components'>): GranumManifest {
   return {
-    granum: GRANUM_MANIFEST_VERSION,
-    contractVersion: raw.contractVersion as 1,
-    id,
+    granum: rest.granum,
+    contractVersion: raw.contractVersion as GranumManifest['contractVersion'],
+    id: expectString(raw.id, 'id', file),
     version: expectString(raw.version, 'version', file),
     generatedBy: expectString(raw.generatedBy, 'generatedBy', file),
     hash: expectString(raw.hash, 'hash', file),
     dependencies: expectStringArray(raw.dependencies, 'dependencies', file),
+    theme: rest.theme,
+    engine: rest.engine,
+    components: rest.components,
+    warnings: raw.warnings as GranumManifest['warnings'],
+  }
+}
+
+function validateSchema(raw: Record<string, unknown>, file?: string): GranumManifest {
+  const { theme, components, engine } = validateCommon(raw, file)
+  expectOptionalString(theme.registry, 'theme.registry', file)
+  expectOptionalString(theme.defaultTheme, 'theme.defaultTheme', file)
+  if (theme.declares !== undefined)
+    expectStringArray(theme.declares, 'theme.declares', file)
+  if (theme.catalog !== undefined) {
+    for (const [id, value] of Object.entries(expectRecord(theme.catalog, 'theme.catalog', file))) {
+      const at = `theme.catalog.${id}`
+      if (!isThemeId(id))
+        throw schema(at, `theme id '${id}' must be a slug /^[a-z][a-z0-9-]*$/`, file)
+      const entry = expectRecord(value, at, file)
+      expectString(entry.title, `${at}.title`, file)
+      expectOptionalString(entry.description, `${at}.description`, file)
+      expectOptionalString(entry.docs, `${at}.docs`, file)
+      expectOptionalString(entry.extends, `${at}.extends`, file)
+      expectString(entry.data, `${at}.data`, file)
+      const modes = expectStringArray(entry.modes, `${at}.modes`, file)
+      for (const mode of modes) {
+        if (!isModeName(mode))
+          throw schema(`${at}.modes`, `mode name '${mode}' must match /^[a-z][a-z0-9]*$/ and not be 'root'`, file)
+      }
+      const defaultMode = expectString(entry.defaultMode, `${at}.defaultMode`, file)
+      if (modes[0] !== defaultMode)
+        throw schema(`${at}.modes`, `the default mode '${defaultMode}' must come first`, file)
+    }
+  }
+  for (const [name, value] of Object.entries(components)) {
+    const p = `components.${name}`
+    const tokens = validateComponentCommon(expectRecord(value, p, file), p, file)
+    if (tokens.themes !== undefined)
+      expectComponentThemes(tokens.themes, `${p}.tokens.themes`, file)
+  }
+  return manifestRoot(raw, file, {
+    granum: GRANUM_MANIFEST_VERSION,
     theme: theme as unknown as GranumManifest['theme'],
     engine,
     components: components as unknown as GranumManifest['components'],
-    warnings: raw.warnings as GranumManifest['warnings'],
+  })
+}
+
+/**
+ * Манифест формата 2 без тем (M-11), приведённый к форме 3: остаются
+ * тема-независимые файлы и объявленные токены, поля тем уходят. Хеш сверяется
+ * по исходному файлу.
+ */
+function validateLegacySchema(raw: Record<string, unknown>, file?: string): GranumManifest {
+  const { theme, components, engine } = validateCommon(raw, file)
+  const declares = theme.declares === undefined ? [] : expectStringArray(theme.declares, 'theme.declares', file)
+  const normalized: Record<string, GranumManifest['components'][string]> = {}
+  for (const [name, value] of Object.entries(components)) {
+    const p = `components.${name}`
+    const component = expectRecord(value, p, file)
+    const tokens = validateComponentCommon(component, p, file)
+    const { declares: _declares, ...rest } = tokens
+    normalized[name] = { ...component, tokens: rest } as unknown as GranumManifest['components'][string]
   }
+  return manifestRoot(raw, file, {
+    granum: 2,
+    theme: {
+      ...(theme.tokensCss !== undefined ? { tokensCss: theme.tokensCss as string } : {}),
+      ...(theme.baseCss !== undefined ? { baseCss: theme.baseCss as string } : {}),
+      declares,
+    },
+    engine,
+    components: normalized,
+  })
 }
 
 /**
@@ -419,8 +533,9 @@ function validatePaths(manifest: GranumManifest, file?: string): void {
   }
   check(manifest.theme.tokensCss, 'theme.tokensCss')
   check(manifest.theme.baseCss, 'theme.baseCss')
-  for (const [theme, path] of Object.entries(manifest.theme.themes))
-    check(path, `theme.themes.${theme}`)
+  check(manifest.theme.registry, 'theme.registry')
+  for (const [id, entry] of Object.entries(manifest.theme.catalog ?? {}))
+    check(entry.data, `theme.catalog.${id}.data`)
   if (manifest.engine.module !== null)
     check(manifest.engine.module, 'engine.module')
   for (const [name, component] of Object.entries(manifest.components)) {
@@ -447,11 +562,16 @@ function validateSubcomponents(manifest: GranumManifest, file?: string): void {
   }
 }
 
-function validateTokenKeys(sets: Readonly<Record<string, GranumTokenSet>>, at: string, file?: string): void {
-  for (const [theme, set] of Object.entries(sets)) {
-    for (const token of Object.keys(set.tokens)) {
+function validateComponentThemeKeys(themes: Readonly<Record<string, GranumComponentThemeTokens>>, at: string, file?: string): void {
+  const check = (tokens: Readonly<Record<string, string>> | undefined, path: string): void => {
+    for (const token of Object.keys(tokens ?? {})) {
       if (token.startsWith('--'))
-        throw new InvalidManifestError('token-key-prefix', `token key '${token}' must not start with '--'`, `${at}.${theme}.tokens`, file)
+        throw new InvalidManifestError('token-key-prefix', `token key '${token}' must not start with '--'`, path, file)
     }
+  }
+  for (const [theme, entry] of Object.entries(themes)) {
+    check(entry.root, `${at}.${theme}.root`)
+    for (const [mode, tokens] of Object.entries(entry.modes))
+      check(tokens, `${at}.${theme}.modes.${mode}`)
   }
 }

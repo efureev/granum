@@ -1,0 +1,14 @@
+{
+  "id": "atoms",
+  "title": "Atoms",
+  "root": {},
+  "modes": {
+    "light": {
+      "colorScheme": "light",
+      "tokens": {
+        "at-bg": "#ffffff",
+        "at-fg": "#1b1f24"
+      }
+    }
+  }
+}

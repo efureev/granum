@@ -1,0 +1,10 @@
+{
+  "root": {
+    "th-font": "Georgia, serif",
+    "th-radius": "2px"
+  },
+  "modes": {
+    "light": { "tokens": { "th-accent": "#111827" } },
+    "dim": { "title": "Сумерки", "colorScheme": "dark", "extends": "dark", "tokens": { "th-bg": "#1e293b" } }
+  }
+}

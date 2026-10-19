@@ -14,7 +14,7 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
-  themes: { names: ['light', 'dark'] },
+  modes: { names: ['light', 'dark'] },
   appSources: { dirs: ['src'] },
   pruneTokens: { mode: 'on' },
 })

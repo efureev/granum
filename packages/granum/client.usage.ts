@@ -22,7 +22,8 @@ import 'virtual:granum/layers/tokens.css'
 import 'virtual:granum/layers/utilities.css'
 
 /** Манифест тем типизирован по-настоящему: поля читаются, а не `any`. */
-export const defaultTheme: string = manifest.defaultTheme
-export const firstThemeName: string | undefined = manifest.themes[0]?.name
-export const firstSelectors: readonly string[] = manifest.themes[0]?.selectors ?? []
+export const themeId: string = manifest.theme.id
+export const defaultMode: string = manifest.defaultMode
+export const firstModeValue: string | undefined = manifest.modes[0]?.value
+export const attribute: string = manifest.activation.attribute
 export const anyComponent: unknown = XhPanel

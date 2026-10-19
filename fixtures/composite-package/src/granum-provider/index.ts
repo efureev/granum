@@ -16,7 +16,7 @@ export const PROVIDER_ID = '@granum-fixtures/composite'
  */
 export const compositeProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   components: [
     // <granum:components:registry>
     xcButtonConfig,

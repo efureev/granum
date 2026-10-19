@@ -1,30 +1,49 @@
 /**
- * Форма `granum.manifest.json` версии 2 (`docs/manifest.md`).
+ * Форма `granum.manifest.json` версии 3 (`docs/manifest.md`).
  * Только типы: писатель и читатель живут в `./node`.
  */
-import type { GranumTokenSet } from './types'
 
-export const GRANUM_MANIFEST_VERSION = 2 as const
+export const GRANUM_MANIFEST_VERSION = 3 as const
+
+/** Запись каталога в манифесте: индекс темы, по которому CLI и отчёт перечисляют темы, не читая данных. */
+export interface GranumManifestCatalogEntry {
+  readonly title: string
+  readonly description?: string
+  readonly docs?: string
+  readonly extends?: string
+  /** Путь к JSON `GranumThemeData` с уже разрешённым `extends`. */
+  readonly data: string
+  /** Режимы темы: режим по умолчанию первым. */
+  readonly modes: readonly string[]
+  readonly defaultMode: string
+}
 
 export interface GranumManifestTheme {
   readonly tokensCss?: string
   readonly baseCss?: string
-  readonly themes: Readonly<Record<string, string>>
-  readonly defaultThemes: readonly string[]
-  readonly tokenDefinitions: Readonly<Record<string, GranumTokenSet>>
+  readonly registry?: string
+  readonly defaultTheme?: string
+  readonly catalog?: Readonly<Record<string, GranumManifestCatalogEntry>>
   /** Все объявленные токены, с `--`, отсортированы. */
-  readonly declares: readonly string[]
+  readonly declares?: readonly string[]
+}
+
+/** Токены компонента для одной темы: режимонезависимые и по режимам. Ключи без `--`. */
+export interface GranumComponentThemeTokens {
+  readonly root?: Readonly<Record<string, string>>
+  readonly modes: Readonly<Record<string, Readonly<Record<string, string>>>>
 }
 
 export interface GranumManifestComponentTokens {
-  readonly declares: Readonly<Record<string, GranumTokenSet>>
+  /** Тема → токены компонента для неё (`themesDir`); темы могут быть из чужого каталога. */
+  readonly themes?: Readonly<Record<string, GranumComponentThemeTokens>>
   readonly consumes: readonly string[]
   /**
    * Подмножество `consumes`, значение которого обязан дать кто-то извне:
    * потребляется хотя бы раз без fallback, и сам компонент его не присваивает.
    * Именно это множество проверяет `token-undefined`.
    *
-   * Необязательное: манифест формата 2 без этого поля читается как прежде, и
+   * Необязательное: манифест без этого поля читается как прежде, и
    * диагностика на нём смотрит весь `consumes`.
    */
   readonly requires?: readonly string[]
@@ -77,8 +96,9 @@ export interface GranumManifestWarning {
 }
 
 export interface GranumManifest {
-  readonly granum: typeof GRANUM_MANIFEST_VERSION
-  readonly contractVersion: 1
+  /** `2` — манифест спутника без тем, прочитанный по M-11 и приведённый к форме 3. */
+  readonly granum: typeof GRANUM_MANIFEST_VERSION | 2
+  readonly contractVersion: 2 | 1
   readonly id: string
   readonly version: string
   readonly generatedBy: string

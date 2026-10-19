@@ -5,7 +5,7 @@ import { windEngine } from '@feugene/granum-engine-wind'
  * Стенд аудита дистрибутива.
  *
  * Пакет `@granum-fixtures/mini-ds` — миниатюрная дизайн-система: два
- * компонента, две темы, десять токенов. Приложение берёт ОДИН компонент, и
+ * компонента, тема с двумя режимами, десять токенов. Приложение берёт ОДИН компонент, и
  * всё остальное обязано исчезнуть из дистрибутива: код второго компонента —
  * tree-shaking'ом, его классы — селекцией, его токены и мёртвый груз шкалы —
  * обрезкой.
@@ -18,7 +18,7 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/mini-ds'],
   components: ['@granum-fixtures/mini-ds:XxCard'],
-  themes: { names: ['light'] },
+  modes: { names: ['light'] },
   appSources: { dirs: ['src'] },
   pruneTokens: { mode: 'on' },
 })

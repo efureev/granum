@@ -1,0 +1,38 @@
+{
+  "id": "paper",
+  "title": "Бумага",
+  "root": {
+    "th-font": "system-ui, sans-serif",
+    "th-radius": "6px",
+    "th-ring": "0 0 0 2px var(--th-accent)"
+  },
+  "defaultMode": "light",
+  "modes": {
+    "light": {
+      "colorScheme": "light",
+      "tokens": {
+        "th-accent": "#2563eb",
+        "th-accent-fg": "#ffffff",
+        "th-bg": "#ffffff",
+        "th-fg": "#1f2937",
+        "th-line": "#e5e7eb",
+        "th-shade": "color-mix(in oklab, var(--th-fg) 8%, var(--th-bg))"
+      },
+      "fallbacks": [
+        { "supports": "not (color: color-mix(in oklab, red, red))", "tokens": { "th-shade": "#eeeeee" } }
+      ]
+    },
+    "dark": {
+      "title": "Тёмный",
+      "colorScheme": "dark",
+      "tokens": {
+        "th-accent": "#60a5fa",
+        "th-accent-fg": "#0f172a",
+        "th-bg": "#0f172a",
+        "th-fg": "#e2e8f0",
+        "th-line": "#334155"
+      }
+    }
+  },
+  "extensions": { "fixture": { "density": "comfortable" } }
+}

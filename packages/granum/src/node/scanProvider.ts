@@ -13,14 +13,16 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { GRANUM_MANIFEST_VERSION } from '../contract'
+import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
 import { sortedUnique } from '../core/dedupe'
+import { themeTokenNames } from '../core/themeData'
 import { GRANUM_VERSION } from '../version'
 import { scanCssDeclarations } from './cssDeclarations'
 import { objectRulesAllowed } from './dialects'
 import { collectImportSpecifiers } from './imports'
 import { computeManifestHash } from './manifest'
 import { packageSubcomponents } from './subcomponents'
+import { componentThemesDirPath, readComponentThemesDir, readObjectCatalog } from './themeFiles'
 import { extractRequiredTokenUses, scanTokenConsumption } from './tokenScan'
 
 export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
@@ -185,7 +187,7 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
       classes,
       safelist,
       tokens: {
-        declares: descriptor.tokenDefinitions ?? {},
+        ...themesOf(provider.id, descriptor, distDir),
         consumes: sortedUnique(consumes),
         requires: sortedUnique([...required].filter(t => !assigns.has(t))),
         dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
@@ -203,27 +205,23 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
 
   const theme = provider.theme
   const declares = new Set<string>()
-  for (const rel of [theme?.tokensCss, theme?.baseCss, ...Object.values(theme?.themes ?? {})]) {
+  for (const rel of [theme?.tokensCss, theme?.baseCss]) {
     if (rel === undefined)
       continue
     for (const decl of scanCssDeclarations(readRel(distDir, rel)))
       declares.add(`--${decl.token}`)
   }
-  for (const set of Object.values(theme?.tokenDefinitions ?? {})) {
-    for (const t of Object.keys(set.tokens))
-      declares.add(`--${t}`)
-  }
-  for (const component of provider.components) {
-    for (const set of Object.values(component.tokenDefinitions ?? {})) {
-      for (const t of Object.keys(set.tokens))
-        declares.add(`--${t}`)
-    }
-  }
+  // Индекс режимов взять негде, кроме самих данных: медленный путь читает все
+  // темы каталога. Он и так читает пакет целиком, а сборка провайдера — нет.
+  const catalog = readObjectCatalog(provider, distDir, (data) => {
+    for (const token of themeTokenNames(data))
+      declares.add(`--${token}`)
+  })
 
   const usesVocabulary = Object.values(components).some(c => c.classes.length > 0 || c.safelist.length > 0)
   const body: Omit<GranumManifest, 'hash'> = {
     granum: GRANUM_MANIFEST_VERSION,
-    contractVersion: 1,
+    contractVersion: GRANUM_CONTRACT_VERSION,
     id: provider.id,
     version: '0.0.0',
     generatedBy: `@feugene/granum@${GRANUM_VERSION} (scanned)`,
@@ -231,9 +229,9 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     theme: {
       ...(theme?.tokensCss !== undefined ? { tokensCss: theme.tokensCss } : {}),
       ...(theme?.baseCss !== undefined ? { baseCss: theme.baseCss } : {}),
-      themes: theme?.themes ?? {},
-      defaultThemes: theme?.defaultThemes ?? [],
-      tokenDefinitions: theme?.tokenDefinitions ?? {},
+      ...(theme?.registry !== undefined ? { registry: theme.registry } : {}),
+      ...(theme?.defaultTheme !== undefined ? { defaultTheme: theme.defaultTheme } : {}),
+      ...(Object.keys(catalog).length > 0 ? { catalog } : {}),
       declares: sortedUnique(declares),
     },
     engine: {
@@ -250,6 +248,15 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
   }
   const manifest: GranumManifest = { ...body, hash: '' }
   return { manifest: { ...manifest, hash: computeManifestHash(manifest) }, baseUrl: provider.baseUrl! }
+}
+
+/** Токены компонента по темам: папка `themesDir` от `config.ts` или от раскладки. */
+function themesOf(providerId: string, descriptor: GranumComponentDescriptor, distDir: string): Pick<GranumManifestComponent['tokens'], 'themes'> {
+  const dir = componentThemesDirPath(descriptor, distDir)
+  if (dir === undefined)
+    return {}
+  const themes = readComponentThemesDir(providerId, descriptor.name, dir)
+  return Object.keys(themes).length > 0 ? { themes } : {}
 }
 
 /** Инстансы-доноры объектного провайдера (транзитивно): с манифестной формой их надо подать в резолвер отдельно. */

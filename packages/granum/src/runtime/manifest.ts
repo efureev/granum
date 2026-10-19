@@ -1,126 +1,42 @@
 /**
- * Манифест тем — канал между сборкой и рантаймом.
+ * Манифест тем — канал между сборкой и рантаймом (T-4).
  *
- * Темы вшиваются в CSS на этапе сборки: granum эмитит блок токенов под тем
- * селектором, который объявил провайдер (`:root`, `.dark`,
- * `[data-theme="dark"]`, …). Переключение темы в браузере — это всего лишь
- * приведение DOM в состояние, при котором нужный блок начинает совпадать.
+ * Тема выбирается на сборке: в CSS ровно одна активная тема, её режимы стоят
+ * под атрибутом на корне, `data-theme="<тема>-<режим>"` по умолчанию. Значения
+ * пар и имя атрибута знает только сборка, а нужны они в браузере — переключать
+ * режим и восстанавливать его до первого кадра. Без канала приложение
+ * дублировало бы их руками и расходилось бы со сборкой молча: несовпавшее
+ * значение атрибута не даёт ни ошибки, ни предупреждения.
  *
- * Загвоздка в том, что ЗНАНИЕ об этих селекторах есть только у сборки, а
- * нужно оно в браузере. Без канала приложение вынуждено дублировать имена тем
- * и их селекторы руками — и расходиться с провайдером молча, потому что
- * несовпавший селектор не даёт ни ошибки, ни предупреждения: просто ничего не
- * переключается.
- *
- * Манифест закрывает этот разрыв: node-слой строит его из ТОЙ ЖЕ резолюции,
- * из которой эмитит CSS.
- *
- * Модуль browser-safe: только типы и чистые функции, никакого FS.
+ * Модуль browser-safe: только типы и чистые функции.
  */
 
-/** Как привести DOM в состояние, при котором тема активна. */
-export type GranumThemeActivation
-  /**
-   * Тема висит на корне (`:root` / `html`) — она активна всегда и
-   * «включается» тем, что все остальные выключены. Обычно это базовая тема.
-   */
-  = | { type: 'root' }
-  /** Добавить класс на целевой элемент (`.dark` → `class="dark"`). */
-    | { type: 'class', value: string }
-  /** Проставить атрибут (`[data-theme="dark"]` → `data-theme="dark"`). */
-    | { type: 'attribute', name: string, value: string }
-  /**
-   * Из селекторов вывести не удалось: селектор сложнее одного класса, атрибута
-   * или `:root` (комбинатор, `:not(…)`), либо у темы нет ни блока, ни
-   * прочитанного файла — у файла темы granum берёт селектор первого плоского
-   * блока токенов. Лечится явным `activations` в опциях манифеста.
-   */
-    | { type: 'unknown' }
-
-/** Одна тема в манифесте. */
-export interface GranumThemeEntry {
-  name: string
-  /** Все селекторы, под которыми эмитятся токены этой темы. */
-  selectors: readonly string[]
-  activation: GranumThemeActivation
-  /** Значения токенов — только если манифест собран с `includeTokens`. */
-  tokens?: Readonly<Record<string, Readonly<Record<string, string>>>>
-  /**
-   * Человекочитаемое имя из `themes.define[name].label`.
-   *
-   * Нужно затем же, зачем и сам манифест: без него приложение с темами
-   * `emerald`/`ocean`/`crimson` вынуждено держать вторую, рукописную карту
-   * «имя → подпись» и расходиться с конфигом молча.
-   */
-  label?: string
-  /**
-   * К какой системной схеме тяготеет тема (`themes.define[name].colorScheme`).
-   * Используется контроллером при `initial: 'auto'`, когда тем с именами
-   * `light`/`dark` в сборке нет.
-   */
-  colorScheme?: 'light' | 'dark'
+/** Режим активной темы в манифесте. */
+export interface GranumModeEntry {
+  readonly name: string
+  readonly title?: string
+  readonly colorScheme: 'light' | 'dark'
+  /** Значение атрибута активации — пара `<тема>-<режим>`. */
+  readonly value: string
 }
 
 export interface GranumThemeManifest {
-  /** Темы в порядке, в котором их блоки идут в CSS. */
-  themes: readonly GranumThemeEntry[]
-  /** Имя первой темы — она же активна, пока никто ничего не переключал. */
-  defaultTheme: string
-}
-
-const ROOT_SELECTORS = new Set([':root', 'html', ':root:root', 'html:root'])
-// Имя CSS-класса: латиница/цифры/дефис/подчёркивание плюс экранированные
-// последовательности. Юникодные имена намеренно не поддерживаем — тема с
-// не-ASCII селектором лечится явной активацией в `activations`.
-const SINGLE_CLASS_RE = /^\.([\w-]+)$/
-const ATTRIBUTE_RE = /^\[([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\]]*)))?\]$/
-
-/** Разбивает селекторный список на альтернативы: `.a, .b` → `['.a', '.b']`. */
-export function splitSelectorList(selector: string): string[] {
-  return selector.split(',').map(s => s.trim()).filter(Boolean)
+  /** Активная тема сборки: только чтение, рантайм её не меняет. */
+  readonly theme: { readonly id: string, readonly title: string }
+  /** Режимы в порядке блоков CSS: режим по умолчанию первым. */
+  readonly modes: readonly GranumModeEntry[]
+  readonly defaultMode: string
+  readonly activation: { readonly attribute: string }
+  /** `extensions` данных темы как есть: granum их не интерпретирует. */
+  readonly extensions?: Readonly<Record<string, unknown>>
 }
 
 /**
- * Выводит способ активации из селекторов темы.
- *
- * Приоритет — атрибут, затем класс, затем корень. Атрибут выбирается первым
- * намеренно: он взаимоисключающий по своей природе (`data-theme` держит одно
- * значение), поэтому переключение между тремя и более темами не требует
- * вычищать классы предыдущей.
- *
- * Селекторы сложнее одного класса или атрибута (комбинаторы, `:where(...)`,
- * псевдоклассы) не поддерживаются: выразить их одной операцией над элементом
- * нельзя. Для них — `activations`-override.
+ * Режим по значению атрибута — чтение пары обратно (RT-5): серверный HTML или
+ * ранний скрипт уже выставили пару, и контроллер обязан её узнать.
  */
-export function resolveThemeActivation(
-  selectors: readonly string[],
-): GranumThemeActivation {
-  const alternatives = selectors.flatMap(splitSelectorList)
-
-  let classFallback: GranumThemeActivation | undefined
-  let rootFallback: GranumThemeActivation | undefined
-
-  for (const alternative of alternatives) {
-    const attribute = alternative.match(ATTRIBUTE_RE)
-    if (attribute) {
-      const [, name, quoted, singleQuoted, bare] = attribute
-      const value = quoted ?? singleQuoted ?? bare
-      // `[data-theme]` без значения активацией быть не может: непонятно, что
-      // писать в атрибут.
-      if (name !== undefined && value !== undefined && value !== '')
-        return { type: 'attribute', name, value }
-      continue
-    }
-
-    const single = alternative.match(SINGLE_CLASS_RE)
-    if (single?.[1] !== undefined) {
-      classFallback ??= { type: 'class', value: single[1] }
-      continue
-    }
-
-    if (ROOT_SELECTORS.has(alternative))
-      rootFallback ??= { type: 'root' }
-  }
-
-  return classFallback ?? rootFallback ?? { type: 'unknown' }
+export function resolveThemeActivation(manifest: GranumThemeManifest, value: string | null | undefined): GranumModeEntry | undefined {
+  if (value === null || value === undefined)
+    return undefined
+  return manifest.modes.find(mode => mode.value === value)
 }

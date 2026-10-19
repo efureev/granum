@@ -4,9 +4,9 @@
  */
 import type { GranumAppSources, GranumConfig, GranumCssOptions, GranumJsOptions, GranumPruneTokensOptions, GranumReportOptions } from '../config'
 import type { GranumTokenRef } from '../contract'
-import type { GranumThemesInput } from '../core/resolve'
-import type { GranumAppThemeDefinition } from '../core/resolveThemes'
+import type { GranumAppTheme, GranumModeActivation, GranumModeDefinition, GranumModesInput } from '../core/resolveThemes'
 import { GranumError } from '../core/errors'
+import { checkThemeData, isModeName } from '../core/themeData'
 import { isDialect } from '../engine/dialect'
 
 export class InvalidConfigError extends GranumError {
@@ -33,9 +33,11 @@ function keysOf<T>() {
   ): readonly string[] => keys
 }
 
-const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'themes', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
-const THEMES_KEYS = keysOf<GranumThemesInput>()(['names', 'define', 'tokenOverrides', 'strictTokens'])
-const THEME_DEFINITION_KEYS = keysOf<GranumAppThemeDefinition>()(['extends', 'selector', 'tokens', 'tokensRef', 'label', 'colorScheme'])
+const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'theme', 'previews', 'modes', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
+const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'extends', 'sources'])
+const MODES_KEYS = keysOf<GranumModesInput>()(['names', 'define', 'activation', 'tokenOverrides', 'strictTokens', 'system'])
+const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme'])
+const ACTIVATION_KEYS = keysOf<GranumModeActivation>()(['attribute', 'value'])
 const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
 const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split'])
 const APP_SOURCES_KEYS = keysOf<GranumAppSources>()(['dirs', 'extensions'])
@@ -45,7 +47,15 @@ const REPORT_KEYS = keysOf<GranumReportOptions>()(['file', 'brotli'])
 
 const V1_SCAN = `granum does not scan files for package classes: they come from provider manifests; application sources go to 'appSources'`
 const ENGINE_RULES = `application rules go to the engine factory, e.g. windEngine({ rules }) from '@feugene/granum-engine-wind'`
-const THEME_FILES = `a provider file cannot be swapped: change theme values with 'themes.tokenOverrides' or a whole theme with 'themes.define.<name>.tokensRef'`
+const THEMES_V2 = `removed in granum 3: the build has one theme ('theme') and its modes ('modes') — `
+  + `themes.names → modes.names, themes.define → modes.define, themes.tokenOverrides → modes.tokenOverrides, themes.strictTokens → modes.strictTokens`
+/** Ключи `themes.*` granum 2 → их место в 3 (A-30). */
+const THEMES_V2_KEYS: Readonly<Record<string, string>> = {
+  names: 'modes.names',
+  define: 'modes.define',
+  tokenOverrides: 'modes.tokenOverrides',
+  strictTokens: 'modes.strictTokens',
+}
 
 /**
  * Ключи, которых в конфиге нет, но которые пишут по памяти: пресет v1 и опции,
@@ -58,9 +68,7 @@ const KEY_HINTS: Readonly<Record<string, string>> = {
   'rules': ENGINE_RULES,
   'variants': ENGINE_RULES,
   'preflights': ENGINE_RULES,
-  'themes.themeFiles': THEME_FILES,
-  'themes.baseFile': THEME_FILES,
-  'themes.tokensFile': THEME_FILES,
+  'themes': THEMES_V2,
   'pruneTokens.appSources': `moved to the top-level 'appSources': it also feeds the extraction of application classes`,
   'js.virtualComponents': `removed: virtual:granum/components is built only when the application imports it; to forbid the import, use ESLint no-restricted-imports`,
   'css.expandDirectives': `removed: @apply is expanded by the provider build (granumProvider()), and granum doctor reports what is left (apply-not-expanded)`,
@@ -145,9 +153,92 @@ function validateEngine(engine: unknown): void {
     throw new InvalidConfigError('engine.vocabulary', 'expected a non-empty fingerprint of the generated name set (vocabularyFingerprint)')
 }
 
+/** Тема-объект приложения: полные данные (C-24…C-26) плюс `extends` и `sources`. */
+function validateAppTheme(value: unknown, path: string): void {
+  if (typeof value === 'string') {
+    if (value.trim().length === 0)
+      throw new InvalidConfigError(path, 'expected a theme id or a theme object')
+    return
+  }
+  if (!isRecord(value))
+    throw new InvalidConfigError(path, `expected a theme id or a theme object, got ${typeof value}`)
+  rejectUnknownKeys(value, APP_THEME_KEYS, path)
+  const { extends: base, sources, ...data } = value
+  if (base !== undefined && (typeof base !== 'string' || base.length === 0))
+    throw new InvalidConfigError(`${path}.extends`, 'expected the id of a catalog theme whose component tokens this theme builds on')
+  if (sources !== undefined && (!Array.isArray(sources) || !sources.every(file => typeof file === 'string')))
+    throw new InvalidConfigError(`${path}.sources`, 'expected an array of file paths')
+  const issue = checkThemeData(data)
+  if (issue)
+    throw new InvalidConfigError(issue.path ? `${path}.${issue.path}` : path, issue.details)
+}
+
+function validateModes(modes: unknown): void {
+  assertSection(modes, MODES_KEYS, 'modes')
+  if (modes === undefined)
+    return
+  if (modes.names !== undefined && (!Array.isArray(modes.names) || !modes.names.every(name => typeof name === 'string')))
+    throw new InvalidConfigError('modes.names', 'expected an array of mode names')
+  if (modes.define !== undefined && !isRecord(modes.define))
+    throw new InvalidConfigError('modes.define', 'expected an object')
+  // Имена токенов пишутся без `--` — префикс добавляет генератор.
+  // Ключ с ним уехал бы в CSS как `----имя` и не действовал бы молча.
+  for (const [name, definition] of Object.entries(modes.define ?? {})) {
+    const at = `modes.define.${name}`
+    if (!isModeName(name))
+      throw new InvalidConfigError(at, `mode name must match /^[a-z][a-z0-9]*$/ and not be 'root': it becomes the end of the pair '<theme>-${name}'`)
+    if (!isRecord(definition))
+      throw new InvalidConfigError(at, 'expected an object')
+    rejectUnknownKeys(definition, MODE_DEFINITION_KEYS, at)
+    if (typeof definition.extends !== 'string' || definition.extends.length === 0)
+      throw new InvalidConfigError(`${at}.extends`, 'expected the name of a theme mode or another defined mode')
+    if (definition.colorScheme !== undefined && definition.colorScheme !== 'light' && definition.colorScheme !== 'dark')
+      throw new InvalidConfigError(`${at}.colorScheme`, `expected 'light' or 'dark'`)
+    const ref = definition.tokensRef
+    if (ref !== undefined && typeof ref !== 'string') {
+      if (!isRecord(ref))
+        throw new InvalidConfigError(`${at}.tokensRef`, `expected a CSS URL or { url, selector?, strict? }`)
+      rejectUnknownKeys(ref, TOKEN_REF_KEYS, `${at}.tokensRef`)
+    }
+    if (definition.tokens !== undefined) {
+      if (!isRecord(definition.tokens))
+        throw new InvalidConfigError(`${at}.tokens`, 'expected an object of token values')
+      rejectPrefixedTokens(definition.tokens, `${at}.tokens`)
+    }
+  }
+  const activation = modes.activation
+  assertSection(activation, ACTIVATION_KEYS, 'modes.activation')
+  if (activation?.attribute !== undefined && !/^[a-z][\w-]*$/i.test(String(activation.attribute)))
+    throw new InvalidConfigError('modes.activation.attribute', 'expected an attribute name')
+  if (activation?.value !== undefined && typeof activation.value !== 'string')
+    throw new InvalidConfigError('modes.activation.value', `expected a template with '{theme}' and '{mode}'`)
+  if (modes.tokenOverrides !== undefined && !isRecord(modes.tokenOverrides))
+    throw new InvalidConfigError('modes.tokenOverrides', 'expected an object: root and mode names → token values')
+  // Значение режима — объект токенов: строка разошлась бы на `--0`, `--1`, …
+  for (const [scope, overrides] of Object.entries(modes.tokenOverrides ?? {})) {
+    if (!isRecord(overrides))
+      throw new InvalidConfigError(`modes.tokenOverrides.${scope}`, 'expected an object of token values')
+    rejectPrefixedTokens(overrides, `modes.tokenOverrides.${scope}`)
+    for (const [token, value] of Object.entries(overrides)) {
+      if (typeof value !== 'string')
+        throw new InvalidConfigError(`modes.tokenOverrides.${scope}.${token}`, 'expected a string value')
+    }
+  }
+  if (modes.strictTokens !== undefined && typeof modes.strictTokens !== 'boolean')
+    throw new InvalidConfigError('modes.strictTokens', 'expected a boolean')
+  if (modes.system !== undefined && modes.system !== 'none' && modes.system !== 'media')
+    throw new InvalidConfigError('modes.system', `expected 'none' or 'media'`)
+}
+
 export function validateGranumConfig(config: unknown): asserts config is GranumConfig {
   if (!isRecord(config))
     throw new InvalidConfigError('', 'expected an object')
+  // Ключи `themes.*` granum 2 — по одному, с их новым местом (A-30).
+  if (isRecord(config.themes)) {
+    const key = Object.keys(config.themes).find(k => Object.hasOwn(THEMES_V2_KEYS, k))
+    if (key !== undefined)
+      throw new InvalidConfigError(`themes.${key}`, `removed in granum 3 — use '${THEMES_V2_KEYS[key]}'; the theme itself is chosen with 'theme'`)
+  }
   rejectUnknownKeys(config, ROOT_KEYS, '')
   if (!Array.isArray(config.providers) || config.providers.length === 0)
     throw new InvalidConfigError('providers', 'expected a non-empty array of package names, provider objects or loaded manifests')
@@ -159,43 +250,14 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
   const c = config.components
   if (c !== undefined && c !== 'all' && c !== 'imports' && !Array.isArray(c))
     throw new InvalidConfigError('components', `expected 'all', 'imports' or an array, got ${typeof c}`)
-  const themes = config.themes
-  if (themes !== undefined) {
-    if (!isRecord(themes))
-      throw new InvalidConfigError('themes', 'expected an object')
-    rejectUnknownKeys(themes, THEMES_KEYS, 'themes')
-    if (themes.names !== undefined && !Array.isArray(themes.names))
-      throw new InvalidConfigError('themes.names', 'expected an array of theme names')
-    if (themes.define !== undefined && !isRecord(themes.define))
-      throw new InvalidConfigError('themes.define', 'expected an object')
-    if (themes.tokenOverrides !== undefined && !isRecord(themes.tokenOverrides))
-      throw new InvalidConfigError('themes.tokenOverrides', 'expected an object')
-    // Имена токенов пишутся без `--` — префикс добавляет генератор.
-    // Ключ с ним уехал бы в CSS как `----имя` и не действовал бы молча.
-    for (const [theme, definition] of Object.entries(themes.define ?? {})) {
-      if (!isRecord(definition))
-        throw new InvalidConfigError(`themes.define.${theme}`, 'expected an object')
-      rejectUnknownKeys(definition, THEME_DEFINITION_KEYS, `themes.define.${theme}`)
-      const ref = definition.tokensRef
-      if (ref !== undefined && typeof ref !== 'string') {
-        if (!isRecord(ref))
-          throw new InvalidConfigError(`themes.define.${theme}.tokensRef`, `expected a CSS URL or { url, selector?, as?, strict? }`)
-        rejectUnknownKeys(ref, TOKEN_REF_KEYS, `themes.define.${theme}.tokensRef`)
-      }
-      if (isRecord(definition.tokens))
-        rejectPrefixedTokens(definition.tokens, `themes.define.${theme}.tokens`)
-    }
-    // Значение темы — объект токенов: строка разошлась бы на `--0`, `--1`, …
-    for (const [theme, overrides] of Object.entries(themes.tokenOverrides ?? {})) {
-      if (!isRecord(overrides))
-        throw new InvalidConfigError(`themes.tokenOverrides.${theme}`, 'expected an object of token values or selector blocks')
-      rejectPrefixedTokens(overrides, `themes.tokenOverrides.${theme}`)
-      for (const value of Object.values(overrides)) {
-        if (isRecord(value))
-          rejectPrefixedTokens(value, `themes.tokenOverrides.${theme}`)
-      }
-    }
+  if (config.theme !== undefined)
+    validateAppTheme(config.theme, 'theme')
+  if (config.previews !== undefined) {
+    if (!Array.isArray(config.previews))
+      throw new InvalidConfigError('previews', 'expected an array of theme ids or theme objects')
+    config.previews.forEach((preview, i) => validateAppTheme(preview, `previews.${i}`))
   }
+  validateModes(config.modes)
   const prune = config.pruneTokens
   assertSection(prune, PRUNE_TOKENS_KEYS, 'pruneTokens')
   if (prune?.mode !== undefined && !['off', 'report', 'on'].includes(prune.mode as string))

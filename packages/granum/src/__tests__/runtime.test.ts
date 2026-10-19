@@ -1,206 +1,182 @@
-import type { GranumThemeManifest, GranumThemeTarget } from '../runtime'
-import type { GranumPluginOptions } from '../vite/plugin'
+import type { GranumThemeManifest, GranumThemeStorage, GranumThemeTarget } from '../runtime'
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { getThemeManifest } from '../node/themeManifest'
-import { createThemeController, resolveThemeActivation } from '../runtime'
-import { makeProvider } from './helpers'
+import { createCookieStorage, createThemeController, createThemeScript, modeFromCookie, resolveThemeActivation, themeRootAttributes } from '../runtime'
+import { INK, makeManifest, PAPER } from './helpers'
 
-function createTarget(): GranumThemeTarget & { classes: Set<string>, attributes: Map<string, string> } {
-  const classes = new Set<string>()
-  const attributes = new Map<string, string>()
-  return {
-    classes,
+function createTarget(initial?: Record<string, string>): GranumThemeTarget & { attributes: Map<string, string>, writes: number } {
+  const attributes = new Map(Object.entries(initial ?? {}))
+  const target = {
     attributes,
-    classList: { add: t => void classes.add(t), remove: t => void classes.delete(t), contains: t => classes.has(t) },
-    getAttribute: name => attributes.get(name) ?? null,
-    setAttribute: (name, value) => void attributes.set(name, value),
-    removeAttribute: name => void attributes.delete(name),
+    writes: 0,
+    getAttribute: (name: string) => attributes.get(name) ?? null,
+    setAttribute: (name: string, value: string) => {
+      target.writes++
+      attributes.set(name, value)
+    },
   }
+  return target
 }
 
-function manifestOf(themes: GranumThemeManifest['themes']): GranumThemeManifest {
-  return { themes, defaultTheme: themes[0]!.name }
+function memoryStorage(initial: Record<string, string> = {}): GranumThemeStorage & { data: Map<string, string> } {
+  const data = new Map(Object.entries(initial))
+  return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) }
 }
 
-describe('resolveThemeActivation', () => {
-  it('корень, класс, атрибут в любых кавычках; приоритет атрибут → класс → корень; невыводимые — unknown', () => {
-    expect(resolveThemeActivation([':root'])).toEqual({ type: 'root' })
-    expect(resolveThemeActivation(['html'])).toEqual({ type: 'root' })
-    expect(resolveThemeActivation(['.dark'])).toEqual({ type: 'class', value: 'dark' })
-    expect(resolveThemeActivation(['[data-theme="dark"]'])).toEqual({ type: 'attribute', name: 'data-theme', value: 'dark' })
-    expect(resolveThemeActivation(['[data-theme=\'hc\']'])).toEqual({ type: 'attribute', name: 'data-theme', value: 'hc' })
-    expect(resolveThemeActivation(['[data-theme=sepia]'])).toEqual({ type: 'attribute', name: 'data-theme', value: 'sepia' })
-    expect(resolveThemeActivation(['.theme-dark, .dark, [data-theme="dark"]'])).toEqual({ type: 'attribute', name: 'data-theme', value: 'dark' })
-    expect(resolveThemeActivation([':root', '.dark'])).toEqual({ type: 'class', value: 'dark' })
-    for (const bad of [[], ['.a .b'], ['[data-theme]'], ['@media (min-width: 100px)']])
-      expect(resolveThemeActivation(bad)).toEqual({ type: 'unknown' })
-  })
-})
+const MANIFEST: GranumThemeManifest = {
+  theme: { id: 'ink', title: 'Чернила' },
+  modes: [
+    { name: 'light', colorScheme: 'light', value: 'ink-light' },
+    { name: 'dark', title: 'Тёмный', colorScheme: 'dark', value: 'ink-dark' },
+    { name: 'dim', colorScheme: 'dark', value: 'ink-dim' },
+  ],
+  defaultMode: 'light',
+  activation: { attribute: 'data-theme' },
+}
 
-describe('getThemeManifest — из той же резолюции, что и CSS', () => {
-  const provider = makeProvider('ds', {
+describe('getThemeManifest — из той же резолюции, что и CSS (T-4)', () => {
+  const owner = makeManifest('@p/ds', {}, {
     theme: {
-      defaultThemes: ['light', 'dark'],
-      tokenDefinitions: {
-        light: { selector: ':root', tokens: { brd: '#eee' } },
-        dark: { selector: '.dark, [data-theme="dark"]', tokens: { brd: '#333' } },
+      defaultTheme: 'paper',
+      catalog: {
+        paper: { title: 'Бумага', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' },
+        ink: { title: 'Чернила', extends: 'paper', data: 'themes/ink.json', modes: ['light', 'dark', 'dim'], defaultMode: 'light' },
       },
+      declares: [],
     },
   })
+  const resolve = (input: Partial<Parameters<typeof resolveGranum>[0]> = {}) =>
+    resolveGranum({ providers: [owner], themeData: { '@p/ds': { paper: PAPER, ink: { ...INK, extensions: { granularity: { componentDefaults: { Button: { size: 'm' } } } } } } }, ...input })
 
-  it('имена, селекторы и активации', () => {
-    const manifest = getThemeManifest(resolveGranum({ providers: [provider] }))
-    expect(manifest.defaultTheme).toBe('light')
-    expect(manifest.themes.map(t => t.name)).toEqual(['light', 'dark'])
-    expect(manifest.themes[0]!.activation).toEqual({ type: 'root' })
-    expect(manifest.themes[1]!.selectors).toEqual(['.dark, [data-theme="dark"]'])
-    expect(manifest.themes[1]!.activation).toEqual({ type: 'attribute', name: 'data-theme', value: 'dark' })
-    expect(manifest.themes[0]!.tokens).toBeUndefined()
+  it('тема, режимы с парами, атрибут, extensions как есть', () => {
+    const manifest = getThemeManifest(resolve({ theme: 'ink', modes: { define: { sepia: { extends: 'light', title: 'Сепия' } } } }))
+    expect(manifest.theme).toEqual({ id: 'ink', title: 'Чернила' })
+    expect(manifest.modes.map(m => `${m.name}:${m.value}:${m.colorScheme}`)).toEqual(['light:ink-light:light', 'dark:ink-dark:dark', 'dim:ink-dim:dark', 'sepia:ink-sepia:light'])
+    expect(manifest.modes[3]!.title).toBe('Сепия')
+    expect(manifest.defaultMode).toBe('light')
+    expect(manifest.activation).toEqual({ attribute: 'data-theme' })
+    expect(manifest.extensions).toEqual({ granularity: { componentDefaults: { Button: { size: 'm' } } } })
   })
 
-  it('includeTokens отдаёт значения после tokenOverrides; вложенный override создаёт селектор', () => {
-    const r = resolveGranum({ providers: [provider], themes: { names: ['light'], tokenOverrides: { light: { brd: '#000' } } } })
-    expect(getThemeManifest(r, { includeTokens: true }).themes[0]!.tokens).toEqual({ ':root': { brd: '#000' } })
-    const nested = resolveGranum({ providers: [provider], themes: { names: ['dark'], tokenOverrides: { dark: { '[data-mode="hc"]': { brd: '#000' } } } } })
-    const dark = getThemeManifest(nested, { includeTokens: true }).themes[0]!
-    expect(dark.selectors).toContain('[data-mode="hc"]')
-    expect(dark.tokens!['[data-mode="hc"]']).toEqual({ brd: '#000' })
-    const only = resolveGranum({ providers: [provider], themes: { names: ['brand'], tokenOverrides: { brand: { accent: '#f0f' } } } })
-    expect(getThemeManifest(only, { includeTokens: true }).themes[0]!.tokens).toEqual({ ':root': { accent: '#f0f' } })
+  it('от селекции компонентов не зависит', () => {
+    expect(getThemeManifest(resolve({ components: [] }))).toEqual(getThemeManifest(resolve()))
   })
 
-  it('тема приложения из одних tokens активируется атрибутом, а не root', () => {
-    const r = resolveGranum({ providers: [provider], themes: { names: ['light', 'brand'], define: { brand: { tokens: { brd: '#f0f' } } } } })
-    const brand = getThemeManifest(r).themes.find(t => t.name === 'brand')!
-    expect(brand.activation).toEqual({ type: 'attribute', name: 'data-theme', value: 'brand' })
-  })
-
-  it('тема-файл без фактов о файле даёт unknown, но чинится явной активацией', () => {
-    const fileThemed = makeProvider('file', { theme: { defaultThemes: ['dark'], themes: { dark: 'theme/dark.css' } } })
-    const r = resolveGranum({ providers: [fileThemed] })
-    expect(getThemeManifest(r).themes[0]!.activation).toEqual({ type: 'unknown' })
-    expect(getThemeManifest(r, { activations: { dark: { type: 'class', value: 'dark' } } }).themes[0]!.activation).toEqual({ type: 'class', value: 'dark' })
-  })
-
-  describe('тема-файл: активация из селектора файла, а не из селекции', () => {
-    const fileThemed = makeProvider('file', { theme: { defaultThemes: ['light', 'dark'], themes: { light: 'theme/light.css', dark: 'theme/dark.css' } } })
-    const facts = (light: string, dark: string): NonNullable<Parameters<typeof resolveGranum>[0]['themeFiles']> => ({
-      file: { light: { selector: light, tokens: ['bg'], values: { bg: '#fff' }, partial: false }, dark: { selector: dark, tokens: ['bg'], values: { bg: '#000' }, partial: false } },
-    })
-
-    it('`:root` — корень, атрибут с классом — атрибут; селектор файла в `selectors`', () => {
-      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', `[data-theme='dark'], .dark`) })
-      const [light, dark] = getThemeManifest(r).themes
-      expect(light).toMatchObject({ selectors: [':root'], activation: { type: 'root' } })
-      expect(dark).toMatchObject({ selectors: [`[data-theme='dark'], .dark`], activation: { type: 'attribute', name: 'data-theme', value: 'dark' } })
-    })
-
-    it('блок под селектором файла не дублирует его в `selectors`', () => {
-      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', '.dark'), themes: { tokenOverrides: { dark: { bg: '#000' } } } })
-      expect(getThemeManifest(r).themes[1]).toMatchObject({ selectors: ['.dark'], activation: { type: 'class', value: 'dark' } })
-    })
-
-    it('селектор файла идёт раньше блоков темы', () => {
-      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', '.dark'), themes: { tokenOverrides: { dark: { '[data-mode="night"]': { bg: '#000' } } } } })
-      expect(getThemeManifest(r).themes[1]!.selectors).toEqual(['.dark', '[data-mode="night"]'])
-    })
-
-    it('селектор файла сложнее класса или атрибута — `unknown`', () => {
-      const r = resolveGranum({ providers: [fileThemed], themeFiles: facts(':root', 'html:not(.light)') })
-      expect(getThemeManifest(r).themes[1]!.activation).toEqual({ type: 'unknown' })
-    })
-  })
-
-  it('label и colorScheme из themes.define доезжают', () => {
-    const r = resolveGranum({ providers: [provider], themes: { define: { emerald: { extends: 'light', tokens: { bg: '#052e1f' }, label: 'Изумруд', colorScheme: 'dark' } } } })
-    expect(getThemeManifest(r).themes).toEqual([{
-      name: 'emerald',
-      selectors: ['[data-theme="emerald"]'],
-      activation: { type: 'attribute', name: 'data-theme', value: 'emerald' },
-      label: 'Изумруд',
-      colorScheme: 'dark',
-    }])
+  it('без тем — режимов нет', () => {
+    const manifest = getThemeManifest(resolveGranum({ providers: [makeManifest('@p/plain', { X: {} })] }))
+    expect(manifest.modes).toEqual([])
   })
 })
 
-describe('createThemeController', () => {
-  const manifest = manifestOf([
-    { name: 'light', selectors: [':root'], activation: { type: 'root' } },
-    { name: 'dark', selectors: ['.dark'], activation: { type: 'class', value: 'dark' } },
-    { name: 'hc', selectors: ['[data-theme="hc"]'], activation: { type: 'attribute', name: 'data-theme', value: 'hc' } },
-  ])
-  const setup = (options = {}): { target: ReturnType<typeof createTarget>, controller: ReturnType<typeof createThemeController> } => {
+describe('resolveThemeActivation — пара обратно в режим (RT-5)', () => {
+  it('известная пара — режим, чужая или пустая — undefined', () => {
+    expect(resolveThemeActivation(MANIFEST, 'ink-dim')?.name).toBe('dim')
+    expect(resolveThemeActivation(MANIFEST, 'paper-dark')).toBeUndefined()
+    expect(resolveThemeActivation(MANIFEST, null)).toBeUndefined()
+  })
+})
+
+describe('createThemeController (RT-1)', () => {
+  it('режим по умолчанию, переключение, хранение имени режима, cycle и подписки', () => {
     const target = createTarget()
-    return { target, controller: createThemeController(manifest, { target, storage: null, ...options }) }
+    const storage = memoryStorage()
+    const themes = createThemeController(MANIFEST, { target, storage, prefersDark: () => false })
+    expect(themes.mode).toBe('light')
+    expect(themes.theme).toEqual({ id: 'ink', title: 'Чернила' })
+    expect(target.attributes.get('data-theme')).toBe('ink-light')
+    const seen: string[] = []
+    const stop = themes.subscribe(mode => seen.push(mode))
+    themes.setMode('dim')
+    expect(target.attributes.get('data-theme')).toBe('ink-dim')
+    expect(storage.data.get('granum-theme')).toBe('dim')
+    expect(themes.cycle()).toBe('light')
+    stop()
+    themes.setMode('dark')
+    expect(seen).toEqual(['dim', 'light'])
+    expect(themes.modes().map(m => m.name)).toEqual(['light', 'dark', 'dim'])
+  })
+
+  it('auto: сохранённый режим → системная схема → режим по умолчанию', () => {
+    expect(createThemeController(MANIFEST, { target: createTarget(), storage: memoryStorage({ 'granum-theme': 'dim' }) }).mode).toBe('dim')
+    expect(createThemeController(MANIFEST, { target: createTarget(), storage: memoryStorage({ 'granum-theme': 'gone' }), prefersDark: () => true }).mode).toBe('dark')
+    expect(createThemeController(MANIFEST, { target: createTarget(), storage: null, prefersDark: () => false }).mode).toBe('light')
+    expect(createThemeController(MANIFEST, { target: createTarget(), storage: null, initial: 'dim' }).mode).toBe('dim')
+  })
+
+  it('поверх уже выставленной пары: режим узнан, корень не тронут (RT-5)', () => {
+    const target = createTarget({ 'data-theme': 'ink-dark' })
+    const themes = createThemeController(MANIFEST, { target, storage: memoryStorage({ 'granum-theme': 'dim' }) })
+    expect(themes.mode).toBe('dark')
+    expect(target.writes).toBe(0)
+  })
+
+  it('ошибки: неизвестный режим, пустой манифест', () => {
+    const themes = createThemeController(MANIFEST, { target: createTarget(), storage: null })
+    expect(() => themes.setMode('sepia')).toThrow(/mode 'sepia' is not in the build of theme 'ink'/)
+    expect(() => createThemeController({ ...MANIFEST, modes: [] })).toThrow(/no modes/)
+  })
+
+  it('без DOM контроллер работает и ничего не применяет', () => {
+    vi.stubGlobal('document', undefined)
+    try {
+      const themes = createThemeController(MANIFEST, { storage: null, prefersDark: () => true })
+      expect(themes.mode).toBe('dark')
+      themes.setMode('light')
+      expect(themes.mode).toBe('light')
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('createThemeScript (RT-3)', () => {
+  function runScript(html: string, env: { attribute?: string, stored?: string, cookie?: string, dark?: boolean } = {}): string | undefined {
+    const attributes = new Map<string, string>(env.attribute ? [['data-theme', env.attribute]] : [])
+    const body = /<script[^>]*>([\s\S]*)<\/script>/.exec(html)![1]!
+    runInNewContext(body, {
+      document: {
+        documentElement: { getAttribute: (n: string) => attributes.get(n) ?? null, setAttribute: (n: string, v: string) => void attributes.set(n, v) },
+        cookie: env.cookie ?? '',
+      },
+      localStorage: { getItem: () => env.stored ?? null },
+      window: { matchMedia: true },
+      matchMedia: () => ({ matches: env.dark === true }),
+    })
+    return attributes.get('data-theme')
   }
 
-  it('старт, переключение, снятие предыдущей, чужой атрибут не трогается, cycle, подписки', () => {
-    const { target, controller } = setup()
-    expect(controller.get()).toBe('light')
-    expect(controller.list()).toEqual(['light', 'dark', 'hc'])
-    controller.set('dark')
-    expect(target.classes.has('dark')).toBe(true)
-    controller.set('hc')
-    expect(target.classes.has('dark')).toBe(false)
-    expect(target.attributes.get('data-theme')).toBe('hc')
-    controller.set('light')
-    expect(target.classes.size).toBe(0)
-    expect(target.attributes.has('data-theme')).toBe(false)
-
-    target.attributes.set('data-theme', 'своё')
-    controller.set('dark')
-    expect(target.attributes.get('data-theme')).toBe('своё')
-
-    expect(controller.cycle()).toBe('hc')
-    expect(controller.cycle()).toBe('light')
-    const seen: string[] = []
-    const off = controller.subscribe(name => seen.push(name))
-    controller.set('dark')
-    off()
-    controller.set('hc')
-    expect(seen).toEqual(['dark'])
+  it('сохранённый режим, иначе системная схема, иначе режим по умолчанию', () => {
+    const script = createThemeScript({ manifest: MANIFEST })
+    expect(runScript(script, { stored: 'dim' })).toBe('ink-dim')
+    expect(runScript(script, { stored: 'nope', dark: true })).toBe('ink-dark')
+    expect(runScript(script)).toBe('ink-light')
   })
 
-  it('ошибки: неизвестная тема, невыводимая активация, пустой манифест', () => {
-    const { controller } = setup()
-    expect(() => controller.set('nope')).toThrow(/light, dark, hc/)
-    const broken = manifestOf([{ name: 'light', selectors: [':root'], activation: { type: 'root' } }, { name: 'dark', selectors: [], activation: { type: 'unknown' } }])
-    const error = ((): Error => {
-      try {
-        createThemeController(broken, { target: createTarget(), storage: null }).set('dark')
-      }
-      catch (e) {
-        return e as Error
-      }
-      throw new Error('should have thrown')
-    })()
-    // Сообщение называет лекарство в форме, которую примут типы, — и не пресет v1.
-    expect(error.message).toMatch(/themeManifest: \{ activations: \{ dark: \{ type: 'attribute', name: 'data-theme', value: 'dark' \} \} \}/)
-    expect(error.message).not.toMatch(/preset/)
-    expect(() => createThemeController({ themes: [], defaultTheme: '' })).toThrow(/manifest is empty/)
+  it('пара от сервера не трогается; cookie раньше localStorage', () => {
+    expect(runScript(createThemeScript({ manifest: MANIFEST }), { attribute: 'ink-dim', stored: 'light' })).toBe('ink-dim')
+    expect(runScript(createThemeScript({ manifest: MANIFEST, cookie: 'mode' }), { cookie: 'a=1; mode=dark', stored: 'light' })).toBe('ink-dark')
   })
 
-  it('хранилище, системная схема, явный initial', () => {
-    const store = new Map<string, string>()
-    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) }
-    createThemeController(manifest, { target: createTarget(), storage }).set('hc')
-    const target = createTarget()
-    expect(createThemeController(manifest, { target, storage }).get()).toBe('hc')
-    expect(target.attributes.get('data-theme')).toBe('hc')
-    expect(setup({ prefersDark: () => true }).controller.get()).toBe('dark')
-    expect(setup({ prefersDark: () => false }).controller.get()).toBe('light')
-    expect(setup({ storage: { getItem: () => 'dark', setItem: vi.fn() }, prefersDark: () => true, initial: 'hc' }).controller.get()).toBe('hc')
+  it('nonce в теге; закрывающий тег в данных не ломает скрипт', () => {
+    const script = createThemeScript({ manifest: { ...MANIFEST, theme: { id: 'ink', title: '</script>' } }, nonce: 'abc"' })
+    expect(script.startsWith('<script nonce="abc&quot;">')).toBe(true)
+    expect(script.match(/<\/script>/g)).toHaveLength(1)
   })
 })
 
-describe('пример `activations` из troubleshooting проходит типы', () => {
-  it('`{ type, value }` — да, `kind` — нет', () => {
-    // Форма из docs/{ru,en}/troubleshooting.md; `yarn typecheck` сверяет её с типом опций плагина.
-    const options: GranumPluginOptions = { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } }
-    // @ts-expect-error активация описывается полем `type`, а не `kind`
-    const wrong: GranumPluginOptions = { themeManifest: { activations: { dark: { kind: 'class', value: 'dark' } } } }
-    expect(options.themeManifest?.activations?.dark).toEqual({ type: 'class', value: 'dark' })
-    expect(wrong).toBeDefined()
+describe('cookie для SSR (RT-4)', () => {
+  it('хранилище пишет и читает режим; сервер находит его в заголовке', () => {
+    const doc = { cookie: '' }
+    const storage = createCookieStorage({ name: 'mode', document: doc })
+    storage.setItem('ignored', 'dim')
+    expect(doc.cookie).toMatch(/^mode=dim; Max-Age=\d+; Path=\/; SameSite=lax$/)
+    expect(createCookieStorage({ name: 'mode', document: { cookie: 'x=1; mode=dark' } }).getItem('mode')).toBe('dark')
+    expect(modeFromCookie(MANIFEST, 'x=1; granum-theme=dim')?.value).toBe('ink-dim')
+    expect(modeFromCookie(MANIFEST, 'granum-theme=sepia')).toBeUndefined()
+    expect(themeRootAttributes(MANIFEST, 'dark')).toEqual({ 'data-theme': 'ink-dark' })
+    expect(themeRootAttributes(MANIFEST)).toEqual({ 'data-theme': 'ink-light' })
   })
 })

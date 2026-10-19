@@ -54,9 +54,11 @@ function makeFixture(options: {
   packageJson?: Record<string, unknown>
   /** Имя пакета и id провайдера; по умолчанию `@t/kit`. */
   name?: string
+  /** Каталог тем; `false` — провайдер без тем: владелец каталога в приложении один. */
+  catalog?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {}, name = '@t/kit' } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {}, name = '@t/kit', catalog = true } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
@@ -71,13 +73,14 @@ function makeFixture(options: {
   }))
   write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n${runtimeImport ? `export { createThemeController } from '@feugene/granum/runtime'\n` : ''}`)
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-bg:#fff}\n@supports (x:1){:root{--t-fallback:1}}')
-  write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
+  write(root, 'src/themes/registry.json', JSON.stringify({ 't-bg': 'mode', 't-radius': 'root' }))
+  write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: { 't-radius': '4px' }, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
   write(root, 'src/components/Card/Card.vue', plain
     ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
     : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}${vbind ? `const color = 'red'` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;${vbind ? 'color:v-bind(color);' : ''}}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n${runtimeConfig ? `export { cardConfig } from './config.ts'\n` : ''}`)
   if (runtimeConfig)
-    write(root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card', cssFiles: ['./card.css'], tokenDefinitionsRef: { light: './light.css' } })\n`)
+    write(root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card', cssFiles: ['./card.css'], themesDir: './themes' })\n`)
   write(root, 'src/components/Panel/Panel.vue', plain
     ? `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="t-panel"><Card /></section></template>\n`
     : `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\nconst z = '--t-z'\n</script>\n<template><section class="flex gap-2" :style="{ zIndex: 'var(' + z + ')' }"><Card /><!-- p-9 --></section></template>\n${panelStyle ? '<style>.t-panel-sfc{margin:var(--t-gap)}</style>\n' : ''}`)
@@ -96,9 +99,11 @@ function makeFixture(options: {
   })
   const provider = defineGranumProvider({
     id: name,
-    contractVersion: 1,
+    contractVersion: 2,
     components: [card, panel],
-    theme: { tokensCss: `${at}theme/tokens.css`, themes: { dark: `${at}theme/dark.css` }, defaultThemes: ['light'] },
+    theme: catalog
+      ? { tokensCss: `${at}theme/tokens.css`, registry: `${at}themes/registry.json`, defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: `${at}themes/kit.json` } } }
+      : { tokensCss: `${at}theme/tokens.css` },
     ...(engineRules ? { engine: { dialect: TEST_DIALECT, rules: [['kit-reset', { appearance: 'none' }] as const] } } : {}),
   })
   return { root, provider }
@@ -126,7 +131,7 @@ function groupFixture(options: { declareDependency?: boolean } = {}): Fixture {
   write(root, 'src/components/g/GB/index.ts', `export { default as GB } from './GB.vue'\n`)
   const ga = defineGranumComponent(pathToFileURL(join(root, 'src/components/g/GA/config.ts')).href, { name: 'GA', group: 'g', ...(options.declareDependency ? { dependencies: ['GB'] } : {}) })
   const gb = defineGranumComponent(pathToFileURL(join(root, 'src/components/g/GB/config.ts')).href, { name: 'GB', group: 'g' })
-  const provider = defineGranumProvider({ id: '@t/grp', contractVersion: 1, components: [ga, gb], theme: { themes: {}, defaultThemes: [] } })
+  const provider = defineGranumProvider({ id: '@t/grp', contractVersion: 2, components: [ga, gb] })
   return { root, provider }
 }
 
@@ -281,9 +286,10 @@ describe('granumProvider с настоящим Vite', () => {
     expect(panel.tokens.dynamic).toEqual(['--t-z'])
     expect(panel.files.every(f => f.startsWith('components/Panel/') || f.startsWith('chunks/'))).toBe(true)
 
-    expect(manifest.theme.declares).toEqual(['--t-bg', '--t-fallback', '--t-space'])
+    expect(manifest.theme.declares).toEqual(['--t-bg', '--t-fallback', '--t-radius', '--t-space'])
     expect(readFileSync(join(dist, 'theme/tokens.css'), 'utf8')).toContain('--t-space')
-    expect(readFileSync(join(dist, 'theme/dark.css'), 'utf8')).toContain('.dark')
+    expect(JSON.parse(readFileSync(join(dist, 'themes/kit.json'), 'utf8')).modes.dark.tokens).toEqual({ 't-bg': '#000' })
+    expect(manifest.theme.catalog).toEqual({ kit: { title: 'Kit', data: 'themes/kit.json', modes: ['light', 'dark'], defaultMode: 'light' } })
     // Предупреждения о совпавшем safelist больше нет: раскладку чанков, от
     // которой зависит видимость класса, выбирает бандлер, а не автор пакета.
     expect(manifest.warnings).toEqual([])
@@ -389,7 +395,8 @@ describe('granumProvider с настоящим Vite', () => {
     // каждое приложение-потребитель, а не сборка провайдера.
     const { manifest } = await run(makeFixture({ dotPaths: true, engineRules: true }), { engineModule: './engine.js' })
     expect(manifest.theme.tokensCss).toBe('theme/tokens.css')
-    expect(manifest.theme.themes).toEqual({ dark: 'theme/dark.css' })
+    expect(manifest.theme.registry).toBe('themes/registry.json')
+    expect(manifest.theme.catalog!.kit!.data).toBe('themes/kit.json')
     expect(manifest.engine.module).toBe('engine.js')
   })
 
@@ -414,10 +421,10 @@ describe('granumProvider с настоящим Vite', () => {
     // Рядом есть только vue — granum в node_modules пакета нет.
     mkdirSync(join(dist, '../node_modules'), { recursive: true })
     symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(dist, '../node_modules/vue'), 'dir')
-    const card = await import(pathToFileURL(join(dist, 'components/Card/index.js')).href) as { cardConfig: { name: string, cssFiles: string[], tokenDefinitionsRef: Record<string, { url: string }> } }
+    const card = await import(pathToFileURL(join(dist, 'components/Card/index.js')).href) as { cardConfig: { name: string, cssFiles: string[], themesDir: string } }
     expect(card.cardConfig.name).toBe('Card')
     expect(card.cardConfig.cssFiles).toEqual(['components/Card/card.css'])
-    expect(card.cardConfig.tokenDefinitionsRef.light!.url).toMatch(/^file:.*\/light\.css$/)
+    expect(card.cardConfig.themesDir).toBe('components/Card/themes')
   })
 
   it('рантайм-импорт другой точки входа granum без peer — peer-missing; с peer — тишина', async () => {
@@ -606,7 +613,7 @@ describe('встроенный контракт в dist провайдера', (
 
   it('объектная форма провайдера в dist грузится без granum', async () => {
     const fixture = makeFixture({ runtimeConfig: true })
-    write(fixture.root, 'src/granum-provider/index.ts', `import { defineGranumProvider } from '@feugene/granum/contract'\nimport { cardConfig } from '../components/Card/config.ts'\nexport default defineGranumProvider({ id: '@t/kit', contractVersion: 1, components: [cardConfig] })\n`)
+    write(fixture.root, 'src/granum-provider/index.ts', `import { defineGranumProvider } from '@feugene/granum/contract'\nimport { cardConfig } from '../components/Card/config.ts'\nexport default defineGranumProvider({ id: '@t/kit', contractVersion: 2, components: [cardConfig] })\n`)
     const { dist } = await run(fixture, { entries: { 'granum-provider/index': 'src/granum-provider/index.ts' } })
     expect(granumImports(dist)).toEqual([])
     mkdirSync(join(dist, '../node_modules'), { recursive: true })
@@ -623,7 +630,7 @@ describe('встроенный контракт в dist провайдера', (
    */
   it('клиентский бандл приложения: неиспользуемые конфиги выброшены вместе с копиями контракта', async () => {
     const kit = makeFixture({ runtimeConfig: true })
-    const kit2 = makeFixture({ runtimeConfig: true, name: '@t/kit2' })
+    const kit2 = makeFixture({ runtimeConfig: true, name: '@t/kit2', catalog: false })
     await run(kit)
     await run(kit2)
 
@@ -809,5 +816,63 @@ describe('части составного компонента из exports', ()
     })
     const manifest = JSON.parse(readFileSync(join(root, 'dist/granum.manifest.json'), 'utf8')) as GranumManifest
     expect(manifest.components.Card?.subcomponents).toEqual(['CardPart'])
+  })
+})
+
+/**
+ * Темы на сборке провайдера (B-10, C-24…C-31, C-33): данные с `extends`
+ * дополняются из родителя и проверяются по реестру до записи, папка
+ * `themesDir` материализуется в манифест.
+ */
+describe('темы на сборке провайдера', () => {
+  const withTheme = (fixture: Fixture, theme: NonNullable<GranumProvider['theme']>, files: Record<string, unknown> = {}): Fixture => {
+    for (const [rel, data] of Object.entries(files))
+      write(fixture.root, `src/${rel}`, typeof data === 'string' ? data : JSON.stringify(data))
+    return { root: fixture.root, provider: { ...fixture.provider, theme } }
+  }
+  const KIT_CATALOG = { kit: { title: 'Kit', data: 'themes/kit.json' } }
+
+  it('тема с extends: отличия слиты с родителем, в dist — полные данные', async () => {
+    const fixture = withTheme(makeFixture(), {
+      registry: 'themes/registry.json',
+      defaultTheme: 'kit',
+      catalog: { ...KIT_CATALOG, night: { title: 'Night', extends: 'kit', data: 'themes/night.json' } },
+    }, { 'themes/night.json': { root: { 't-radius': '0' }, modes: { dark: { tokens: { 't-bg': '#111' } }, dim: { colorScheme: 'dark', extends: 'dark', tokens: {} } } } })
+    const { manifest, dist } = await run(fixture)
+    const night = JSON.parse(readFileSync(join(dist, 'themes/night.json'), 'utf8'))
+    expect(night).toMatchObject({ id: 'night', title: 'Night', root: { 't-radius': '0' } })
+    expect(night.modes.light.tokens).toEqual({ 't-bg': '#fff' })
+    expect(night.modes.dark).toEqual({ colorScheme: 'dark', tokens: { 't-bg': '#111' } })
+    expect(manifest.theme.catalog!.night).toEqual({ title: 'Night', extends: 'kit', data: 'themes/night.json', modes: ['light', 'dark', 'dim'], defaultMode: 'light' })
+  })
+
+  it('тема без токена реестра — theme-incomplete с перечнем', async () => {
+    const fixture = withTheme(makeFixture(), { registry: 'themes/registry.json', catalog: KIT_CATALOG }, {
+      'themes/registry.json': { 't-bg': 'mode', 't-radius': 'root', 't-fg': 'mode' },
+    })
+    await expect(run(fixture)).rejects.toMatchObject({ reason: 'theme-incomplete', tokens: ['dark:t-fg', 'light:t-fg'] })
+  })
+
+  it('ошибки данных: default-mode-missing, mode-extends-cycle, invalid-mode-name', async () => {
+    const broken = (data: unknown): Fixture => withTheme(makeFixture(), { catalog: KIT_CATALOG }, { 'themes/kit.json': data })
+    await expect(run(broken({ id: 'kit', title: 'K', root: {}, modes: { dark: { colorScheme: 'dark', tokens: {} } } }))).rejects.toMatchObject({ reason: 'default-mode-missing' })
+    await expect(run(broken({ id: 'kit', title: 'K', root: {}, modes: { light: { colorScheme: 'light', extends: 'dark', tokens: {} }, dark: { colorScheme: 'dark', extends: 'light', tokens: {} } } }))).rejects.toMatchObject({ reason: 'mode-extends-cycle' })
+    await expect(run(broken({ id: 'kit', title: 'K', root: {}, modes: { 'light': { colorScheme: 'light', tokens: {} }, 'high-contrast': { colorScheme: 'dark', tokens: {} } } }))).rejects.toMatchObject({ reason: 'invalid-mode-name' })
+  })
+
+  it('путь данных темы за пределами пакета — path-escapes-package при создании плагина', () => {
+    const { provider } = makeFixture()
+    const escaping = { ...provider, theme: { catalog: { kit: { title: 'Kit', data: '../kit.json' } } } }
+    expect(() => granumProvider({ provider: escaping, engine: testEngine() })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+  })
+
+  it('themesDir компонента материализуется в tokens.themes; без него поля нет', async () => {
+    const fixture = makeFixture()
+    write(fixture.root, 'src/components/Card/themes/kit/modes/light.json', '{"t-card-bg":"#fafafa"}')
+    write(fixture.root, 'src/components/Card/themes/kit/root.css', ':root { --t-card-gap: 4px; }')
+    const card = { ...fixture.provider.components[0]!, themesDir: 'components/Card/themes' }
+    const { manifest } = await run({ root: fixture.root, provider: { ...fixture.provider, components: [card, fixture.provider.components[1]!] } })
+    expect(manifest.components.Card!.tokens.themes).toEqual({ kit: { root: { 't-card-gap': '4px' }, modes: { light: { 't-card-bg': '#fafafa' } } } })
+    expect(manifest.components.Panel!.tokens.themes).toBeUndefined()
   })
 })

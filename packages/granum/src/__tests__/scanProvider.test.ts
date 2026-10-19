@@ -25,18 +25,20 @@ function distFixture(): { root: string, dist: string } {
   writeFileSync(join(dist, 'components/Table/index.js'), 'export const Table = { cls: "m-2" }\n')
   writeFileSync(join(dist, 'chunks/shared.js'), 'export const pad = "gap-2"\n')
   writeFileSync(join(dist, 'theme/tokens.css'), ':root{--space:8px;--card-fg:#000}\n')
+  mkdirSync(join(dist, 'themes'), { recursive: true })
+  writeFileSync(join(dist, 'themes/kit.json'), JSON.stringify({ id: 'kit', title: 'Kit', root: { accent: 'red' }, modes: { light: { colorScheme: 'light', tokens: {} }, dark: { colorScheme: 'dark', tokens: {} } } }))
   return { root, dist }
 }
 
 describe('scanObjectProvider', () => {
-  it('файлы компонента и общие чанки; классы только с правилом; токены из JS и CSS; тема по файлам', async () => {
+  it('файлы компонента и общие чанки; классы только с правилом; токены из JS и CSS; индекс каталога по данным', async () => {
     const { dist } = distFixture()
     const provider = defineGranumProvider({
       id: '@x/kit',
-      contractVersion: 1,
+      contractVersion: 2,
       baseUrl: `${pathToFileURL(dist).href}/`,
       components: [{ name: 'Card', dependencies: ['Table'], safelist: ['p-4', 'sr-only'] }, { name: 'Table' }],
-      theme: { tokensCss: 'theme/tokens.css', tokenDefinitions: { light: { tokens: { accent: 'red' } } } },
+      theme: { tokensCss: 'theme/tokens.css', defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: 'themes/kit.json' } } },
     })
     const loaded = (await scanObjectProvider(provider, testEngine()))!
     const card = loaded.manifest.components.Card!
@@ -48,6 +50,7 @@ describe('scanObjectProvider', () => {
     expect(card.dependencies).toEqual(['@x/kit:Table'])
     expect(loaded.manifest.components.Table?.classes).toEqual(['m-2'])
     expect(loaded.manifest.theme.declares).toEqual(['--accent', '--card-fg', '--space'])
+    expect(loaded.manifest.theme.catalog).toEqual({ kit: { title: 'Kit', data: 'themes/kit.json', modes: ['light', 'dark'], defaultMode: 'light' } })
     // `p-4` извлечение нашло статически, поэтому из safelist он вычищен: записи
     // без собственного CSS в манифест не едут. `sr-only` остался — его
     // движок тестов не знает, и в `classes` его нет.
@@ -107,24 +110,28 @@ describe('scanObjectProvider', () => {
 })
 
 describe('объектные доноры в dependencies', () => {
-  const css = `data:text/css,${encodeURIComponent(':root { --b-bg: red; }')}`
-  const donor = (): ReturnType<typeof makeProvider> => makeProvider('b', { theme: { defaultThemes: ['light'], tokenDefinitionsRef: { light: css } } })
-  const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] =>
-    (app.resolution.tokenLayers.get('light') ?? []).flatMap(block => [...block.tokens.keys()])
+  /** Донор — владелец каталога: данные темы на диске, база — его каталог. */
+  const donor = (): ReturnType<typeof makeProvider> => {
+    const dir = mkdtempSync(join(tmpdir(), 'granum-donor-theme-'))
+    mkdirSync(join(dir, 'themes'))
+    writeFileSync(join(dir, 'themes/paper.json'), JSON.stringify({ id: 'paper', title: 'P', root: {}, modes: { light: { colorScheme: 'light', tokens: { 'b-bg': 'red' } } } }))
+    return makeProvider('b', { baseUrl: `${pathToFileURL(dir).href}/`, theme: { defaultTheme: 'paper', catalog: { paper: { title: 'P', data: 'themes/paper.json' } } } })
+  }
+  const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] => [...(app.resolution.tokens.active?.modes.get('light')?.keys() ?? [])]
 
-  it('донор с tokenDefinitionsRef и в providers, и в dependencies — один провайдер', async () => {
+  it('донор-владелец тем и в providers, и в dependencies — один провайдер', async () => {
     // Материализация даёт новый объект; ссылка из dependencies — старый. По
     // идентичности это два инстанса с одним id, а не ромб.
     const b = donor()
     const a = makeProvider('a', { dependencies: [b] })
-    const app = await prepareTestApp({ providers: [a, b], themes: { names: ['light'] } }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
+    const app = await prepareTestApp({ providers: [a, b] }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
     expect(app.resolution.providers.map(p => p.id)).toEqual(['b', 'a'])
     expect(lightTokens(app)).toContain('b-bg')
   })
 
-  it('донор только в dependencies тоже материализуется: его токены доходят до темы', async () => {
+  it('донор только в dependencies тоже подключается: его тема доходит до CSS', async () => {
     const a = makeProvider('a', { dependencies: [donor()] })
-    const app = await prepareTestApp({ providers: [a], themes: { names: ['light'] } }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
+    const app = await prepareTestApp({ providers: [a] }, mkdtempSync(join(tmpdir(), 'granum-donor-')))
     expect(app.resolution.providers.map(p => p.id)).toEqual(['b', 'a'])
     expect(lightTokens(app)).toContain('b-bg')
   })

@@ -14,9 +14,8 @@ import { planTokenPrune } from '../tokenPrune'
 
 export interface TokenPruneFileReport {
   readonly path: string
-  readonly kind: 'tokens' | 'base' | 'theme'
+  readonly kind: 'tokens' | 'base'
   readonly providerId: string
-  readonly theme?: string
   readonly skipped: boolean
   readonly declared: number
   readonly kept: number
@@ -47,7 +46,6 @@ export async function granumTokenPrune(app: PreparedApp): Promise<TokenPruneRepo
   const plan = planTokenPrune({
     resolution,
     options: config.pruneTokens,
-    tokenOverrides: config.themes?.tokenOverrides,
     inlined,
     componentCss,
     appConsumes: app.appScan.consumes,
@@ -62,7 +60,6 @@ export async function granumTokenPrune(app: PreparedApp): Promise<TokenPruneRepo
       path: source.path,
       kind: source.kind,
       providerId: source.providerId,
-      ...(source.theme !== undefined ? { theme: source.theme } : {}),
       skipped,
       declared: declared.size,
       kept: declared.size - result.removed.length,
@@ -90,8 +87,7 @@ function reasonText(reason: TokenKeepReason): string {
     case 'inlined-rule': return 'used by a rule in an inlined file'
     case 'component-css': return 'used by component CSS'
     case 'engine-css': return 'used by engine utilities or preflight'
-    case 'override': return 'written by tokenOverrides'
-    case 'structural': return 'defined by a structural layer'
+    case 'app-value': return 'written by the application (modes.define, modes.tokenOverrides or the theme object)'
     case 'app-source': return 'used by application sources'
     case 'keep-pattern': return `matches keep pattern ${reason.pattern}`
     case 'referenced-by': return `referenced by the value of --${reason.by}`
@@ -110,7 +106,7 @@ export function formatTokenPruneReport(report: TokenPruneReport, cwd: string): s
   push(`Files (${report.files.length}):`)
   for (const f of report.files) {
     const rel = f.path.startsWith(cwd) ? f.path.slice(cwd.length + 1) : f.path
-    push(`  • ${rel} [${f.kind}${f.theme ? ` ${f.theme}` : ''}] — ${f.skipped ? 'not pruned (base)' : `declared ${f.declared}, kept ${f.kept}, removed ${f.removed}`}; ${f.bytesBefore} → ${f.bytesAfter} bytes`)
+    push(`  • ${rel} [${f.kind}] — ${f.skipped ? 'not pruned (base)' : `declared ${f.declared}, kept ${f.kept}, removed ${f.removed}`}; ${f.bytesBefore} → ${f.bytesAfter} bytes`)
   }
   push()
   push(`Removed (${report.removed.length}): ${report.removed.map(t => `--${t}`).join(' ') || '—'}`)

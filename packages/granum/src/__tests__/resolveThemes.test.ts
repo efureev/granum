@@ -1,273 +1,161 @@
-import type { GranumProvider } from '../contract'
+import type { GranumLoadedManifest } from '../contract'
+import type { GranumAppTheme, ResolveThemesInput } from '../core/resolveThemes'
 import { describe, expect, it } from 'vitest'
+import { ThemeResolutionError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
-import { defaultAppThemeSelector, GRANUM_DEFAULT_THEME_NAMES, resolveNeededThemeNames, resolveThemes } from '../core/resolveThemes'
-import { component, makeManifest, makeProvider } from './helpers'
+import { planThemes, resolveThemes } from '../core/resolveThemes'
+import { INK, makeManifest, PAPER, themeData } from './helpers'
 
-const nodes = (...ps: Parameters<typeof toProviderNode>[0][]): ReturnType<typeof toProviderNode>[] => ps.map(toProviderNode)
-const comps = (p: GranumProvider): ReturnType<typeof toProviderNode>['components'] => toProviderNode(p).components
-
-const providerA = makeProvider('a', { theme: { themes: { light: 'theme/light.css', dark: 'theme/dark.css' } } })
-const providerB = makeProvider('b', { theme: { themes: { light: 'theme/light.css' } } })
-const providerStructural = makeProvider('s', {
-  theme: {
-    tokenDefinitions: {
-      light: { selector: ':root', tokens: { 'primary-color': 'blue', 'radius': '4px' } },
-      dark: { selector: '[data-theme="dark"]', tokens: { 'primary-color': 'lightblue' } },
-    },
-  },
-})
-
-describe('resolveThemes', () => {
-  it('по умолчанию — только light', () => {
-    const r = resolveThemes(nodes(providerA, providerB))
-    expect(r.names).toEqual(GRANUM_DEFAULT_THEME_NAMES)
-    expect(r.items.map(i => `${i.providerId}:${i.themeName}`)).toEqual(['a:light', 'b:light'])
-  })
-
-  it('пустой массив — тем нет', () => {
-    expect(resolveThemes(nodes(providerA, providerB), { names: [] }).items).toEqual([])
-  })
-
-  it('пересечение × имена, пропуск отсутствующих; провайдер без темы — игнор', () => {
-    const r = resolveThemes(nodes(providerA, providerB), { names: ['light', 'dark'] })
-    expect(r.items.map(i => `${i.providerId}:${i.themeName}`)).toEqual(['a:light', 'a:dark', 'b:light'])
-    expect(resolveThemes(nodes(makeProvider('n'), providerA), { names: ['light'] }).items)
-      .toEqual([{ providerId: 'a', themeName: 'light', cssRef: 'theme/light.css' }])
-  })
-
-  it('tokenDefinitions побеждает themes у одного провайдера', () => {
-    const mixed = makeProvider('m', { theme: { themes: { light: 'l.css' }, tokenDefinitions: { light: { tokens: { a: '1' } } } } })
-    const r = resolveThemes(nodes(mixed), { names: ['light'] })
-    expect(r.items[0]!.tokenDefinition).toBeDefined()
-    expect(r.items[0]!.cssRef).toBeUndefined()
-  })
-
-  it('мержит токены из нескольких провайдеров; позже — важнее', () => {
-    const s2 = makeProvider('s2', { theme: { tokenDefinitions: { light: { tokens: { 'secondary-color': 'red', 'radius': '8px' } } } } })
-    const r = resolveThemes(nodes(providerStructural, s2), { names: ['light'] })
-    expect(r.tokenRegistry.light!.tokens).toEqual({ 'primary-color': 'blue', 'secondary-color': 'red', 'radius': '8px' })
-    expect(r.tokenRegistry.light!.selector).toBe(':root')
-  })
-
-  it('компоненты мержатся поверх провайдеров; неактивные темы игнорируются', () => {
-    const p = makeProvider('s', {
-      theme: providerStructural.theme!,
-      components: [{
-        name: 'XTokenized',
-        tokenDefinitions: {
-          light: { tokens: { 'x-tokenized': 'red', 'primary-color': 'green' } },
-          dark: { tokens: { 'x-tokenized': 'yellow' } },
-        },
-      }],
-    })
-    const r = resolveThemes(nodes(p), { names: ['light', 'dark'] }, comps(p))
-    expect(r.tokenRegistry.light!.tokens).toEqual({ 'primary-color': 'green', 'radius': '4px', 'x-tokenized': 'red' })
-    expect(r.tokenRegistry.dark!.tokens).toEqual({ 'primary-color': 'lightblue', 'x-tokenized': 'yellow' })
-    expect(r.items.find(i => i.componentName === 'XTokenized' && i.themeName === 'light')!.tokenDefinition!.tokens['x-tokenized']).toBe('red')
-
-    const only = resolveThemes([], { names: ['light'] }, comps(p))
-    expect(only.tokenRegistry.light!.tokens).toEqual({ 'x-tokenized': 'red', 'primary-color': 'green' })
-    expect(only.tokenRegistry.dark).toBeUndefined()
-    expect(only.items.every(i => i.themeName !== 'dark')).toBe(true)
-  })
-
-  it('разные селекторы одной темы — отдельные блоки; безселекторный вклад — в первичный', () => {
-    const p1 = makeProvider('p1', {
-      theme: { tokenDefinitions: { dark: { selector: '.dark', tokens: { a: '1' } } } },
-      components: [{ name: 'X', tokenDefinitions: { dark: { tokens: { b: '2' } } } }],
-    })
-    const p2 = makeProvider('p2', { theme: { tokenDefinitions: { dark: { selector: '[data-theme="dark"]', tokens: { c: '3' } } } } })
-    const r = resolveThemes(nodes(p1, p2), { names: ['dark'] }, comps(p1))
-    expect(r.tokenRegistry.dark!.blocks).toEqual([
-      { selector: '.dark', tokens: { a: '1', b: '2' } },
-      { selector: '[data-theme="dark"]', tokens: { c: '3' } },
-    ])
-    expect(r.tokenRegistry.dark!.selector).toBe('.dark')
-  })
-
-  it('компонент создаёт тему с нуля, если у провайдеров её нет', () => {
-    const p = makeProvider('a', { components: [{ name: 'X', tokenDefinitions: { light: { selector: ':root', tokens: { x: 'red' } } } }] })
-    const r = resolveThemes(nodes(providerA), { names: ['light'] }, comps(p))
-    expect(r.tokenRegistry.light!.tokens.x).toBe('red')
-  })
-
-  it('манифестная форма: темы, токены и defaultThemes читаются из манифеста', () => {
-    const m = makeManifest('@x/h', {
-      XhCard: { tokens: { declares: { light: { tokens: { card: '#fff' } } }, consumes: [], dynamic: [] } },
-    }, {
-      theme: {
-        themes: { dark: 'theme/dark.css' },
-        defaultThemes: ['light', 'dark'],
-        tokenDefinitions: { light: { tokens: { bg: '#fff' } } },
-        declares: ['--bg'],
-      },
-    })
-    const node = toProviderNode(m)
-    const r = resolveThemes([node], {}, node.components)
-    expect(r.names).toEqual(['light', 'dark'])
-    expect(r.namesSource).toBe('provider-defaults')
-    expect(r.tokenRegistry.light!.tokens).toEqual({ bg: '#fff', card: '#fff' })
-    expect(r.items.find(i => i.themeName === 'dark')!.cssRef).toBe('theme/dark.css')
-  })
-})
-
-describe('defaultThemes провайдеров', () => {
-  const mk = (id: string, defaults: string[] | undefined, themes: Record<string, string>): GranumProvider =>
-    makeProvider(id, { theme: { themes, ...(defaults ? { defaultThemes: defaults } : {}) } })
-
-  it('без names — из defaultThemes, объединение в порядке провайдеров с дедупом', () => {
-    const r = resolveThemes(nodes(mk('p', ['brand-day'], { 'brand-day': 'day.css' })))
-    expect(r.names).toEqual(['brand-day'])
-    expect(r.namesSource).toBe('provider-defaults')
-    const p1 = mk('p1', ['light', 'dark'], { light: 'l', dark: 'd' })
-    const p2 = mk('p2', ['dark', 'hc'], { dark: 'd', hc: 'h' })
-    expect(resolveThemes(nodes(p1, p2)).names).toEqual(['light', 'dark', 'hc'])
-  })
-
-  it('никто не объявил — фолбэк light; явные names перебивают; names: [] — тем нет', () => {
-    expect(resolveThemes(nodes(mk('p', undefined, { light: 'l' }))).namesSource).toBe('fallback')
-    const p = mk('p', ['dark'], { light: 'l', dark: 'd' })
-    expect(resolveThemes(nodes(p), { names: ['light'] })).toMatchObject({ names: ['light'], namesSource: 'explicit' })
-    expect(resolveThemes(nodes(p), { names: [] })).toMatchObject({ names: [], items: [] })
-  })
-
-  it('предупреждения: без источника, частичная тема, несколько дефолтных', () => {
-    expect(resolveThemes(nodes(mk('p', ['dark'], { light: 'l' }))).warnings)
-      .toContainEqual({ kind: 'default-theme-without-source', providerId: 'p', theme: 'dark' })
-    expect(resolveThemes(nodes(providerA, providerB), { names: ['dark'] }).warnings)
-      .toContainEqual({ kind: 'partial-theme', theme: 'dark', providersWithout: ['b'] })
-    expect(resolveThemes(nodes(mk('p', ['light', 'dark'], { light: 'l', dark: 'd' }))).warnings)
-      .toContainEqual({ kind: 'multiple-default-themes', themes: ['light', 'dark'] })
-    expect(resolveThemes(nodes(mk('p', ['light'], { light: 'l' }))).warnings).toEqual([])
-  })
-
-  it('тема, поставляемая только компонентом или только ссылкой, не считается «без источника»', () => {
-    const byComponent = makeProvider('p', {
-      components: [{ name: 'X', tokenDefinitions: { dark: { selector: '.dark', tokens: { brd: '#000' } } } }],
-      theme: { defaultThemes: ['dark'] },
-    })
-    expect(resolveThemes(nodes(byComponent))).toMatchObject({ names: ['dark'], warnings: [] })
-    const byRef = makeProvider('q', { theme: { defaultThemes: ['dark'], tokenDefinitionsRef: { dark: 'file:///q/dark.css' } } })
-    expect(resolveThemes(nodes(byRef)).warnings).toEqual([])
-  })
-})
-
-describe('themes.define — набор тем принадлежит приложению', () => {
-  const structural = makeProvider('ds', {
+/** Владелец каталога в форме манифеста: данные тем приходят резолверу отдельно (`themeData`). */
+function owner(id = '@p/ds', defaultTheme: string | null = 'paper'): GranumLoadedManifest {
+  return makeManifest(id, {}, {
     theme: {
-      defaultThemes: ['light', 'dark'],
-      tokenDefinitions: {
-        light: { selector: ':root', tokens: { bg: '#fff', fg: '#000', radius: '4px' } },
-        dark: { selector: '.dark', tokens: { bg: '#000', fg: '#fff' } },
+      ...(defaultTheme !== null ? { defaultTheme } : {}),
+      catalog: {
+        paper: { title: 'Бумага', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' },
+        ink: { title: 'Чернила', extends: 'paper', data: 'themes/ink.json', modes: ['light', 'dark', 'dim'], defaultMode: 'light' },
       },
+      declares: [],
     },
   })
-  const opaque = makeProvider('op', { theme: { themes: { legacy: 'legacy.css' } } })
+}
 
-  it('без names набор тем равен ключам define', () => {
-    const r = resolveThemes(nodes(structural), {
-      define: { emerald: { extends: 'light', tokens: { bg: '#052e1f' } }, crimson: { extends: 'light', tokens: { bg: '#450a0a' } } },
-    })
-    expect(r.names).toEqual(['emerald', 'crimson'])
-    expect(r.namesSource).toBe('app-defined')
-    expect(Object.keys(r.tokenRegistry)).toEqual(['emerald', 'crimson'])
+const DATA = { '@p/ds': { paper: PAPER, ink: INK } }
+
+function resolve(input: ResolveThemesInput = {}, providers: GranumLoadedManifest[] = [owner()]) {
+  return resolveThemes(providers.map(toProviderNode), input, [], DATA)
+}
+
+function reasonOf(run: () => unknown): string | undefined {
+  try {
+    run()
+  }
+  catch (error) {
+    return error instanceof ThemeResolutionError ? error.reason : `not a ThemeResolutionError: ${(error as Error).message}`
+  }
+  return undefined
+}
+
+describe('активная тема (A-22, A-23)', () => {
+  it('по умолчанию — defaultTheme владельца, источник default', () => {
+    const r = resolve()
+    expect(r.theme?.id).toBe('paper')
+    expect(r.themeSource).toBe('default')
+    expect(r.owner).toBe('@p/ds')
   })
 
-  it('единственная тема под :root; явный names перебивает define', () => {
-    const r = resolveThemes(nodes(structural), { define: { brand: { extends: 'dark', selector: ':root', tokens: { fg: '#eee' } } } })
-    expect(r.tokenRegistry.brand!.blocks).toEqual([{ selector: ':root', tokens: { bg: '#000', fg: '#eee' } }])
-    const e = resolveThemes(nodes(structural), { names: ['light'], define: { emerald: { extends: 'light' } } })
-    expect(e.names).toEqual(['light'])
-    expect(e.tokenRegistry.emerald).toBeUndefined()
+  it('id из конфига и квалифицированная форма; цепочка тем для токенов компонентов', () => {
+    expect(resolve({ theme: 'ink' }).theme?.chain).toEqual(['ink', 'paper'])
+    expect(resolve({ theme: '@p/ds:ink' }).themeSource).toBe('provider')
   })
 
-  it('extends: база резолвится, но в сборку не попадает; токены переезжают под селектор новой темы', () => {
-    const r = resolveThemes(nodes(structural), { names: ['emerald'], define: { emerald: { extends: 'light', tokens: { bg: '#052e1f' } } } })
-    expect(r.tokenRegistry.light).toBeUndefined()
-    expect(r.tokenRegistry.emerald!.tokens).toEqual({ bg: '#052e1f', fg: '#000', radius: '4px' })
-    const o = resolveThemes(nodes(structural), { names: ['ocean'], define: { ocean: { extends: 'dark', tokens: { bg: '#082f49' } } } })
-    expect(o.tokenRegistry.ocean!.blocks).toEqual([{ selector: defaultAppThemeSelector('ocean'), tokens: { bg: '#082f49', fg: '#fff' } }])
-    expect(resolveNeededThemeNames(nodes(structural), { names: ['ocean'], define: { ocean: { extends: 'dark' } } })).toEqual(new Set(['ocean', 'dark']))
+  it('неизвестная тема — unknown-theme со списком доступных; чужой провайдер в ключе — тоже', () => {
+    expect(reasonOf(() => resolve({ theme: 'clay' }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ theme: '@other/x:paper' }))).toBe('unknown-theme')
+    try {
+      resolve({ theme: 'clay' })
+    }
+    catch (error) {
+      expect((error as ThemeResolutionError).available).toEqual(['paper', 'ink'])
+    }
   })
 
-  it('тема приложения, которую не поставляет никто, встаёт под свой селектор, а не под :root', () => {
-    // Под `:root` она перекрыла бы светлую тему и получила бы активацию `root`:
-    // переключение тем ничего бы не меняло.
-    const r = resolveThemes(nodes(structural), { names: ['light', 'brand'], define: { brand: { tokens: { bg: 'red' } } } })
-    expect(r.tokenRegistry.brand!.blocks).toEqual([{ selector: defaultAppThemeSelector('brand'), tokens: { bg: 'red' } }])
-    expect(r.tokenRegistry.light!.blocks[0]!.selector).toBe(':root')
+  it('два владельца каталога — multiple-theme-owners', () => {
+    expect(reasonOf(() => resolve({}, [owner('@a/one'), owner('@b/two')]))).toBe('multiple-theme-owners')
   })
 
-  it('цепочка extends: базы раньше наследников; define без extends — точечный мерж', () => {
-    const r = resolveThemes(nodes(structural), {
-      names: ['ocean-hc'],
-      define: { 'ocean': { extends: 'light', tokens: { bg: '#082f49' } }, 'ocean-hc': { extends: 'ocean', tokens: { fg: '#ffffff' } } },
-    })
-    expect(r.tokenRegistry['ocean-hc']!.tokens).toEqual({ bg: '#082f49', fg: '#ffffff', radius: '4px' })
-    const d = resolveThemes(nodes(structural), { names: ['dark'], define: { dark: { tokens: { bg: '#111' } } } })
-    expect(d.tokenRegistry.dark!.blocks).toEqual([{ selector: '.dark', tokens: { bg: '#111', fg: '#fff' } }])
+  it('без владельца и без темы-объекта тем нет', () => {
+    const r = resolve({}, [makeManifest('@p/plain', { X: {} })])
+    expect(r.theme).toBeUndefined()
+    expect(r.modes).toEqual([])
   })
 
-  it('диагностика: неизвестная база, непрозрачная база, цикл, partial-theme не для тем приложения', () => {
-    expect(resolveThemes(nodes(structural), { names: ['e'], define: { e: { extends: 'lite', tokens: { bg: '#0' } } } }).warnings)
-      .toContainEqual({ kind: 'theme-extends-unresolved', theme: 'e', base: 'lite', reason: 'unknown' })
-    expect(resolveThemes(nodes(opaque), { names: ['e'], define: { e: { extends: 'legacy' } } }).warnings)
-      .toContainEqual({ kind: 'theme-extends-unresolved', theme: 'e', base: 'legacy', reason: 'opaque' })
-    const cyc = resolveThemes(nodes(structural), { names: ['a'], define: { a: { extends: 'b', tokens: { fg: '#1' } }, b: { extends: 'a', tokens: { bg: '#2' } } } })
-    expect(cyc.warnings.some(w => w.kind === 'theme-extends-cycle')).toBe(true)
-    expect(cyc.names).toEqual(['a'])
-    const other = makeProvider('other', { theme: { tokenDefinitions: { light: { tokens: { accent: 'red' } } } } })
-    const r = resolveThemes(nodes(structural, other), { names: ['emerald'], define: { emerald: { extends: 'light', tokens: { bg: '#0' } } } })
-    expect(r.warnings.filter(w => w.kind === 'partial-theme')).toEqual([])
+  it('каталог без defaultTheme: одна тема — она, несколько — unknown-theme', () => {
+    expect(reasonOf(() => resolve({}, [owner('@p/ds', null)]))).toBe('unknown-theme')
   })
 
-  it('метаданные label/colorScheme — только для активных тем и только если объявлены', () => {
-    const r = resolveThemes(nodes(structural), {
-      names: ['emerald', 'light'],
-      define: { emerald: { extends: 'light', label: 'Изумруд', colorScheme: 'dark' }, sand: { label: 'Песок' } },
-    })
-    expect(r.meta).toEqual({ emerald: { label: 'Изумруд', colorScheme: 'dark' } })
+  it('тема-объект приложения: источник app, extends даёт цепочку каталога', () => {
+    const brand: GranumAppTheme = { ...themeData('brand', { light: { 'p-bg': '#fafafa' } }), extends: 'ink' }
+    const r = resolve({ theme: brand })
+    expect(r.theme?.providerId).toBe('(app)')
+    expect(r.themeSource).toBe('app')
+    expect(r.theme?.chain).toEqual(['brand', 'ink', 'paper'])
+  })
+
+  it('данные темы каталога не переданы — theme-data-missing', () => {
+    expect(reasonOf(() => resolveThemes([toProviderNode(owner())], {}, [], {}))).toBe('theme-data-missing')
+  })
+
+  it('план читает только активную тему и превью (T-6)', () => {
+    const plan = planThemes([toProviderNode(owner())], { theme: 'ink', previews: ['paper'] })
+    expect(plan.active).toEqual({ kind: 'catalog', providerId: '@p/ds', id: 'ink', data: 'themes/ink.json' })
+    expect(plan.previews.map(p => p.kind === 'catalog' ? p.id : '')).toEqual(['paper'])
   })
 })
 
-describe('extends от темы-файла: значения файла наследуются', () => {
-  const DARK = `[data-theme='dark'], .dark`
-  const fileDark = (id: string, patch: Parameters<typeof makeProvider>[1] = {}): GranumProvider =>
-    makeProvider(id, { theme: { themes: { light: 'theme/light.css', dark: 'theme/dark.css' } }, ...patch })
-  const facts = (values: Record<string, string>, partial = false): { selector: string, tokens: string[], values: Record<string, string>, partial: boolean } =>
-    ({ selector: DARK, tokens: Object.keys(values), values, partial })
-  const ocean = { names: ['ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { primary: '#4fd1e0' } } } }
-
-  it('тема приложения получает значения файла базы и свои поверх', () => {
-    const p = fileDark('f')
-    const r = resolveThemes(nodes(p), ocean, [], { f: { dark: facts({ bg: '#0f172a', primary: '#60a5fa' }) } })
-    expect(r.tokenRegistry.ocean!.blocks).toEqual([{ selector: '[data-theme="ocean"]', tokens: { bg: '#0f172a', primary: '#4fd1e0' } }])
-    expect(r.warnings).toEqual([])
+describe('режимы (A-25, A-26, A-28)', () => {
+  it('все режимы темы, режим по умолчанию первым, пары по шаблону', () => {
+    const r = resolve({ theme: 'ink' })
+    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light', 'dark=ink-dark', 'dim=ink-dim'])
+    expect(r.modesSource).toBe('theme')
+    expect(r.defaultMode).toBe('light')
+    expect(r.activation).toEqual({ attribute: 'data-theme', value: '{theme}-{mode}' })
   })
 
-  it('порядок: файл < блоки компонентов базы < tokens приложения; провайдеры — в порядке графа', () => {
-    const tinted = fileDark('f', { components: [component('Tinted', { tokenDefinitions: { dark: { selector: '[data-theme="dark"]', tokens: { bg: '#101010', tint: '#334155' } } } })] })
-    const second = fileDark('g')
-    const r = resolveThemes(nodes(tinted, second), ocean, comps(tinted), {
-      f: { dark: facts({ bg: '#0f172a', primary: '#60a5fa', ring: '#1' }) },
-      g: { dark: facts({ ring: '#2', muted: '#3' }) },
-    })
-    expect(r.tokenRegistry.ocean!.tokens).toEqual({ bg: '#101010', tint: '#334155', primary: '#4fd1e0', ring: '#2', muted: '#3' })
+  it('modes.names задаёт набор; режим по умолчанию всё равно первым', () => {
+    const r = resolve({ theme: 'ink', modes: { names: ['dim', 'light'] } })
+    expect(r.modes.map(m => m.name)).toEqual(['light', 'dim'])
+    expect(r.modesSource).toBe('explicit')
   })
 
-  it('цепочка: наследник темы-файла передаёт её значения дальше', () => {
-    const p = fileDark('f')
-    const r = resolveThemes(nodes(p), { names: ['deep'], define: { ocean: { extends: 'dark', tokens: { primary: '#4fd1e0' } }, deep: { extends: 'ocean', tokens: { bg: '#000' } } } }, [], { f: { dark: facts({ bg: '#0f172a', fg: '#e2e8f0' }) } })
-    expect(r.tokenRegistry.deep!.tokens).toEqual({ bg: '#000', fg: '#e2e8f0', primary: '#4fd1e0' })
+  it('неизвестный режим — unknown-mode', () => {
+    expect(reasonOf(() => resolve({ modes: { names: ['sepia'] } }))).toBe('unknown-mode')
+    expect(reasonOf(() => resolve({ modes: { tokenOverrides: { sepia: { 'p-bg': 'red' } } } }))).toBe('unknown-mode')
   })
 
-  it('часть файла не наследуется — theme-extends-partial; наследовать нечего — opaque', () => {
-    const p = fileDark('f')
-    const partial = resolveThemes(nodes(p), ocean, [], { f: { dark: facts({ bg: '#0f172a' }, true) } })
-    expect(partial.warnings).toEqual([{ kind: 'theme-extends-partial', theme: 'ocean', base: 'dark', providers: ['f'] }])
-    expect(partial.tokenRegistry.ocean!.tokens).toEqual({ bg: '#0f172a', primary: '#4fd1e0' })
-    const unread = resolveThemes(nodes(p), ocean, [])
-    expect(unread.warnings).toEqual([{ kind: 'theme-extends-unresolved', theme: 'ocean', base: 'dark', reason: 'opaque' }])
+  it('define поверх режима темы и другого define; база раньше наследника', () => {
+    const r = resolve({ modes: { define: { deep: { extends: 'ocean' }, ocean: { extends: 'dark', title: 'Океан' } } } })
+    expect(r.modes.map(m => m.name)).toEqual(['light', 'dark', 'ocean', 'deep'])
+    expect(r.definitions.map(m => `${m.name}←${m.extends}`)).toEqual(['ocean←dark', 'deep←ocean'])
+    const ocean = r.modes.find(m => m.name === 'ocean')!
+    expect(ocean).toMatchObject({ origin: 'define', colorScheme: 'dark', title: 'Океан', value: 'paper-ocean' })
+  })
+
+  it('неизвестная база и цикл define — предупреждения, наследуется режим по умолчанию', () => {
+    const r = resolve({ modes: { define: { a: { extends: 'nope' }, b: { extends: 'c' }, c: { extends: 'b' } } } })
+    expect(r.warnings).toContainEqual({ kind: 'mode-extends-unresolved', mode: 'a', base: 'nope' })
+    expect(r.warnings.some(w => w.kind === 'mode-extends-cycle')).toBe(true)
+    expect(r.definitions.find(m => m.name === 'a')!.extends).toBe('light')
+  })
+
+  it('define с именем режима темы — та же пара: activation-collision', () => {
+    expect(reasonOf(() => resolve({ modes: { define: { dark: { extends: 'light' } } } }))).toBe('activation-collision')
+  })
+
+  it('шаблон без {mode} и совпавшие пары — activation-collision', () => {
+    expect(reasonOf(() => resolve({ modes: { activation: { value: '{theme}' } } }))).toBe('activation-collision')
+    expect(reasonOf(() => resolve({ previews: ['paper'], modes: { activation: { value: '{mode}' } } }))).toBe('activation-collision')
+  })
+
+  it('свой атрибут и шаблон', () => {
+    const r = resolve({ modes: { activation: { attribute: 'data-mode', value: '{mode}@{theme}' } } })
+    expect(r.modes.map(m => m.value)).toEqual(['light@paper', 'dark@paper'])
+    expect(r.activation.attribute).toBe('data-mode')
+  })
+})
+
+describe('превью (A-32)', () => {
+  it('режимы превью — все режимы её данных, пары своей темы', () => {
+    const r = resolve({ theme: 'ink', previews: ['paper'] })
+    expect(r.previews.map(p => `${p.theme.id}:${p.modes.map(m => m.value).join(',')}`)).toEqual(['paper:paper-light,paper-dark'])
+  })
+})
+
+describe('токены компонентов чужих тем (C-36)', () => {
+  it('тема, которой нет ни в одном каталоге, — component-theme-unknown', () => {
+    const ds = makeManifest('@p/ui', { Chart: { tokens: { themes: { unknown: { modes: { light: { x: '1' } } }, paper: { modes: {} } }, consumes: [], dynamic: [] } } })
+    const providers = [owner(), ds].map(toProviderNode)
+    const r = resolveThemes(providers, {}, providers[1]!.components, DATA)
+    expect(r.warnings).toEqual([{ kind: 'component-theme-unknown', providerId: '@p/ui', component: 'Chart', theme: 'unknown' }])
   })
 })

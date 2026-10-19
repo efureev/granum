@@ -14,7 +14,7 @@ export const PROVIDER_ID = '@granum-fixtures/atoms'
  */
 export const atomsProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   engine: { dialect: 'granum-fixtures/atoms@1', rules: atomsRules },
   components: [
     // <granum:components:registry>
@@ -24,8 +24,8 @@ export const atomsProvider = defineGranumProvider({
   ],
   theme: {
     tokensCss: 'styles/tokens.css',
-    themes: { light: 'styles/light.css' },
-    defaultThemes: ['light'],
+    defaultTheme: 'atoms',
+    catalog: { atoms: { title: 'Atoms', data: 'themes/atoms.json' } },
   },
 })
 

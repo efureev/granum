@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { build, createServer } from 'vite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
 import { granum } from '../vite/plugin'
@@ -31,15 +31,15 @@ async function buildProvider(): Promise<string> {
     exports: { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js' },
   }))
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px}')
-  write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
+  write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: {}, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
   write(root, 'src/components/Card/Card.vue', `<template><div class="t-card p-4"><slot /></div></template>\n<style>.t-card{gap:var(--t-space)}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/index.ts', `export * from './components/Card/index.ts'\n`)
   const provider = defineGranumProvider({
     id: '@t/kit',
-    contractVersion: 1,
+    contractVersion: 2,
     components: [defineGranumComponent(pathToFileURL(join(root, 'src/components/Card/config.ts')).href, { name: 'Card' })],
-    theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light', 'dark'], tokenDefinitions: { light: { tokens: { 't-bg': '#fff' } } } },
+    theme: { tokensCss: 'theme/tokens.css', defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: 'themes/kit.json' } } },
   })
   await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
   return root
@@ -63,7 +63,7 @@ afterEach(async () => {
   open = undefined
 })
 
-async function startApp(providerRoot: string): Promise<DevApp> {
+async function startApp(providerRoot: string, extra: Partial<Parameters<typeof granum>[0]> = {}): Promise<DevApp> {
   const root = mkdtempSync(join(tmpdir(), 'granum-dev-app-'))
   mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
   symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
@@ -75,7 +75,7 @@ async function startApp(providerRoot: string): Promise<DevApp> {
     configFile: false,
     logLevel: 'silent',
     appType: 'custom',
-    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'], themes: { names: ['light', 'dark'] } }, { log: () => {} })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'], modes: { names: ['light', 'dark'] }, ...extra }, { log: () => {} })],
     server: { middlewareMode: true, hmr: false },
   })
   open = server
@@ -138,6 +138,22 @@ describe('granum() на dev-сервере', async () => {
     writeFileSync(tokens, readFileSync(tokens, 'utf8').replace('8px', '9px'))
     await waitFor(() => app.reloaded.includes(CSS_ID), 'CSS reload')
     expect((await app.server.transformRequest('virtual:granum.css'))?.code).toContain('--t-space:9px')
+  }, 30_000)
+
+  /**
+   * Тема-объект живёт в конфиге, а конфиг читается один раз на процесс Vite:
+   * правку файлов, из которых он собран, подхватывает только перезапуск (A-33).
+   */
+  it('правка файла из sources темы-объекта перезапускает dev-сервер', async () => {
+    const sourcesDir = realpathSync(mkdtempSync(join(tmpdir(), 'granum-theme-src-')))
+    write(sourcesDir, 'theme.json', '{}')
+    const theme = { id: 'own', title: 'Own', root: {}, modes: { light: { colorScheme: 'light' as const, tokens: { 't-bg': '#fff' } } }, sources: [sourcesDir] }
+    const app = await startApp(providerRoot, { theme, modes: {} })
+    const restart = vi.spyOn(app.server, 'restart').mockResolvedValue()
+    await waitFor(() => watching(app.server, sourcesDir), 'watcher on theme sources')
+    writeFileSync(join(sourcesDir, 'theme.json'), '{"changed":true}')
+    await waitFor(() => restart.mock.calls.length > 0, 'server restart')
+    expect(restart).toHaveBeenCalledTimes(1)
   }, 30_000)
 
   it('компонент из корня пакета — ошибка и в dev: Vite покажет её оверлеем', async () => {

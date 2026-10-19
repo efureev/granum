@@ -3,13 +3,13 @@ import { windEngine } from '@feugene/granum-engine-wind'
 
 /**
  * Ровно один компонент. Его граф разворачивает ещё четыре
- * (XhCard, XhButton, XhAlert, XhOverlay). Обе темы — честный худший случай:
- * приложение, которое умеет переключаться, платит за оба файла.
+ * (XhCard, XhButton, XhAlert, XhOverlay). Оба режима — честный худший случай:
+ * приложение, которое умеет переключаться, платит за оба блока.
  */
 export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
-  themes: { names: ['light', 'dark'] },
+  modes: { names: ['light', 'dark'] },
   appSources: { dirs: ['src'] },
 })

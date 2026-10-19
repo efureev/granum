@@ -185,8 +185,11 @@ M-7).
 первой ошибке:
 
 1. JSON парсится; корень — объект.
-2. `granum === 3`, либо `granum === 2` у провайдера без тем: `theme` без `catalog` и без
-   `tokens.themes` у компонентов (M-11); иначе `UnsupportedManifestVersionError`.
+2. `granum === 3`, либо `granum === 2` у провайдера без тем: пустые `theme.themes` и
+   `theme.tokenDefinitions` и пустые `tokens.declares` компонентов (M-11); иначе
+   `UnsupportedManifestVersionError` с подсказкой пересобрать провайдер granum 3. Манифест формата 2
+   приводится к форме 3: поля тем 2.x отбрасываются, `contractVersion` остаётся `1`, а хеш сверяется
+   по файлу как есть — в канонизации формата 2.
 3. Схема: обязательные поля присутствуют, типы верны; иначе `InvalidManifestError`
    (`schema`, с путём до поля).
 4. Все пути относительные, без `..`, без `\`; иначе `InvalidManifestError`
@@ -203,7 +206,8 @@ M-7).
 8. Часть (`subcomponents`) не совпадает с именем компонента и не числится у двух
    владельцев; иначе `InvalidManifestError` (`schema`). Тип и правило имён — на шаге 3.
 9. Ключи токенов в `tokens.themes` компонентов без `--`; иначе `InvalidManifestError` (`token-key-prefix`).
-   Id тем и имена режимов в `catalog` и `tokens.themes` — по C-24; иначе `InvalidManifestError` (`schema`).
+   Id тем и имена режимов в `catalog` и `tokens.themes` — по C-24, режим по умолчанию в `modes`
+   записи каталога — первым; иначе `InvalidManifestError` (`schema`).
 10. Существование файлов **не** проверяется при чтении (это делает `doctor` и чтение CSS
    в момент эмиссии, с `CssReadError`).
 

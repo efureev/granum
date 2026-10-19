@@ -24,7 +24,7 @@ export * from './node/diagnostics/index'
 export { clearReextractCache, objectRulesAllowed, reconcileProviderEngines } from './node/dialects'
 export type { ProviderClassSource, ProviderEngineDecision, ReconciledProviders, ReextractReason } from './node/dialects'
 export type { EmittedCss, LayerName } from './node/emit'
-export { emitCss, LAYER_NAMES, serializeThemeBlock, wrapLayers } from './node/emit'
+export { emitCss, LAYER_NAMES, wrapLayers } from './node/emit'
 export { boundaryKindOf, collectImportSpecifiers } from './node/imports'
 export type { InlinedCssKind, InlinedCssSource } from './node/inlinedCss'
 export { resolveInlinedCssSources, resolveProviderPath } from './node/inlinedCss'
@@ -40,15 +40,24 @@ export {
   serializeManifest,
   writeManifestSync,
 } from './node/manifest'
-export { materializeComponentRefs, materializeProviderRefs } from './node/materializeRefs'
 export type { PreparedApp, PreparedWarning } from './node/prepare'
-export { loadProviderInputs, materializeAppThemes, prepareApp, scanProviderInputs } from './node/prepare'
+export { loadProviderInputs, materializeAppModes, prepareApp, readPlannedThemeData, scanProviderInputs } from './node/prepare'
 export type { PruneCssResult } from './node/pruneCssDeclarations'
 export { pruneCssDeclarations } from './node/pruneCssDeclarations'
 export type { BuildReportOptions, GranumBuildReport, LayerSize } from './node/report'
 export { buildReport, bundleLayerSizes } from './node/report'
 export { collectProviderInstances, providerDistDir, scanObjectProvider } from './node/scanProvider'
-export type { GranumThemeManifestOptions } from './node/themeManifest'
+export type { ThemeCss } from './node/themeCss'
+export { emitThemeCss } from './node/themeCss'
+export {
+  componentThemesDirPath,
+  componentThemeTokenNames,
+  readComponentThemesDir,
+  readObjectCatalog,
+  readObjectComponentThemes,
+  readRegistry,
+  readThemeDataFile,
+} from './node/themeFiles'
 export { getThemeManifest } from './node/themeManifest'
 export type { PlanTokenPruneInput, PrunableSection, TokenKeepReason, TokenPrunePlan } from './node/tokenPrune'
 export { planTokenPrune } from './node/tokenPrune'

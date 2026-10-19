@@ -13,13 +13,13 @@
       <p class="demo-lead">
         Классы <code>XTestStyled</code> склеиваются в JS из строки, поэтому сборка пакета
         кладёт их в <code>safelist</code> манифеста. Цвета, которые компонент потребляет,
-        задаёт само приложение через <code>themes.tokenOverrides</code>.
+        задаёт само приложение темой-объектом в <code>theme</code>: у провайдера тем нет.
       </p>
       <h2>Что видно</h2>
       <ul class="demo-notes">
         <li>
           Рамка бирюзовая (<code>--brd</code>), текст малиновый (<code>--card-fg</code>): оба
-          токена объявлены в <code>tokenOverrides.light</code>.
+          токена объявлены в <code>root</code> темы приложения.
         </li>
         <li>
           Фона и скругления у карточки нет: <code>--card</code> и <code>--ds-radius-lg</code>

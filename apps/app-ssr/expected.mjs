@@ -3,9 +3,11 @@
  * `node scripts/verify-ssr.mjs`.
  */
 export default {
-  purpose: 'серверный рендер: тему выбирает сервер, клиент её не переизбирает, CSS один ассет со слоями',
+  purpose: 'серверный рендер: режим выбирает сервер парой на корне, клиент её не переизбирает, CSS один ассет со слоями',
 
-  themes: ['light', 'dark'],
+  /** Тема сборки и её режимы с парами — манифест `virtual:granum/themes`. */
+  theme: 'heavy',
+  modes: { light: 'heavy-light', dark: 'heavy-dark' },
 
   /**
    * Провайдеры, которые серверный бандл грузит из node_modules. Granum у
@@ -14,51 +16,42 @@ export default {
    */
   externalProviders: ['@granum-fixtures/extra-simple', '@granum-fixtures/simple', '@granum-fixtures/heavy'],
 
-  /**
-   * Манифест тем: селекторы в порядке CSS и активация. `heavy` ставит темы
-   * файлами, и селектор его файла идёт первым — манифест читает файлы тем, а
-   * не только блоки компонентов, так что активация не зависит от того,
-   * выбран ли `XTokenized` со своими блоками.
-   */
-  manifest: {
-    light: { selectors: [':root'], activation: { type: 'root' } },
-    dark: {
-      selectors: ["[data-theme='dark'], .dark", '.dark, [data-theme="dark"]'],
-      activation: { type: 'attribute', name: 'data-theme', value: 'dark' },
-    },
-  },
-
-  /** URL, которые рендерим. */
+  /** Запросы, которые рендерим: URL и, где нужно, заголовок `Cookie`. */
   render: {
-    light: '/',
-    dark: '/?theme=dark',
-    // Имени нет в манифесте — активировать нечего, и granum не должен отдать
-    // страницу без токенов: сервер откатывается к теме по умолчанию.
-    unknown: '/?theme=nope',
+    light: { url: '/' },
+    dark: { url: '/?mode=dark' },
+    // Режим из cookie — выбор пользователя прошлых визитов (RT-4).
+    cookie: { url: '/', cookie: 'a=1; granum-theme=dark' },
+    // Имени нет в манифесте — блоков под него нет, и granum не должен отдать
+    // страницу без токенов: сервер откатывается к режиму по умолчанию.
+    unknown: { url: '/?mode=nope' },
   },
 
   expectRender: {
     light: {
-      theme: 'light',
-      // Тема с активацией `root` не пишет на корень ничего: её токены под
-      // `:root`, и она активна, пока не активирована другая.
-      rootTag: '<html lang="ru">',
-      // Активная тема отражена в разметке, и это та же строка, которую увидит
-      // клиент при гидрации: разойтись им нельзя. Имена всех тем есть в
-      // подписях кнопок, поэтому маркер именно у активной.
-      html: ['x-sp-test', 'xh-card', 'x-tokenized', 'data-active-theme>light<'],
-      htmlAbsent: ['data-active-theme>dark<'],
+      mode: 'light',
+      // Пара пишется и для режима по умолчанию: клиент читает её обратно.
+      rootTag: '<html lang="ru" data-theme="heavy-light">',
+      // Активный режим отражён в разметке, и это та же строка, которую увидит
+      // клиент при гидрации: разойтись им нельзя.
+      html: ['x-sp-test', 'xh-card', 'x-tokenized', 'data-active-mode>light<'],
+      htmlAbsent: ['data-active-mode>dark<'],
     },
     dark: {
-      theme: 'dark',
-      rootTag: '<html lang="ru" data-theme="dark">',
-      html: ['x-sp-test', 'xh-card', 'x-tokenized', 'data-active-theme>dark<'],
-      htmlAbsent: ['data-active-theme>light<'],
+      mode: 'dark',
+      rootTag: '<html lang="ru" data-theme="heavy-dark">',
+      html: ['x-sp-test', 'xh-card', 'x-tokenized', 'data-active-mode>dark<'],
+      htmlAbsent: ['data-active-mode>light<'],
+    },
+    cookie: {
+      mode: 'dark',
+      rootTag: '<html lang="ru" data-theme="heavy-dark">',
+      html: ['data-active-mode>dark<'],
     },
     unknown: {
-      theme: 'light',
-      rootTag: '<html lang="ru">',
-      html: ['data-active-theme>light<'],
+      mode: 'light',
+      rootTag: '<html lang="ru" data-theme="heavy-light">',
+      html: ['data-active-mode>light<'],
     },
   },
 
@@ -70,9 +63,9 @@ export default {
     layerOrder: ['tokens', 'base', 'themes', 'components', 'utilities'],
     present: [
       { what: 'CSS компонента XTest1, пришедшего замыканием графа', css: '.x-sp-test' },
-      { what: 'токен темы light структурного определения', css: '--x-tokenized:red' },
-      { what: 'токен темы dark — обе темы в CSS сразу', css: '--x-tokenized:yellow' },
-      { what: 'селектор активации dark, обещанный манифестом', css: '[data-theme=dark]' },
+      { what: 'токен компонента для режима light', css: '--x-tokenized:red' },
+      { what: 'токен компонента для dark — оба режима в CSS сразу', css: '--x-tokenized:yellow' },
+      { what: 'пара тёмного режима, обещанная манифестом', css: '[data-theme=heavy-dark]' },
       { what: 'класс, который есть только в разметке приложения', css: 'color:var(--x-tokenized)' },
     ],
     absent: [
@@ -85,7 +78,8 @@ export default {
   doctor: {
     // `--brd` компоненту даёт приложение: фикстура объявляет только форму
     // границы, цвет — дело потребителя. Здесь его нет, и доктор честно говорит.
-    warnings: { 'token-undefined': 1 },
+    // `XTokenized` кладёт токены и для темы `paper` другого каталога — здесь её нет (C-36).
+    warnings: { 'token-undefined': 1, 'component-theme-unknown': 1 },
   },
 
   report: (report, check) => {
@@ -93,7 +87,7 @@ export default {
       report.selection.map(s => s.key.split(':').pop()).join(',') === 'XTest1,XgQuick,XhCard,XTokenized',
       `селекция: ${report.selection.map(s => s.key)}`,
     )
-    check(report.themes.namesSource === 'explicit', `источник списка тем: ${report.themes.namesSource}`)
+    check(report.themes.theme === 'heavy' && report.themes.modesSource === 'theme', `тема и режимы: ${report.themes.theme}, ${report.themes.modesSource}`)
     check(report.classes.unmatched.length === 0, `классы без правила: ${JSON.stringify(report.classes.unmatched)}`)
     // Обрезка включена и что-то сняла, но токен, до которого достаёт только
     // разметка приложения, остался: серверный рендер её не обманывает.

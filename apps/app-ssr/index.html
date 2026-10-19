@@ -11,17 +11,17 @@
       <p class="demo-kicker">granum · демо-стенд <code>app-ssr</code></p>
       <h1>Серверный рендер</h1>
       <p class="demo-lead">
-        Первый кадр собирает Node: сервер выбирает тему по <code>?theme=</code> и пишет её
-        активацию в корень документа, а клиент при гидрации читает применённую тему, а не
-        выбирает заново.
+        Первый кадр собирает Node: сервер выбирает режим по <code>?mode=</code> или cookie и
+        пишет пару <code>data-theme</code> в корень документа, а клиент при гидрации узнаёт
+        выставленный режим, а не выбирает заново.
       </p>
       <h2>Что видно</h2>
       <ul class="demo-notes">
-        <li>Метка справа от кнопок — активная тема: у сервера и первого клиентского кадра она одна.</li>
+        <li>Метка справа от кнопок — активный режим: у сервера и первого клиентского кадра он один.</li>
         <li>
           <code>XgQuick</code> с <code>XTest1</code> из другого пакета, <code>XhCard</code> на
-          токенах темы из CSS-файлов провайдера, образец <code>XTokenized</code> на
-          структурных токенах.
+          данных темы <code>heavy</code>, образец <code>XTokenized</code> на своих токенах
+          для этой темы из <code>themesDir</code>.
         </li>
         <li>
           Строка «Токен приложения» держит <code>--x-tokenized</code>: до него обрезка токенов
@@ -29,8 +29,8 @@
         </li>
       </ul>
       <p class="demo-run">
-        Запуск: <code>yarn workspace @granum-apps/app-ssr dev</code>, тёмная тема —
-        <code>?theme=dark</code>. Проверка: <code>yarn workspace @granum-apps/app-ssr verify</code>.
+        Запуск: <code>yarn workspace @granum-apps/app-ssr dev</code>, тёмный режим —
+        <code>?mode=dark</code>. Проверка: <code>yarn workspace @granum-apps/app-ssr verify</code>.
       </p>
     </header>
     <div id="app" class="demo-stage"><!--app-html--></div>

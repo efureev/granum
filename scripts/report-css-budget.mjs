@@ -70,7 +70,9 @@ const css = stand.assets.filter(a => a.kind === 'css').map(a => a.text).join('\n
 const js = stand.assets.filter(a => a.kind === 'js').map(a => a.text).join('\n')
 const declared = declaredTokens(css)
 const reachable = reachableTokens(css, js)
-const subject = [...declared].filter(t => !t.startsWith('un-'))
+// `--un-*` — переменные движка, `--lightningcss-*` вставляет минификатор рядом с
+// `color-scheme` режима: ни то, ни другое не токены пакета.
+const subject = [...declared].filter(t => !t.startsWith('un-') && !t.startsWith('lightningcss-'))
 const unused = subject.filter(t => !reachable.has(t)).sort()
 const roles = rolesOf(stand)
 

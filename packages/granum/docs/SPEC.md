@@ -68,7 +68,7 @@ interface GranumComponentDescriptor {
 | C-33 | `themesDir` — путь относительно `config.ts`; хелпер оставляет его путём (C-20), папку читает плагин сборки провайдера и материализует в манифест `components.<Name>.tokens.themes.<тема> = { root?, modes: { <режим>: tokens } }`. Файл значений — JSON `{ "<токен без -->": "<значение>" }` или CSS с одним плоским блоком `:root {}` (C-13); селектор файла игнорируется — селекторы назначает приложение (A-28, T-9). |
 | C-34 | Имя подпапки MUST быть id темы, имя файла режима — имя режима (C-24); `root` — режимонезависимые токены компонента. Нарушение — `InvalidProviderError('invalid-theme-dir')` на сборке провайдера. |
 | C-35 | Компонент MAY класть токены для темы чужого каталога (спутник — для темы дизайн-системы): применяются, когда эта тема активна (A-24). |
-| C-36 | Подпапка темы, которой нет ни в одном каталоге графа, — предупреждение резолюции `component-theme-unknown`, а не ошибка: спутник кладёт токены для тем, о которых приложение может не знать. |
+| C-36 | Подпапка темы, которой нет ни в одном каталоге графа, — предупреждение резолюции `component-theme-unknown`, а не ошибка: спутник кладёт токены для тем, о которых приложение может не знать. Предупреждение — только у компонентов селекции. |
 | C-37 | Токены компонента, одинаковые для всех тем, задаются значением по умолчанию в `var(--x, …)` или файлами базовой темы, от которой наследуют остальные (C-27): отдельной «темы для всех» в контракте нет. |
 | C-38 | `tokenDefinitions` и `tokenDefinitionsRef` дескриптора удалены: их место — `themesDir`. Дескриптор с ними — `InvalidProviderError('legacy-token-definitions')` с подсказкой. |
 
@@ -120,7 +120,7 @@ interface GranumModeData {
 | C-24 | Id темы MUST соответствовать `/^[a-z][a-z0-9-]*$/`, имя режима — `/^[a-z][a-z0-9]*$/` (без дефиса — иначе пара `<тема>-<режим>` не разбирается однозначно); имя режима `root` запрещено. Нарушение — `InvalidProviderError('invalid-theme-id' \| 'invalid-mode-name')` при регистрации, у приложения — `InvalidConfigError` с путём до поля. |
 | C-25 | `defaultMode` MUST быть ключом `modes`; не задан — `light`, и тогда `modes.light` MUST существовать (`InvalidProviderError('default-mode-missing')`). |
 | C-26 | `extends` режима MUST ссылаться на режим той же темы; итоговые токены режима — цепочка предков, затем свои. Цикл — `InvalidProviderError('mode-extends-cycle')`. |
-| C-27 | Наследование темы от темы (`extends` в индексе каталога) разрешает тот, кто тему собирает: провайдер — на своей сборке, приложение — до передачи объекта в конфиг. `data` каталога MUST содержать полные данные; цепочка `extends` нужна приложению только для токенов компонентов (A-24). |
+| C-27 | Наследование темы от темы (`extends` в индексе каталога) разрешает тот, кто тему собирает: провайдер — на своей сборке, приложение — до передачи объекта в конфиг. Исходник темы с `extends` MAY содержать только отличия: сборка провайдера сливает его с родителем — токены `root` и режимов по ключу, `colorScheme`/`extends`/`title` режима и `defaultMode` — свои или родителя, `fallbacks` режима и `baseCss` — свои целиком, `extensions` — слиянием верхнего уровня; метаданные (`id`, `title`, `description`, `docs`) — из записи каталога. В манифест и `dist` уходят полные данные; `data` объектной формы, которую никто не собирает, MUST быть полными. Цепочка `extends` нужна приложению только для токенов компонентов (A-24). Ссылка `extends` на тему вне каталога и цикл — `InvalidProviderError('theme-extends-unknown')` при регистрации. |
 | C-28 | `extensions` granum MUST NOT интерпретировать: поле уходит в `virtual:granum/themes` как есть (T-4). Через него дизайн-система передаёт приложению, например, пропы компонентов по умолчанию. |
 | C-29 | Индекс каталога в манифесте MUST содержать `title`, `extends?`, `docs?`, `data`, а также `modes` (порядок: режим по умолчанию первым) и `defaultMode`, вычисленные сборкой из данных: CLI и отчёт перечисляют темы, не читая данных. |
 | C-30 | Сборка провайдера MUST проверить каждую тему каталога по реестру: каждый токен `root` есть в `root`, каждый токен `mode` — в итоговых токенах каждого режима. Нехватка — `InvalidProviderError('theme-incomplete')` с перечнем токенов. Токены компонентов (C-33) и токены, которые читаются с значением по умолчанию в `var()`, в полноту не входят. |
@@ -211,7 +211,7 @@ interface GranumModeData {
 
 | ID | Требование |
 |---|---|
-| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: (GranumProvider \| GranumLoadedManifest)[], components?, theme?, previews?, modes? }` без обращения к FS и сети; результат — `GranumResolution`. `GranumLoadedManifest` — `{ manifest, baseUrl }`: JSON плюс директория файла как база путей. |
+| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: (GranumProvider \| GranumLoadedManifest)[], components?, theme?, previews?, modes? }` без обращения к FS и сети; результат — `GranumResolution`. `GranumLoadedManifest` — `{ manifest, baseUrl }`: JSON плюс директория файла как база путей. Данные тем каталога резолверу приносит node-слой входом `themeData` (провайдер → id темы → данные) — только активной и превью (T-6), а токены `themesDir` объектной формы — входом `componentThemes`: файлов резолвер не читает. |
 | R-2 | `Resolution` MUST содержать: упорядоченный список провайдеров, реестр компонентов, селекцию после транзитивного замыкания в post-order DFS (INV-SEL-2), активную тему с источником (`themeSource`), набор режимов с источником (`modesSource`), превью-темы, слои токенов и эффективные значения по режимам, объединённые множества классов и safelist по компонентам, список CSS-ссылок в порядке эмиссии, предупреждения. |
 | R-3 | Резолюция MUST мемоизироваться по идентичности объекта входа, а все каналы эмиссии одного билда (CSS, виртуальные модули, guard, отчёт) MUST читать один и тот же объект `Resolution` — его держит кэш `prepareApp` в плагине (INV-RES-1). Отдельные вызовы резолвера ради одного реестра (резолвер авто-импорта A-8) допустимы: они не участвуют в эмиссии. |
 | R-4 | Ошибки резолюции MUST быть типизированы и нести структурные поля (§14). |
@@ -335,11 +335,13 @@ interface EngineOutput {
 | `cssFiles` дескриптора вне `components/<Name>/` | `InvalidProviderError` (`css-file-escapes-component`) | регистрация |
 | путь каталога тем, реестра или `engineModule` вне пакета | `InvalidProviderError` (`path-escapes-package`) | создание плагина сборки |
 | id темы или имя режима не slug; режим `root` | `InvalidProviderError` (`invalid-theme-id`, `invalid-mode-name`) | регистрация |
-| нет `defaultMode` в режимах; цикл `extends` режимов | `InvalidProviderError` (`default-mode-missing`, `mode-extends-cycle`) | сборка провайдера |
+| нет `defaultMode` в режимах; `extends` режима на чужой режим или цикл; форма данных темы | `InvalidProviderError` (`default-mode-missing`, `mode-extends-unknown`, `mode-extends-cycle`, `invalid-theme-data`) | сборка провайдера |
+| `extends` или `defaultTheme` каталога вне каталога, цикл `extends` тем | `InvalidProviderError` (`theme-extends-unknown`, `invalid-theme-id`) | регистрация |
 | тема каталога неполна по реестру | `InvalidProviderError` (`theme-incomplete`, список токенов) | сборка провайдера |
 | подпапка `themesDir` не slug темы, файл не slug режима | `InvalidProviderError` (`invalid-theme-dir`) | сборка провайдера |
 | `tokenDefinitions` / `tokenDefinitionsRef` в дескрипторе | `InvalidProviderError` (`legacy-token-definitions`) | регистрация |
-| неизвестная тема, неизвестный режим, два владельца каталога, владелец не найден, совпавшие пары активации | `ThemeResolutionError` (`unknown-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `activation-collision`) | резолюция |
+| неизвестная тема, неизвестный режим, два владельца каталога, владелец не найден, совпавшие пары активации, данные темы не переданы резолверу | `ThemeResolutionError` (`unknown-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `activation-collision`, `theme-data-missing`) | подготовка и резолюция |
+| данные активной темы или превью не читаются или не проходят форму | `ThemeDataError` (провайдер, тема, путь) | подготовка приложения |
 | `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
 | правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |
 | объявленный диалект ≠ диалект движка сборки | `EngineDialectMismatchError` | сборка провайдера |
@@ -373,8 +375,8 @@ interface EngineOutput {
   `css-double-delivery`, `peer-missing`, `engine-module-missing`;
 - **резолюция** (`warnings`, читает отчёт и `doctor`): `provider-without-manifest`,
   `provider-scanned`, `override-skipped`, и предупреждения тем и режимов —
-  `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-partial`,
-  `mode-extends-cycle`; подготовка
+  `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-cycle` —
+  `doctor` показывает их своими кодами; подготовка
   приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,

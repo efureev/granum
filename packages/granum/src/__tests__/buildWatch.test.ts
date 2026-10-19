@@ -49,9 +49,9 @@ function makeFixture(): { root: string, provider: GranumProvider } {
 
   const provider = defineGranumProvider({
     id: '@t/watch',
-    contractVersion: 1,
+    contractVersion: 2,
     components: [defineGranumComponent(pathToFileURL(join(root, 'src/components/Card/config.ts')).href, { name: 'Card' })],
-    theme: { tokensCss: 'theme/tokens.css', themes: {}, defaultThemes: ['light'] },
+    theme: { tokensCss: 'theme/tokens.css' },
   })
   return { root, provider }
 }

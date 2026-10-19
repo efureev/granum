@@ -22,9 +22,9 @@ export default {
       { what: 'акцентный токен бейджа', css: '--xxx-accent' },
       { what: 'парный ему токен текста', css: '--xxx-accent-fg' },
       { what: 'шаг шкалы, который берёт только бейдж', css: '--xxx-space-1' },
-      // Тема одна: блок тёмной темы не попадает в дистрибутив целиком, а не
+      // Режим один: блок тёмного режима не попадает в дистрибутив целиком, а не
       // приезжает обрезанным до пустоты.
-      { what: 'селектор тёмной темы', css: '[data-theme=dark]' },
+      { what: 'пара тёмного режима', css: '[data-theme=mini-dark]' },
       { what: 'значение тёмной поверхности', css: '#0b1120' },
       // Мёртвый груз дизайн-системы: не берёт ни один компонент.
       { what: 'типографический токен, который не берёт никто', css: '--xxx-font-sm' },
@@ -43,7 +43,7 @@ export default {
     check(report.selection.map(s => s.key).join(',') === '@granum-fixtures/mini-ds:XxCard', `selection: ${report.selection.map(s => s.key)}`)
     check(report.classes.unmatched.length === 0, `unmatched: ${JSON.stringify(report.classes.unmatched)}`)
     check(report.tokens.undefined.length === 0, `undefined tokens: ${report.tokens.undefined}`)
-    check(report.themes.names.join(',') === 'light', `themes: ${report.themes.names}`)
+    check(report.themes.modes.join(',') === 'light', `modes: ${report.themes.modes}`)
     check(report.prune?.mode === 'on', `prune mode: ${report.prune?.mode}`)
     // Ровно половина объявленного пакетом: пять токенов из десяти.
     check(report.prune.removable.join(' ') === 'xxx-accent xxx-accent-fg xxx-font-sm xxx-muted xxx-space-1', `removable: ${report.prune.removable}`)

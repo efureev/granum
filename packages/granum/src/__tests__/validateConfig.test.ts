@@ -12,15 +12,31 @@ const FULL: GranumConfig = {
   providers: ['@x/a'],
   components: 'imports',
   engine,
-  themes: {
+  theme: {
+    id: 'brand',
+    title: 'Brand',
+    description: 'Своя тема приложения',
+    docs: 'https://example.com/brand',
+    root: { 'p-radius': '4px' },
+    modes: { light: { colorScheme: 'light', tokens: { 'p-bg': '#fff' }, fallbacks: [{ supports: 'not (color: oklch(0 0 0))', tokens: { 'p-bg': 'white' } }] } },
+    defaultMode: 'light',
+    baseCss: ['@font-face { font-family: Brand; src: url(b.woff2) }'],
+    extensions: { granularity: { componentDefaults: {} } },
+    extends: 'slate',
+    sources: ['src/theme'],
+  },
+  previews: ['clay', '@x/a:slate'],
+  modes: {
     names: ['light', 'ocean', 'crimson', 'ruby'],
     define: {
-      ocean: { extends: 'light', selector: '[data-theme="ocean"]', tokens: { 'p-bg': '#000' }, label: 'Ocean', colorScheme: 'dark' },
-      crimson: { tokensRef: { url: './crimson.css', selector: ':root', as: '.crimson', strict: false } },
-      ruby: { tokensRef: './ruby.css' },
+      ocean: { extends: 'light', tokens: { 'p-bg': '#000' }, title: 'Ocean', colorScheme: 'dark' },
+      crimson: { extends: 'ocean', tokensRef: { url: './crimson.css', selector: ':root', strict: false } },
+      ruby: { extends: 'light', tokensRef: './ruby.css' },
     },
-    tokenOverrides: { dark: { 'p-bg': '#111', '.dark': { 'p-fg': '#fff' } } },
+    activation: { attribute: 'data-theme', value: '{theme}-{mode}' },
+    tokenOverrides: { root: { 'p-radius': '2px' }, light: { 'p-bg': '#111' } },
     strictTokens: true,
+    system: 'media',
   },
   css: { layers: true, layerPrefix: 'ds', split: false },
   appSources: { dirs: ['src'], extensions: ['.vue'] },
@@ -47,7 +63,7 @@ describe('validateGranumConfig', () => {
     expect(() => validateGranumConfig(FULL)).not.toThrow()
   })
 
-  it('не проверяются поля инстанса движка, объектов провайдеров и ключи override темы', () => {
+  it('не проверяются поля инстанса движка, объектов провайдеров и ключи override режима', () => {
     const provider = { id: '@x/obj', contractVersion: 1, components: [], anything: true }
     expect(failureOf({ ...FULL, engine: { ...engine, customField: 1 }, providers: [provider] })).toBeUndefined()
   })
@@ -66,13 +82,24 @@ describe('validateGranumConfig', () => {
     [{ providers: ['a'], engine: { ...engine, vocabulary: '' } }, 'engine.vocabulary'],
     [{ providers: ['a'], engine, components: 42 }, 'components'],
     [{ providers: ['a'], engine, components: 'imports' }, 'components'],
-    [{ providers: ['a'], engine, themes: { names: 'light' } }, 'themes.names'],
+    [{ providers: ['a'], engine, modes: { names: 'light' } }, 'modes.names'],
     // Имена токенов — без `--`: ключ с ним дал бы в CSS `----имя`.
-    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '--p-primary': '#000' } } } }, 'themes.tokenOverrides.dark'],
-    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: { '.dark': { '--p-primary': '#000' } } } } }, 'themes.tokenOverrides.dark'],
-    [{ providers: ['a'], engine, themes: { tokenOverrides: { dark: '#000' } } }, 'themes.tokenOverrides.dark'],
-    [{ providers: ['a'], engine, themes: { define: { ocean: { tokens: { '--p-bg': '#000' } } } } }, 'themes.define.ocean.tokens'],
-    [{ providers: ['a'], engine, themes: { define: { ocean: 'dark' } } }, 'themes.define.ocean'],
+    [{ providers: ['a'], engine, modes: { tokenOverrides: { dark: { '--p-primary': '#000' } } } }, 'modes.tokenOverrides.dark'],
+    [{ providers: ['a'], engine, modes: { tokenOverrides: { dark: { '.dark': { 'p-primary': '#000' } } } } }, 'modes.tokenOverrides.dark..dark'],
+    [{ providers: ['a'], engine, modes: { tokenOverrides: { dark: '#000' } } }, 'modes.tokenOverrides.dark'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: { extends: 'dark', tokens: { '--p-bg': '#000' } } } } }, 'modes.define.ocean.tokens'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: 'dark' } } }, 'modes.define.ocean'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: { tokens: {} } } } }, 'modes.define.ocean.extends'],
+    // Имя режима — slug без дефиса: оно конец пары `<тема>-<режим>`.
+    [{ providers: ['a'], engine, modes: { define: { 'deep-sea': { extends: 'dark' } } } }, 'modes.define.deep-sea'],
+    [{ providers: ['a'], engine, modes: { system: 'auto' } }, 'modes.system'],
+    [{ providers: ['a'], engine, modes: { activation: { attribute: '1x' } } }, 'modes.activation.attribute'],
+    // Тема-объект — полные данные: C-24…C-26 с путём до поля.
+    [{ providers: ['a'], engine, theme: '' }, 'theme'],
+    [{ providers: ['a'], engine, theme: { id: 'Brand', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {} } } } }, 'theme.id'],
+    [{ providers: ['a'], engine, theme: { id: 'brand', title: 'B', root: {}, modes: { dark: { colorScheme: 'dark', tokens: {} } } } }, 'theme.modes'],
+    [{ providers: ['a'], engine, theme: { id: 'brand', title: 'B', root: { '--x': '1' }, modes: { light: { colorScheme: 'light', tokens: {} } } } }, 'theme.root'],
+    [{ providers: ['a'], engine, previews: 'clay' }, 'previews'],
     [{ providers: ['a'], engine, pruneTokens: { mode: 'maybe' } }, 'pruneTokens.mode'],
     [{ providers: ['a'], engine, appSources: { dirs: 'src' } }, 'appSources'],
     [{ providers: ['a'], engine, js: { guard: 'loud' } }, 'js.guard'],
@@ -93,22 +120,26 @@ describe('неизвестный ключ конфига — ошибка с п�
   it.each([
     // Опечатки: ближайший допустимый ключ того же уровня.
     [{ appSource: { dirs: ['src'] } }, 'appSource', /did you mean 'appSources'/],
-    [{ themes: { define: { ocean: { extend: 'light' } } } }, 'themes.define.ocean.extend', /did you mean 'extends'/],
-    [{ themes: { define: { ocean: { tokensRef: { uri: './o.css' } } } } }, 'themes.define.ocean.tokensRef.uri', /did you mean 'url'/],
+    [{ modes: { define: { ocean: { extends: 'light', extend: 'light' } } } }, 'modes.define.ocean.extend', /did you mean 'extends'/],
+    [{ modes: { define: { ocean: { extends: 'light', tokensRef: { uri: './o.css' } } } } }, 'modes.define.ocean.tokensRef.uri', /did you mean 'url'/],
     [{ css: { splitt: true } }, 'css.splitt', /did you mean 'split'/],
     [{ appSources: { dir: ['src'] } }, 'appSources.dir', /did you mean 'dirs'/],
     [{ report: { brotly: true } }, 'report.brotly', /did you mean 'brotli'/],
     [{ pruneTokens: { keeps: ['x'] } }, 'pruneTokens.keeps', /did you mean 'keep'/],
     [{ js: { gaurd: 'warn' } }, 'js.gaurd', /did you mean 'guard'/],
-    [{ themes: { strictToken: true } }, 'themes.strictToken', /did you mean 'strictTokens'/],
+    [{ modes: { strictToken: true } }, 'modes.strictToken', /did you mean 'strictTokens'/],
+    [{ theme: { id: 'b', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {} } }, source: [] } }, 'theme.source', /did you mean 'sources'/],
     // Ключи пресета v1: подсказка, куда они делись.
     [{ scan: { dirs: ['src'] } }, 'scan', /provider manifests.*appSources/],
     [{ content: { filesystem: ['src/**'] } }, 'content', /provider manifests.*appSources/],
     [{ unocss: { rules: [] } }, 'unocss', /engine factory/],
     [{ rules: [] }, 'rules', /engine factory/],
-    [{ themes: { themeFiles: { dark: './dark.css' } } }, 'themes.themeFiles', /tokenOverrides.*tokensRef/],
-    [{ themes: { baseFile: './base.css' } }, 'themes.baseFile', /tokenOverrides.*tokensRef/],
-    [{ themes: { tokensFile: './tokens.css' } }, 'themes.tokensFile', /tokenOverrides.*tokensRef/],
+    // Ключи `themes.*` granum 2: каждый — со своим новым местом (A-30).
+    [{ themes: { names: ['light', 'dark'] } }, 'themes.names', /use 'modes\.names'/],
+    [{ themes: { define: { ocean: { extends: 'dark' } } } }, 'themes.define', /use 'modes\.define'/],
+    [{ themes: { tokenOverrides: { dark: {} } } }, 'themes.tokenOverrides', /use 'modes\.tokenOverrides'/],
+    [{ themes: { strictTokens: true } }, 'themes.strictTokens', /use 'modes\.strictTokens'/],
+    [{ themes: { themeFiles: {} } }, 'themes', /one theme \('theme'\) and its modes \('modes'\)/],
     [{ pruneTokens: { appSources: ['src'] } }, 'pruneTokens.appSources', /top-level 'appSources'/],
     // Опции, удалённые в этом выпуске: почему их нет.
     [{ js: { virtualComponents: false } }, 'js.virtualComponents', /removed/],
@@ -126,7 +157,8 @@ describe('неизвестный ключ конфига — ошибка с п�
     [{ js: 1 }, 'js'],
     [{ report: [] }, 'report'],
     [{ pruneTokens: 'on' }, 'pruneTokens'],
-    [{ themes: { define: { crimson: { tokensRef: 42 } } } }, 'themes.define.crimson.tokensRef'],
+    [{ modes: { define: { crimson: { extends: 'light', tokensRef: 42 } } } }, 'modes.define.crimson.tokensRef'],
+    [{ modes: 'dark' }, 'modes'],
   ])('%j — не объект → %s', (extra, path) => {
     const error = failureOf({ providers: ['@x/a'], engine, ...extra })
     expect(error?.path).toBe(path)
@@ -135,8 +167,8 @@ describe('неизвестный ключ конфига — ошибка с п�
   it('`defineGranumConfig` ловит лишний ключ типами', () => {
     // @ts-expect-error опечатка: `appSource` вместо `appSources`
     defineGranumConfig({ engine, providers: ['@x/a'], appSource: { dirs: ['src'] } })
-    // @ts-expect-error ключ пресета v1 — в granum его нет
-    defineGranumConfig({ engine, providers: ['@x/a'], themes: { themeFiles: { dark: './dark.css' } } })
+    // @ts-expect-error ключ granum 2 — в 3 его место занял `modes`
+    defineGranumConfig({ engine, providers: ['@x/a'], themes: { names: ['light'] } })
     expect(defineGranumConfig(FULL)).toBe(FULL)
   })
 })

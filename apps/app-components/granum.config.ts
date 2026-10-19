@@ -18,7 +18,7 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/mini-ds'],
   components: 'all',
-  themes: { names: ['light'] },
+  modes: { names: ['light'] },
   appSources: { dirs: ['src'] },
   // Объявления для `virtual:granum/components` пишет сам плагин: имена зависят
   // от селекции, и руками они разъезжаются с ней молча.

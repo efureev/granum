@@ -27,17 +27,24 @@ function fixture(patch: { cardCss?: string, cardJs?: string, warnings?: any[] } 
   mkdirSync(join(root, 'src'), { recursive: true })
   writeFileSync(join(dist, 'theme/tokens.css'), ':root {\n  --space: 8px;\n  --unused: 1px;\n  --derived: calc(var(--space) * 2);\n}\n')
   writeFileSync(join(dist, 'theme/base.css'), 'body { margin: var(--space) }\n')
-  writeFileSync(join(dist, 'theme/dark.css'), '.dark {\n  --bg: #000;\n  --dark-unused: 1;\n}\n')
+  mkdirSync(join(dist, 'themes'), { recursive: true })
+  writeFileSync(join(dist, 'themes/kit.json'), JSON.stringify({ id: 'kit', title: 'Kit', root: { accent: 'red' }, modes: { light: { colorScheme: 'light', tokens: { bg: '#fff' } }, dark: { colorScheme: 'dark', tokens: { 'bg': '#000', 'dark-unused': '1' } } } }))
   writeFileSync(join(dist, 'components/Card/styles.css'), patch.cardCss ?? '.card{padding:var(--derived);background:var(--bg)}\n')
   writeFileSync(join(dist, 'components/Card/index.js'), patch.cardJs ?? 'export const Card = 1\n')
   writeFileSync(join(dist, 'components/Panel/styles.css'), '.panel{display:flex}\n')
   writeFileSync(join(dist, 'components/Panel/index.js'), 'import "../Card/index.js"\nexport const Panel = 2\n')
   writeFileSync(join(root, 'src/App.vue'), '<template><div class="panel-app text-[var(--app-only)] gap-2"/></template>\n')
   const loaded = makeManifest('@x/kit', {
-    Card: { classes: ['p-4', 'flex'], css: ['components/Card/styles.css'], tokens: { declares: { light: { tokens: { 'card-pad': 'var(--space)' } } }, consumes: ['--derived', '--bg', '--nowhere'], dynamic: [] } },
+    Card: { classes: ['p-4', 'flex'], css: ['components/Card/styles.css'], tokens: { themes: { kit: { modes: { light: { 'card-pad': 'var(--space)' } } } }, consumes: ['--derived', '--bg', '--nowhere'], dynamic: [] } },
     Panel: { classes: ['gap-2'], css: ['components/Panel/styles.css'], dependencies: ['Card'], safelist: ['p-4', 'shadow-legacy'] },
   }, {
-    theme: { tokensCss: 'theme/tokens.css', baseCss: 'theme/base.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light', 'dark'], tokenDefinitions: { light: { tokens: { accent: 'red' } } }, declares: ['--space', '--unused', '--derived', '--bg', '--dark-unused', '--accent'] },
+    theme: {
+      tokensCss: 'theme/tokens.css',
+      baseCss: 'theme/base.css',
+      defaultTheme: 'kit',
+      catalog: { kit: { title: 'Kit', data: 'themes/kit.json', modes: ['light', 'dark'], defaultMode: 'light' } },
+      declares: ['--space', '--unused', '--derived', '--bg', '--dark-unused', '--accent'],
+    },
     ...(patch.warnings ? { warnings: patch.warnings } : {}),
   })
   return { root, dist, manifest: { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` } }
@@ -137,7 +144,9 @@ describe('granum doctor', () => {
     }])
     expect(report.engine).toEqual({ name: TEST_ENGINE.name, dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary })
     expect(report.components.map(c => c.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
-    expect(report.themes.names).toEqual(['light', 'dark'])
+    expect(report.themes).toMatchObject({ theme: 'kit', themeSource: 'default', owner: '@x/kit', modesSource: 'theme', previews: [] })
+    expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light', 'dark=kit-dark'])
+    expect(formatDoctorReport(report)).toContain('Theme: kit (source: defaultTheme of the catalog owner, catalog of @x/kit)')
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
     // `--nowhere` никем не объявлен; `shadow-legacy` — без правила движка.
@@ -187,11 +196,16 @@ describe('granum doctor', () => {
     ])
   })
 
-  it('тексты предупреждений extends от темы-файла', () => {
-    expect(formatThemeWarning({ kind: 'theme-extends-partial', theme: 'ocean', base: 'dark', providers: ['@p/ds'] }))
-      .toBe('theme "ocean" extends "dark" only in part: the theme file of @p/ds has blocks with another selector, nested or under an at-rule — their values are not inherited')
-    expect(formatThemeWarning({ kind: 'theme-extends-unresolved', theme: 'ocean', base: 'dark', reason: 'opaque' }))
-      .toBe('theme "ocean" extends "dark", but there is nothing to inherit: the theme file has no readable flat block of tokens')
+  it('тексты предупреждений тем и режимов', () => {
+    expect(formatThemeWarning({ kind: 'mode-extends-unresolved', mode: 'ocean', base: 'abyss' }))
+      .toBe('modes.define.ocean extends "abyss", which is neither a theme mode nor a defined mode — it inherits the default mode instead')
+    expect(formatThemeWarning({ kind: 'component-theme-unknown', providerId: '@p/ui', component: 'Chart', theme: 'neon' }))
+      .toContain('ships tokens for theme "neon", which no catalog in the graph declares')
+  })
+
+  it('предупреждения тем — своими кодами, а не одним общим', async () => {
+    const report = await granumDoctor(await app(fixture(), { modes: { define: { ocean: { extends: 'abyss' } } } }))
+    expect(report.diagnostics.find(d => d.code === 'mode-extends-unresolved')?.subject).toBe('ocean')
   })
 
   it('предупреждение манифеста о невыбранном компоненте не показывается', async () => {
@@ -219,8 +233,15 @@ describe('granum doctor', () => {
 
   it('конфликт токенов и override-skipped читаются из тех же слоёв, что эмиссия', async () => {
     const f = fixture()
-    const report = await granumDoctor(await app(f, { themes: { tokenOverrides: { light: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
-    expect(report.tokenConflicts).toEqual([expect.objectContaining({ theme: 'light', token: 'accent', finalValue: 'blue' })])
+    // Override приложения — намеренное значение, а не конфликт; компонент поверх данных темы — конфликт.
+    const card = f.manifest.manifest.components.Card!
+    const clash = { ...f.manifest, manifest: { ...f.manifest.manifest, components: { ...f.manifest.manifest.components, Card: { ...card, tokens: { ...card.tokens, themes: { kit: { modes: { light: { bg: '#fefefe' } } } } } } } } }
+    const report = await granumDoctor(await app({ ...f, manifest: clash }, { modes: { tokenOverrides: { root: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
+    // Токен компонента из режима по умолчанию доходит и до тёмного — там он тоже поверх данных темы.
+    expect(report.tokenConflicts).toEqual([
+      expect.objectContaining({ mode: 'light', token: 'bg', sources: ['theme kit/light', 'component @x/kit:Card (kit/light)'], finalValue: '#fefefe' }),
+      expect.objectContaining({ mode: 'dark', token: 'bg', sources: ['theme kit/dark', 'component @x/kit:Card (kit/light)'], finalValue: '#fefefe' }),
+    ])
     expect(report.diagnostics.map(d => d.code)).toContain('override-skipped')
   })
 })
@@ -260,7 +281,10 @@ describe('granum explain', () => {
     expect(panel).toMatchObject({ key: '@x/kit:Panel', reason: 'selected', included: true, chain: ['@x/kit:Panel'], dependencies: ['@x/kit:Card'], requiredBy: [] })
     const card = granumExplain(a, '@x/kit:Card')
     expect(card).toMatchObject({ reason: 'dependency', chain: ['@x/kit:Panel', '@x/kit:Card'], requiredBy: ['@x/kit:Panel'], consumes: ['--derived', '--bg', '--nowhere'] })
-    expect(card.tokens).toEqual([{ theme: 'light', selector: ':root', tokens: [{ name: 'card-pad', value: 'var(--space)', effective: 'var(--space)', overridden: false }] }])
+    expect(card.tokens).toEqual([
+      { mode: 'light', tokens: [{ name: 'card-pad', value: 'var(--space)', from: 'kit/light', effective: 'var(--space)', overridden: false }] },
+      { mode: 'dark', tokens: [{ name: 'card-pad', value: 'var(--space)', from: 'kit/light', effective: 'var(--space)', overridden: false }] },
+    ])
     expect(card.files).toEqual(['components/Card/index.js'])
     const text = formatExplainReport(card)
     expect(text).toContain('@x/kit:Panel → @x/kit:Card')
@@ -321,23 +345,28 @@ describe('granum why-css', () => {
 
 describe('granum tokens', () => {
   it('own и deep: объявления, цепочки значений, потребители за пределами scope', async () => {
-    const a = await app(fixture(), { themes: { tokenOverrides: { light: { 'card-pad': '4px' } } } })
+    const a = await app(fixture(), { modes: { tokenOverrides: { light: { 'card-pad': '4px' } } } })
     const own = granumTokens(a, 'Panel')
     expect(own.components).toEqual(['@x/kit:Panel'])
     expect(own.uses).toEqual([])
     const deep = granumTokens(a, 'Panel', 'deep')
     expect(deep.components).toEqual(['@x/kit:Panel', '@x/kit:Card'])
-    expect(deep.declares).toEqual([expect.objectContaining({ token: 'card-pad', declaredBy: '@x/kit:Card', value: 'var(--space)', effective: '4px', overridden: true, unusedInScope: true })])
+    // Токен компонента из режима по умолчанию доходит и до тёмного (T-10); override — только в светлом.
+    expect(deep.declares).toEqual([
+      expect.objectContaining({ token: 'card-pad', mode: 'dark', from: 'kit/light', declaredBy: '@x/kit:Card', value: 'var(--space)', effective: 'var(--space)', overridden: false, unusedInScope: true }),
+      expect.objectContaining({ token: 'card-pad', mode: 'light', from: 'kit/light', value: 'var(--space)', effective: '4px', overridden: true }),
+    ])
     const byToken = Object.fromEntries(deep.uses.map(u => [u.token, u]))
     expect(byToken.nowhere?.origin).toBe('none')
     expect(byToken.derived?.origin).toBe('provider')
-    expect(byToken.bg?.origin).toBe('provider')
+    expect(byToken.bg?.origin).toBe('theme')
+    expect(byToken.bg?.values.map(v => `${v.mode}=${v.effective}`)).toEqual(['light=#fff', 'dark=#000'])
     expect(deep.undefinedCount).toBe(1)
     const text = formatTokensReport(deep)
-    expect(text).toContain('--card-pad: var(--space) → 4px (overridden) (unused)')
+    expect(text).toContain('[light] --card-pad: var(--space) (from kit/light) → 4px (overridden) (unused)')
     expect(text).toContain('--nowhere — defined by no layer')
     const card = granumTokens(a, 'Card')
-    expect(card.declares[0]?.layers.map(l => l.source)).toEqual(['component:Card', 'app-override'])
+    expect(card.declares.find(d => d.mode === 'light')?.layers.map(l => l.source)).toEqual(['component', 'app-override'])
   })
 
   it('неизвестное имя: unresolved', async () => {
@@ -368,7 +397,8 @@ describe('granum prune', () => {
     const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
     const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine })
     const report = await granumTokenPrune(a)
-    expect(report.removed).toEqual(['dark-unused'])
+    // Данные темы и токены компонентов — пакетный слой: никем не потребляемые режутся (T-14).
+    expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused'])
     expect(report.kept.find(k => k.token === 'unused')?.reason).toEqual({ kind: 'engine-css' })
     expect(formatTokenPruneReport(report, a.root)).toContain('--unused — used by engine utilities or preflight')
   })
@@ -377,9 +407,9 @@ describe('granum prune', () => {
     const a = await app(fixture(), { pruneTokens: { mode: 'on' } })
     const report = await granumTokenPrune(a)
     expect(report.mode).toBe('on')
-    expect(report.removed).toEqual(['dark-unused', 'unused'])
-    expect(report.kept.map(k => k.token)).toEqual(['accent', 'app-only', 'bg', 'card-pad', 'derived', 'nowhere', 'space'])
-    expect(report.kept.find(k => k.token === 'accent')?.reason).toEqual({ kind: 'structural' })
+    expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused', 'unused'])
+    expect(report.kept.map(k => k.token)).toEqual(['app-only', 'bg', 'derived', 'nowhere', 'space'])
+    expect(report.kept.find(k => k.token === 'bg')?.reason).toEqual({ kind: 'usage' })
     expect(report.kept.find(k => k.token === 'space')?.reason).toEqual({ kind: 'inlined-rule' })
     const base = report.files.find(f => f.kind === 'base')!
     expect(base.skipped).toBe(true)
@@ -389,7 +419,7 @@ describe('granum prune', () => {
     expect(tokens.bytesAfter).toBeLessThan(tokens.bytesBefore)
     expect(report.bytesAfter).toBeLessThan(report.bytesBefore)
     const text = formatTokenPruneReport(report, a.root)
-    expect(text).toContain('Removed (2): --dark-unused --unused')
+    expect(text).toContain('Removed (4): --accent --card-pad --dark-unused --unused')
     expect(text).toContain('not pruned (base)')
     expect(text).toContain('--space — used by a rule in an inlined file')
   })
@@ -417,7 +447,7 @@ describe('formatDoctorReport: сводка и детали по требован
         safelist: 1,
         css: 0,
       })),
-      themes: { names: ['light'], namesSource: 'defaults', blocks: [], warnings: [] },
+      themes: { theme: 'kit', themeSource: 'default', owner: '@x/kit', modes: [], modesSource: 'theme', previews: [], warnings: [] },
       tokenConflicts: [],
       undefinedTokens: [],
       files: { checked: 1, missing: [] },

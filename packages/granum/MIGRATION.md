@@ -10,6 +10,73 @@ Step-by-step guides, mirrored in two languages:
 - English: [`docs/en/migration.md`](../../docs/en/migration.md)
 - Русский: [`docs/ru/migration.md`](../../docs/ru/migration.md)
 
+## From 2.x to 3.0
+
+3.0 turns a theme into data. A **theme** is a design language — the full set of
+token values — and the application builds exactly one. A **mode** is a variant
+inside the theme (`light`, `dark`, any other); modes switch at runtime through one
+attribute on the root, `data-theme="<theme>-<mode>"` by default. The 2.x "theme
+with `extends`" (`ocean` on top of `light`) is a mode now. The contract version is
+`2`, the manifest format is `3`. The reasoning is ADR-11 in `docs/decisions.md`.
+
+Provider:
+
+- `theme.themes` (CSS files), `theme.defaultThemes`, `theme.tokenDefinitions`
+  and `theme.tokenDefinitionsRef` are removed — `InvalidProviderError
+  ('legacy-token-definitions')`. Declare a catalog instead:
+  `theme: { registry: 'themes/registry.json', defaultTheme: 'paper', catalog: { paper: { title, data: 'themes/paper.json' }, ink: { title, extends: 'paper', data: 'themes/ink.json' } } }`.
+  A theme is a `GranumThemeData` JSON: `root` (mode-independent tokens),
+  `modes.<name> = { colorScheme, extends?, tokens, fallbacks? }`, `defaultMode`
+  (`light` when omitted). Keep the selectors out: the application assigns them. A
+  theme with `extends` in the catalog may hold only the differences — the build
+  merges it with the parent and checks it against the registry
+  (`theme-incomplete` names what is missing).
+- Component `tokenDefinitions` and `tokenDefinitionsRef` are removed. Put the
+  values into a folder and pass `themesDir: './themes'` to
+  `defineGranumComponent`: `<dir>/<theme>/root.{json,css}` and
+  `<dir>/<theme>/modes/<mode>.{json,css}` — JSON `{ "<token>": "<value>" }` or
+  CSS with a single flat block. A component may ship tokens for another
+  provider's themes: they apply when that theme is active.
+- Set `contractVersion: 2` and rebuild. A provider without themes that keeps a
+  format-2 manifest is still read; a format-2 manifest with themes is an
+  `UnsupportedManifestVersionError`.
+- A string dependency on the theme owner (`dependencies: ['@scope/tokens']`) is
+  loaded by granum from the dependent package directory: applications no longer
+  have to list it in `providers`.
+
+Application:
+
+- `themes` is replaced by `theme`, `previews` and `modes`; the old keys are
+  `InvalidConfigError`s that name the new place:
+  `themes.names` → `modes.names`, `themes.define` → `modes.define`,
+  `themes.tokenOverrides` → `modes.tokenOverrides`,
+  `themes.strictTokens` → `modes.strictTokens`.
+- `modes.define.<name>` requires `extends` (a mode of the theme or another
+  defined mode); `label` is `title`, `selector` and `tokensRef.as` are gone — the
+  activation derives the selector. A mode name is a slug without a hyphen.
+- `modes.tokenOverrides.root` goes to the mode-independent tokens,
+  `modes.tokenOverrides.<mode>` to that mode; a key that is neither is a
+  `ThemeResolutionError('unknown-mode')`. The selector form
+  (`{ '.dark': { … } }`) is gone.
+- Your own theme is an object in `theme`: complete data plus an optional
+  `extends` (a catalog theme whose component tokens it builds on) and `sources`
+  (files to watch in dev — editing them restarts the server).
+- `.light`/`.dark` classes are no longer emitted. Activate a mode with the pair
+  attribute; the `dark:` utility variant follows the dark modes of the theme.
+- Runtime: `virtual:granum/themes` returns `{ theme, modes, defaultMode,
+  activation, extensions }`. `createThemeController` switches modes:
+  `get()`/`set()`/`list()`/`entry()` become `mode`/`setMode()`/`modes()`;
+  storage keeps the mode name. A controller started on top of a pair already on
+  the root keeps it. `createThemeScript`, `createCookieStorage`, `modeFromCookie`
+  and `themeRootAttributes` cover the first frame and SSR.
+- Report and `doctor --json`: `themes { names, namesSource }` became
+  `themes { theme, themeSource, modes, modesSource, previews }`. Doctor reports
+  theme warnings by their own codes (`component-theme-unknown`,
+  `mode-extends-unresolved`, `mode-extends-cycle`) instead of `theme-warning` —
+  update `--allow` lists. `token-conflict` covers package layers only.
+- With `pruneTokens.mode: 'on'` the theme data and component tokens are pruned by
+  reachability like any package layer.
+
 ## From 1.x to 2.0
 
 2.0 breaks the application config and asks providers for a rebuild. The manifest

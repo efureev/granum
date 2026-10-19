@@ -1,5 +1,5 @@
 import type { GranumConfig } from '../config'
-import type { GranumComponentDescriptor, GranumLoadedManifest, GranumManifest, GranumManifestComponent, GranumProvider } from '../contract'
+import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumLoadedManifest, GranumManifest, GranumManifestComponent, GranumProvider, GranumThemeData } from '../contract'
 import type { GranumEngine } from '../engine/types'
 import type { PreparedApp } from '../node/prepare'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { defineGranumProvider } from '../contract'
+import { themeModeOrder } from '../core/themeData'
 import { prepareApp } from '../node/prepare'
 import { testEngine } from './testEngine'
 
@@ -32,7 +33,7 @@ export function makeProvider(
 ): GranumProvider {
   return defineGranumProvider({
     id,
-    contractVersion: 1,
+    contractVersion: 2,
     baseUrl: `file:///${id.replace(/[^\w-]/g, '_')}/`,
     components: [],
     ...patch,
@@ -43,21 +44,21 @@ export function component(name: string, patch: Partial<GranumComponentDescriptor
   return { name, ...patch }
 }
 
-/** Манифест с заполненными обязательными полями; `hash` фиктивный — читатель появится на этапе 3. */
+/** Манифест с заполненными обязательными полями; `hash` фиктивный — читатель его не видит. */
 export function makeManifest(
   id: string,
   components: Record<string, Partial<GranumManifestComponent>> = {},
   patch: Partial<Omit<GranumManifest, 'id' | 'components'>> = {},
 ): GranumLoadedManifest {
   const manifest: GranumManifest = {
-    granum: 2,
-    contractVersion: 1,
+    granum: 3,
+    contractVersion: 2,
     id,
     version: '0.0.0',
     generatedBy: '@feugene/granum@test',
     hash: `sha256-${id}`,
     dependencies: [],
-    theme: { themes: {}, defaultThemes: [], tokenDefinitions: {}, declares: [] },
+    theme: { declares: [] },
     engine: { dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary, name: TEST_ENGINE.name, module: null },
     components: Object.fromEntries(Object.entries(components).map(([name, c]) => [name, {
       entry: `components/${name}/index.js`,
@@ -67,7 +68,7 @@ export function makeManifest(
       dependencies: [],
       classes: [],
       safelist: [],
-      tokens: { declares: {}, consumes: [], dynamic: [] },
+      tokens: { consumes: [], dynamic: [] },
       hash: `sha256-${name}`,
       ...c,
     }])),
@@ -77,36 +78,79 @@ export function makeManifest(
   return { manifest, baseUrl: `file:///node_modules/${id}/dist/` }
 }
 
+/** Данные темы: корень, режимы с цветовой схемой и токенами. */
+export function themeData(
+  id: string,
+  modes: Readonly<Record<string, Readonly<Record<string, string>> | { readonly colorScheme: 'light' | 'dark', readonly tokens: Readonly<Record<string, string>>, readonly extends?: string, readonly fallbacks?: readonly { supports: string, tokens: Record<string, string> }[] }>>,
+  patch: Partial<Omit<GranumThemeData, 'id' | 'modes'>> = {},
+): GranumThemeData {
+  return {
+    id,
+    title: id[0]!.toUpperCase() + id.slice(1),
+    root: {},
+    modes: Object.fromEntries(Object.entries(modes).map(([name, mode]) => [
+      name,
+      'tokens' in mode && typeof mode.tokens === 'object'
+        ? mode as GranumThemeData['modes'][string]
+        : { colorScheme: name === 'light' ? 'light' as const : 'dark' as const, tokens: mode as Readonly<Record<string, string>> },
+    ])),
+    ...patch,
+  }
+}
+
+/** «Бумага»: light и dark, формула в корне и в режиме. */
+export const PAPER = themeData('paper', {
+  light: { 'p-bg': '#ffffff', 'p-fg': '#111111', 'p-accent': '#2563eb' },
+  dark: { 'p-bg': '#000000', 'p-fg': '#eeeeee', 'p-accent': '#60a5fa' },
+}, { title: 'Бумага', root: { 'p-radius': '6px', 'p-ring': '0 0 0 2px var(--p-accent)' } })
+
+/** «Чернила» — полные данные, как их кладёт в `dist` сборка; `dim` наследует `dark`. */
+export const INK = themeData('ink', {
+  light: { 'p-bg': '#ffffff', 'p-fg': '#111111', 'p-accent': '#111827' },
+  dark: { 'p-bg': '#000000', 'p-fg': '#eeeeee', 'p-accent': '#60a5fa' },
+  dim: { colorScheme: 'dark', extends: 'dark', tokens: { 'p-bg': '#1e293b' } },
+}, { title: 'Чернила', root: { 'p-radius': '2px', 'p-ring': '0 0 0 2px var(--p-accent)' } })
+
 /**
- * Провайдер с темами-файлами, как ядро granularity: `light` под `:root` (тема по
- * умолчанию), `dark` под атрибутом и классом. У компонента `Tinted` есть
- * структурный блок тёмной темы под атрибутом — так селекция начинает влиять на
- * тему-файл; у `Bare` — такой же блок без селектора. `files` подменяет текст
- * файла темы; `null` — файла на диске нет.
+ * Владелец каталога на диске: данные тем в `dist/themes/<id>.json`, индекс в
+ * манифесте. Компоненты — с токенами по темам, как их материализует сборка.
  */
-export function fileThemeProvider(files: { readonly light?: string | null, readonly dark?: string | null } = {}): { root: string, dist: string, provider: GranumLoadedManifest } {
-  const root = mkdtempSync(join(tmpdir(), 'granum-file-theme-'))
-  const dist = join(root, 'node_modules/@p/ds/dist')
-  mkdirSync(join(dist, 'theme'), { recursive: true })
-  const css = {
-    light: `:root, [data-theme='light'], .light {\n  --p-bg: #ffffff;\n  --p-primary: #2563eb;\n}\n`,
-    dark: `[data-theme='dark'], .dark {\n  --p-bg: #0f172a;\n  --p-primary: #60a5fa;\n}\n`,
-    ...files,
+export function catalogProvider(options: {
+  readonly id?: string
+  readonly themes?: Readonly<Record<string, GranumThemeData & { readonly extends?: string }>>
+  readonly defaultTheme?: string
+  readonly components?: Readonly<Record<string, Partial<GranumManifestComponent> & { readonly themes?: Readonly<Record<string, GranumComponentThemeTokens>> }>>
+  readonly tokensCss?: string
+} = {}): { root: string, dist: string, provider: GranumLoadedManifest } {
+  const id = options.id ?? '@p/ds'
+  const root = mkdtempSync(join(tmpdir(), 'granum-catalog-'))
+  const dist = join(root, `node_modules/${id}/dist`)
+  mkdirSync(join(dist, 'themes'), { recursive: true })
+  const themes: Readonly<Record<string, GranumThemeData & { readonly extends?: string }>> = options.themes ?? { paper: PAPER, ink: { ...INK, extends: 'paper' } }
+  const catalog: Record<string, NonNullable<GranumManifest['theme']['catalog']>[string]> = {}
+  for (const [themeId, data] of Object.entries(themes)) {
+    const { extends: parent, ...full } = data
+    writeFileSync(join(dist, `themes/${themeId}.json`), JSON.stringify(full))
+    catalog[themeId] = {
+      title: full.title,
+      ...(parent !== undefined ? { extends: parent } : {}),
+      data: `themes/${themeId}.json`,
+      modes: themeModeOrder(full),
+      defaultMode: full.defaultMode ?? 'light',
+    }
   }
-  for (const [theme, text] of Object.entries(css)) {
-    if (text !== null)
-      writeFileSync(join(dist, `theme/${theme}.css`), text)
-  }
-  const loaded = makeManifest('@p/ds', {
-    Plain: {},
-    Tinted: { tokens: { declares: { dark: { selector: '[data-theme="dark"]', tokens: { 'p-tint': '#334155' } } }, consumes: [], dynamic: [] } },
-    Bare: { tokens: { declares: { dark: { tokens: { 'p-shade': '#020617' } } }, consumes: [], dynamic: [] } },
-  }, {
+  if (options.tokensCss !== undefined)
+    writeFileSync(join(dist, 'tokens.css'), options.tokensCss)
+  const components = Object.fromEntries(Object.entries(options.components ?? { Plain: {} }).map(([name, { themes: componentThemes, ...rest }]) => [name, {
+    ...rest,
+    ...(componentThemes ? { tokens: { themes: componentThemes, consumes: [], dynamic: [], ...rest.tokens } } : {}),
+  }]))
+  const loaded = makeManifest(id, components, {
     theme: {
-      themes: { light: 'theme/light.css', dark: 'theme/dark.css' },
-      defaultThemes: ['light', 'dark'],
-      tokenDefinitions: {},
-      declares: ['--p-bg', '--p-primary'],
+      ...(options.tokensCss !== undefined ? { tokensCss: 'tokens.css' } : {}),
+      defaultTheme: options.defaultTheme ?? Object.keys(themes)[0]!,
+      catalog,
+      declares: [],
     },
   })
   return { root, dist, provider: { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` } }

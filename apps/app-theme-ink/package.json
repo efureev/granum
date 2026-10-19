@@ -1,0 +1,18 @@
+{
+  "name": "@granum-apps/app-theme-ink",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "vue": "^3.5.40"
+  },
+  "devDependencies": {
+    "@granum-fixtures/themed-companion": "0.1.0",
+    "@granum-fixtures/themed-ds": "0.1.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "verify": "node ../../scripts/verify-app.mjs"
+  }
+}

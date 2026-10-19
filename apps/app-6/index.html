@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>granum app-6 — темы приложения</title>
+    <title>granum app-6 — режимы приложения</title>
   </head>
   <body>
     <header class="demo-head">
       <p class="demo-kicker">granum · демо-стенд <code>app-6</code></p>
-      <h1>Темы приложения</h1>
+      <h1>Режимы приложения</h1>
       <p class="demo-lead">
-        Набор тем принадлежит приложению: три темы из <code>themes.define</code> наследуют
-        <code>light</code> провайдера через <code>extends</code>. Палитру «Багрянца» конфиг
-        читает из CSS-файла (<code>tokensRef</code>). Тем <code>light</code> и
-        <code>dark</code> провайдера в сборке нет.
+        Набор режимов принадлежит приложению: три режима из <code>modes.define</code> наследуют
+        <code>light</code> темы <code>paper</code> через <code>extends</code>. Палитру «Багрянца»
+        конфиг читает из CSS-файла (<code>tokensRef</code>). Режимов <code>light</code> и
+        <code>dark</code> темы в сборке нет.
       </p>
       <h2>Что видно</h2>
       <ul class="demo-notes">
@@ -24,7 +24,7 @@
           Багрянец наследует <code>red</code> из <code>light</code>.
         </li>
         <li>
-          Первую тему контроллер выбирает по <code>prefers-color-scheme</code>: у каждой темы
+          Первый режим контроллер выбирает по <code>prefers-color-scheme</code>: у каждого режима
           объявлена <code>colorScheme</code>.
         </li>
       </ul>

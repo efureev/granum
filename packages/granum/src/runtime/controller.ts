@@ -1,18 +1,13 @@
-import type { GranumThemeEntry, GranumThemeManifest } from './manifest'
+import type { GranumModeEntry, GranumThemeManifest } from './manifest'
+import { resolveThemeActivation } from './manifest'
 
 /**
  * Минимум от DOM-элемента, который нужен контроллеру. Структурный тип, а не
  * `HTMLElement`: пакет не зависит от `lib.dom`, а тесты подставляют заглушку.
  */
 export interface GranumThemeTarget {
-  classList: {
-    add: (token: string) => void
-    remove: (token: string) => void
-    contains: (token: string) => boolean
-  }
   getAttribute: (name: string) => string | null
   setAttribute: (name: string, value: string) => void
-  removeAttribute: (name: string) => void
 }
 
 /** Минимум от `localStorage`. */
@@ -22,53 +17,48 @@ export interface GranumThemeStorage {
 }
 
 export interface GranumThemeControllerOptions {
-  /** Куда применять тему. По умолчанию `document.documentElement`. */
+  /** Куда применять режим. По умолчанию `document.documentElement`. */
   target?: GranumThemeTarget
   /**
    * Где запоминать выбор пользователя. По умолчанию `localStorage`, если он
-   * доступен. `null` — не запоминать.
+   * доступен; `null` — не запоминать. Для SSR — `createCookieStorage()`.
    */
   storage?: GranumThemeStorage | null
   /** Ключ хранилища. По умолчанию `granum-theme`. */
   storageKey?: string
   /**
    * Что включить на старте:
-   *   - имя темы — она;
-   *   - `'auto'` (по умолчанию) — сохранённый выбор, иначе системная
-   *     предпочтительная схема, иначе `manifest.defaultTheme`.
+   *   - имя режима — его;
+   *   - `'auto'` (по умолчанию) — пара, уже выставленная на корне (серверный
+   *     HTML, ранний скрипт), иначе сохранённый режим, иначе системная схема —
+   *     первый режим с подходящим `colorScheme`, иначе `defaultMode`.
    */
   initial?: string | 'auto'
   /**
-   * Сопоставление системной цветовой схемы именам тем — для `initial: 'auto'`.
-   * По умолчанию берутся темы с именами `light`/`dark`, а если таких нет —
-   * первые темы, объявившие `colorScheme` в `themes.define`.
-   */
-  systemThemes?: { light?: string, dark?: string }
-  /**
    * Как узнать системную схему. По умолчанию
    * `matchMedia('(prefers-color-scheme: dark)')`. Вызывается один раз при
-   * создании контроллера — контроллер НЕ подписывается на изменения схемы:
-   * это решение приложения, и оно всегда может вызвать `set()` само.
+   * создании контроллера — на изменения схемы контроллер не подписывается:
+   * это решение приложения, и оно всегда может вызвать `setMode()` само.
    */
   prefersDark?: () => boolean
 }
 
 export interface GranumThemeController {
-  /** Имена тем в порядке манифеста. */
-  list: () => readonly string[]
-  /** Текущая тема. */
-  get: () => string
-  /** Переключить тему: DOM + сохранение + уведомление подписчиков. */
-  set: (name: string) => void
-  /** Следующая тема по кругу — удобно для одной кнопки. */
+  /** Активная тема сборки — только чтение. */
+  readonly theme: GranumThemeManifest['theme']
+  /** Текущий режим. */
+  readonly mode: string
+  /** Режимы в порядке манифеста. */
+  modes: () => readonly GranumModeEntry[]
+  /** Переключить режим: атрибут на корне + сохранение + уведомление подписчиков. */
+  setMode: (name: string) => void
+  /** Следующий режим по кругу — удобно для одной кнопки. */
   cycle: () => string
-  /** Подписка на смену темы. Возвращает функцию отписки. */
-  subscribe: (listener: (name: string) => void) => () => void
-  /** Полная запись темы из манифеста — например, чтобы отрисовать список. */
-  entry: (name: string) => GranumThemeEntry
+  /** Подписка на смену режима. Возвращает функцию отписки. */
+  subscribe: (listener: (mode: string) => void) => () => void
 }
 
-const DEFAULT_STORAGE_KEY = 'granum-theme'
+export const DEFAULT_THEME_STORAGE_KEY = 'granum-theme'
 
 function defaultTarget(): GranumThemeTarget | undefined {
   const doc = (globalThis as { document?: { documentElement?: GranumThemeTarget } }).document
@@ -92,126 +82,83 @@ function defaultPrefersDark(): boolean {
 }
 
 /**
- * Контроллер переключения тем поверх манифеста, собранного сборкой.
+ * Контроллер режимов активной темы поверх манифеста сборки (RT-1).
  *
- * Токены всех тем уже в CSS — контроллер лишь приводит DOM в состояние, при
- * котором совпадает нужный блок. Никакой генерации стилей в рантайме, никакого
- * FOUC-friendly магии: применение синхронно и стоит одну операцию над
- * элементом.
+ * Значения всех режимов уже в CSS — контроллер лишь выставляет пару в атрибут
+ * корня. Хранит он имя режима, а не пару: смена темы на сборке не сбрасывает
+ * выбор пользователя.
  *
  * ```ts
  * import manifest from 'virtual:granum/themes'
  * import { createThemeController } from '@feugene/granum/runtime'
  *
  * const themes = createThemeController(manifest)
- * themes.list()      // ['light', 'dark']
- * themes.set('dark') // <html data-theme="dark">
+ * themes.modes()          // [{ name: 'light', … }, { name: 'dark', … }]
+ * themes.setMode('dark')  // <html data-theme="slate-dark">
  * ```
  */
 export function createThemeController(
   manifest: GranumThemeManifest,
   options: GranumThemeControllerOptions = {},
 ): GranumThemeController {
-  if (!manifest || manifest.themes.length === 0)
-    throw new Error('createThemeController: the manifest is empty — the build contains no themes.')
+  if (!manifest || manifest.modes.length === 0)
+    throw new Error('createThemeController: the manifest has no modes — the build contains no theme.')
 
-  const byName = new Map(manifest.themes.map(theme => [theme.name, theme]))
+  const byName = new Map(manifest.modes.map(mode => [mode.name, mode]))
   const target = options.target ?? defaultTarget()
   const storage = options.storage === undefined ? defaultStorage() : options.storage
-  const storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY
-  const listeners = new Set<(name: string) => void>()
+  const storageKey = options.storageKey ?? DEFAULT_THEME_STORAGE_KEY
+  const attribute = manifest.activation.attribute
+  const listeners = new Set<(mode: string) => void>()
 
-  const entry = (name: string): GranumThemeEntry => {
+  const entry = (name: string): GranumModeEntry => {
     const found = byName.get(name)
     if (!found) {
       throw new Error(
-        `createThemeController: theme '${name}' is not in the build. `
-        + `Available: ${manifest.themes.map(t => t.name).join(', ')}. `
-        + `The theme set is controlled by the 'themes.names' option of granum.config (or the providers' 'defaultThemes').`,
+        `createThemeController: mode '${name}' is not in the build of theme '${manifest.theme.id}'. `
+        + `Available: ${manifest.modes.map(m => m.name).join(', ')}. `
+        + `The mode set is controlled by 'modes.names' and 'modes.define' of granum.config.`,
       )
     }
     return found
   }
 
-  /** Снимает активацию темы — но только если она была проставлена ею. */
-  const deactivate = (theme: GranumThemeEntry): void => {
-    if (!target)
-      return
-    const { activation } = theme
-    if (activation.type === 'class')
-      target.classList.remove(activation.value)
-    else if (activation.type === 'attribute' && target.getAttribute(activation.name) === activation.value)
-      target.removeAttribute(activation.name)
-  }
-
-  const activate = (theme: GranumThemeEntry): void => {
-    if (!target)
-      return
-    const { activation } = theme
-    if (activation.type === 'class')
-      target.classList.add(activation.value)
-    else if (activation.type === 'attribute')
-      target.setAttribute(activation.name, activation.value)
-    // 'root' — активна по факту отсутствия других; делать нечего.
-  }
-
   const apply = (name: string): void => {
-    const theme = entry(name)
-
-    if (theme.activation.type === 'unknown') {
-      throw new Error(
-        `createThemeController: the build could not derive how to activate theme '${name}' `
-        + `(selectors: ${theme.selectors.length ? theme.selectors.join(', ') : '—'}). `
-        + `Only a single class, a single attribute or :root can be applied to an element; a theme file `
-        + `without a flat block of custom properties gives no selector at all. Set the activation explicitly: `
-        + `granum(config, { themeManifest: { activations: { ${name}: { type: 'attribute', name: 'data-theme', value: '${name}' } } } }).`,
-      )
-    }
-
-    // Сначала снимаем чужие активации: иначе класс предыдущей темы останется
-    // висеть и продолжит перебивать новую по каскаду.
-    for (const other of manifest.themes) {
-      if (other.name !== name)
-        deactivate(other)
-    }
-    activate(theme)
+    target?.setAttribute(attribute, entry(name).value)
   }
 
-  const pickInitial = (): string => {
+  const pickInitial = (): { name: string, applied: boolean } => {
     const requested = options.initial ?? 'auto'
     if (requested !== 'auto')
-      return requested
+      return { name: requested, applied: false }
+
+    // Пара уже на корне: контроллер узнаёт её и корень не трогает (RT-5).
+    const present = resolveThemeActivation(manifest, target?.getAttribute(attribute))
+    if (present)
+      return { name: present.name, applied: true }
 
     const stored = storage?.getItem(storageKey)
     if (stored && byName.has(stored))
-      return stored
+      return { name: stored, applied: false }
 
-    const system = options.systemThemes ?? {}
-    // Порядок источников: явная опция → тема с таким именем → первая тема,
-    // объявившая `colorScheme` в манифесте. Последнее и делает `auto`
-    // работоспособным в приложении, где тем `light`/`dark` нет вовсе, а есть
-    // `emerald`/`ocean`: имя темы больше ничего не обязано означать.
-    const byScheme = (scheme: 'light' | 'dark'): string | undefined =>
-      manifest.themes.find(theme => theme.colorScheme === scheme)?.name
-    const dark = system.dark ?? (byName.has('dark') ? 'dark' : byScheme('dark'))
-    const light = system.light ?? (byName.has('light') ? 'light' : byScheme('light'))
-    const prefersDark = options.prefersDark ?? defaultPrefersDark
-    const bySystem = prefersDark() ? dark : light
-    if (bySystem && byName.has(bySystem))
-      return bySystem
-
-    return manifest.defaultTheme
+    const scheme = (options.prefersDark ?? defaultPrefersDark)() ? 'dark' : 'light'
+    const bySystem = manifest.modes.find(mode => mode.colorScheme === scheme)
+    return { name: bySystem?.name ?? manifest.defaultMode, applied: false }
   }
 
-  let current = pickInitial()
-  apply(current)
+  const initial = pickInitial()
+  let current = initial.name
+  if (!initial.applied)
+    apply(current)
 
   return {
-    list: () => manifest.themes.map(theme => theme.name),
-    get: () => current,
-    entry,
+    theme: manifest.theme,
+    get mode() {
+      return current
+    },
+    modes: () => manifest.modes,
 
-    set(name) {
+    setMode(name) {
       apply(name)
       current = name
       storage?.setItem(storageKey, name)
@@ -220,9 +167,9 @@ export function createThemeController(
     },
 
     cycle() {
-      const names = manifest.themes.map(theme => theme.name)
+      const names = manifest.modes.map(mode => mode.name)
       const next = names[(names.indexOf(current) + 1) % names.length]!
-      this.set(next)
+      this.setMode(next)
       return next
     },
 

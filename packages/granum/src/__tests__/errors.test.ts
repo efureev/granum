@@ -28,11 +28,13 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['PackageExportsError', () => new errors.PackageExportsError('p', ['./granum.manifest.json'])],
   ['PluginInstanceReusedError', () => new errors.PluginInstanceReusedError('/app/dist/client', '/app/dist/server')],
   ['ProviderNotRegisteredError', () => new errors.ProviderNotRegisteredError('p', 'ref')],
+  ['ThemeDataError', () => new errors.ThemeDataError('p', 'paper', 'themes/paper.json', 'expected an object')],
+  ['ThemeResolutionError', () => new errors.ThemeResolutionError('unknown-theme', 'theme clay is not in the catalog', 'clay', ['paper'])],
   ['TokenParseError', () => new errors.TokenParseError('message text', 'src', 'no-tokens')],
   ['TokenRefError', () => new errors.TokenRefError('p', 'light', 'X', 'file:///x.css')],
   ['UndeclaredDependencyError', () => new errors.UndeclaredDependencyError('p', [['A', 'p:B']])],
   ['UnresolvedProviderDependencyError', () => new errors.UnresolvedProviderDependencyError('p', 'from')],
-  ['UnsupportedContractVersionError', () => new errors.UnsupportedContractVersionError('p', 2, 1)],
+  ['UnsupportedContractVersionError', () => new errors.UnsupportedContractVersionError('p', 3, 2)],
   ['UnsupportedManifestVersionError', () => new errors.UnsupportedManifestVersionError(2, 1, 'f.json')],
 ]
 

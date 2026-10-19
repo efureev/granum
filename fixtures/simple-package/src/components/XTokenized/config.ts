@@ -1,13 +1,12 @@
 import { defineGranumComponent } from '@feugene/granum/contract'
 
 /**
- * Токены тем объявлены ссылками на CSS: сборка провайдера читает их и кладёт
- * значения в манифест. Обе формы ссылки — строка и объект.
+ * Токены компонента для тем чужих каталогов — `paper` из
+ * `@granum-fixtures/themes` и `heavy` из `@granum-fixtures/heavy`: сборка
+ * провайдера читает папку и кладёт значения в манифест. Обе формы файла — CSS с
+ * одним плоским блоком и JSON.
  */
 export const xTokenizedConfig = defineGranumComponent(import.meta.url, {
   name: 'XTokenized',
-  tokenDefinitionsRef: {
-    light: './themes/light.css',
-    dark: { url: './themes/dark.css', as: '.dark, [data-theme="dark"]' },
-  },
+  themesDir: './themes',
 })

@@ -9,7 +9,7 @@ export const PROVIDER_ID = '@granum-fixtures/extra-simple'
 /** Донор объявлен по id: приложение подключит его манифест само. */
 export const extraSimpleProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   components: [
     // <granum:components:registry>
     xgQuickConfig,

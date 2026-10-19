@@ -181,6 +181,16 @@ export type InvalidProviderReason
     | 'missing-component-entry'
     | 'invalid-dialect'
     | 'rules-without-dialect'
+    | 'invalid-theme-id'
+    | 'invalid-mode-name'
+    | 'invalid-theme-data'
+    | 'default-mode-missing'
+    | 'mode-extends-unknown'
+    | 'mode-extends-cycle'
+    | 'theme-extends-unknown'
+    | 'theme-incomplete'
+    | 'invalid-theme-dir'
+    | 'legacy-token-definitions'
 
 /**
  * Провайдер объявлен некорректно. Бросается при регистрации, а не
@@ -194,9 +204,53 @@ export class InvalidProviderError extends GranumError {
     readonly reason: InvalidProviderReason,
     details: string,
     readonly componentName?: string,
+    /** Токены, которых не хватает теме (`theme-incomplete`). */
+    readonly tokens?: readonly string[],
   ) {
     const where = componentName ? `component '${componentName}' of ` : ''
     super(`Invalid provider: ${where}'${providerId}' — ${details}`)
+  }
+}
+
+export type ThemeResolutionReason
+  = | 'unknown-theme'
+    | 'unknown-mode'
+    | 'multiple-theme-owners'
+    | 'theme-owner-missing'
+    | 'activation-collision'
+    | 'theme-data-missing'
+
+/**
+ * Тему или режимы нельзя собрать из конфига и графа. Это ошибка резолюции, а
+ * не формы конфига: какие темы доступны, знают только манифесты.
+ */
+export class ThemeResolutionError extends GranumError {
+  readonly code = 'theme-resolution' as const
+
+  constructor(
+    readonly reason: ThemeResolutionReason,
+    details: string,
+    /** Тема, режим или пара, о которых речь. */
+    readonly subject?: string,
+    /** Доступные варианты: темы каталога, режимы темы, владельцы. */
+    readonly available?: readonly string[],
+  ) {
+    super(`Theme resolution failed (${reason}): ${details}`)
+  }
+}
+
+/** Данные темы провайдера не читаются или не проходят схему на стороне приложения. */
+export class ThemeDataError extends GranumError {
+  readonly code = 'theme-data' as const
+
+  constructor(
+    readonly providerId: string,
+    readonly themeId: string,
+    readonly path: string,
+    details: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`Cannot use the data of theme '${themeId}' of provider '${providerId}' (${path}): ${details}`, options)
   }
 }
 
@@ -231,11 +285,12 @@ export class UnsupportedManifestVersionError extends GranumError {
     readonly version: unknown,
     readonly supported: number,
     readonly file?: string,
+    note?: string,
   ) {
     const where = file ? ` (${file})` : ''
     super(
-      `Manifest${where} declares format version ${String(version)}, but this package understands version ${supported}. `
-      + `Upgrade '@feugene/granum' or rebuild the provider.`,
+      `Manifest${where} declares format version ${String(version)}, but this package understands version ${supported}. ${
+        note ?? `Upgrade '@feugene/granum' or rebuild the provider.`}`,
     )
   }
 }
@@ -328,7 +383,7 @@ export class TokenParseError extends GranumError {
   }
 }
 
-/** Ссылка `tokenDefinitionsRef` не читается; провайдер, компонент и тема — в полях. */
+/** Файл токенов (`themesDir` компонента, `modes.define[*].tokensRef`) не читается; провайдер, компонент и тема — в полях. */
 export class TokenRefError extends GranumError {
   readonly code = 'token-ref' as const
 
@@ -341,7 +396,7 @@ export class TokenRefError extends GranumError {
   ) {
     const where = componentName ? `component '${componentName}' of provider '${providerId}'` : `provider '${providerId}'`
     super(
-      `Failed to resolve tokenDefinitionsRef['${themeName}'] declared by ${where}: ${url}${
+      `Failed to read the tokens of '${themeName}' declared by ${where}: ${url}${
         options?.cause instanceof Error ? ` (${options.cause.message})` : ''}`,
       options,
     )

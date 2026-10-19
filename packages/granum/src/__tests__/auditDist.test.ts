@@ -50,7 +50,7 @@ function fixture(patch: {
     Card: { classes: ['p-4', 'flex'], css: ['components/Card/styles.css'], safelist: patch.cardSafelist ?? [] },
     Badge: { classes: ['rounded-badge', 'flex'], css: ['components/Badge/styles.css'] },
   }, {
-    theme: { themes: {}, defaultThemes: [], tokenDefinitions: {}, declares: ['--kit-fg', '--kit-bg', '--kit-dead'] },
+    theme: { declares: ['--kit-fg', '--kit-bg', '--kit-dead'] },
   })
   writeFileSync(join(packageDist, 'granum.manifest.json'), JSON.stringify(loaded.manifest))
 

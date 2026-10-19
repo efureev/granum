@@ -50,12 +50,12 @@ describe('архитектура: одно место вычисления зн�
     expect(offenders).toEqual([])
   })
 
-  it('потребители значений читают tokenLayers резолюции, а не пересчитывают темы', () => {
-    const consumers = ['node/emit.ts', 'node/themeManifest.ts', 'node/tokenPrune.ts', 'node/diagnostics/doctor.ts', 'node/diagnostics/explain.ts', 'node/diagnostics/tokens.ts']
+  it('потребители значений читают значения резолюции, а не пересчитывают темы', () => {
+    const consumers = ['node/themeCss.ts', 'node/tokenPrune.ts', 'node/undefinedTokens.ts', 'node/diagnostics/doctor.ts', 'node/diagnostics/explain.ts', 'node/diagnostics/tokens.ts']
     for (const rel of consumers) {
       const file = files.find(f => f.rel === rel)!
       expect(file, rel).toBeDefined()
-      expect(file.code, rel).toMatch(/tokenLayers/)
+      expect(file.code, rel).toMatch(/tokenLayers|resolution\.tokens/)
       expect(file.code, rel).not.toMatch(/collectTokenLayers|resolveThemes\(/)
     }
     // Единственный вызов расчёта слоёв — из резолвера.

@@ -61,6 +61,7 @@ type CacheKey = readonly [
   EngineInput['preflights'],
   EngineInput['theme'],
   EngineInput['sources'],
+  EngineInput['darkSelector'],
 ]
 
 /** Сколько последних множеств классов помнить на генератор. */
@@ -81,7 +82,7 @@ export function windEngine(options: WindEngineOptions = {}): GranumEngine {
   const extra = options.extraRules !== false
 
   const prepare = (input: EngineInput): Promise<Prepared> => {
-    const key: CacheKey = [input.rules, input.variants, input.preflights, input.theme, input.sources]
+    const key: CacheKey = [input.rules, input.variants, input.preflights, input.theme, input.sources, input.darkSelector]
     if (last && key.every((value, i) => value === last!.key[i]))
       return last.prepared
     const prepared = buildGenerator(options, input)
@@ -187,6 +188,9 @@ async function buildGenerator(options: WindEngineOptions, input: EngineInput): P
     presets: [presetWind3({
       preflight: options.preflight ?? true,
       ...(options.variablePrefix !== undefined ? { variablePrefix: options.variablePrefix } : {}),
+      // Вариант `dark:` — предок с парой тёмного режима; список селекторов
+      // ядро разворачивает в отдельные префиксы, по одному на режим.
+      ...(input.darkSelector !== undefined ? { dark: { dark: splitSelectors(input.darkSelector) } } : {}),
     })],
     rules,
     variants,
@@ -195,6 +199,10 @@ async function buildGenerator(options: WindEngineOptions, input: EngineInput): P
   })
 
   return { uno, sourceOf }
+}
+
+function splitSelectors(selector: string): string[] {
+  return selector.split(',').map(part => part.trim()).filter(Boolean)
 }
 
 function cloneRule(rule: Rule<any>, metaClones: Map<object, object>): Rule<any> {

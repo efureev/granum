@@ -17,7 +17,7 @@ export const PROVIDER_ID = '@granum-fixtures/heavy'
  */
 export const heavyProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   components: [
     // <granum:components:registry>
     xhAlertConfig,
@@ -32,8 +32,8 @@ export const heavyProvider = defineGranumProvider({
   theme: {
     baseCss: 'theme/base.css',
     tokensCss: 'theme/tokens.css',
-    themes: { light: 'theme/light.css', dark: 'theme/dark.css' },
-    defaultThemes: ['light'],
+    defaultTheme: 'heavy',
+    catalog: { heavy: { title: 'Heavy', data: 'themes/heavy.json' } },
   },
 })
 

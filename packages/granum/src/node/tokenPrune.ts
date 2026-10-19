@@ -2,16 +2,18 @@
  * План обрезки токенов. Корни — потребление,
  * известное из манифестов селекции (`consumes`, `dynamic`, `var()` в safelist),
  * `var()` в правилах инлайнимых файлов, CSS компонентов и выводе движка
- * (утилиты и preflight), ключи `tokenOverrides`, исходники приложения и
- * шаблоны `keep`. Замыкание — по
- * графу «токен → токены в его значении». Множество сохранённых глобально по
- * темам: токен, нужный только тёмной теме, обязан уцелеть и в светлой.
+ * (утилиты и preflight), значения приложения (`modes.define`,
+ * `modes.tokenOverrides`, тема-объект), исходники приложения и шаблоны `keep`.
+ * Данные темы и токены компонентов — пакетный слой: обрезаются по
+ * достижимости (T-14). Замыкание — по графу «токен → токены в его значении».
+ * Множество сохранённых глобально по режимам: токен, нужный только тёмному
+ * режиму, уцелеет и в светлом (T-15).
  */
 import type { GranumPruneTokensOptions } from '../config'
 import type { GranumResolution } from '../core/resolve'
-import type { ThemeTokenOverrides } from '../core/tokenLayers'
 import type { CssDeclarationOccurrence } from './cssDeclarations'
 import type { InlinedCssSource } from './inlinedCss'
+import { allTokenChains } from '../core/tokenLayers'
 import { scanCssDeclarations } from './cssDeclarations'
 import { extractTokenUses, unescapeCss } from './tokenScan'
 
@@ -20,8 +22,7 @@ export type TokenKeepReason
     | { readonly kind: 'inlined-rule' }
     | { readonly kind: 'component-css' }
     | { readonly kind: 'engine-css' }
-    | { readonly kind: 'override' }
-    | { readonly kind: 'structural' }
+    | { readonly kind: 'app-value' }
     | { readonly kind: 'app-source' }
     | { readonly kind: 'keep-pattern', readonly pattern: string }
     | { readonly kind: 'referenced-by', readonly by: string }
@@ -74,21 +75,6 @@ export function patternMatcher(pattern: string | RegExp): (token: string) => boo
   return token => strip(token) === p
 }
 
-function overrideTokens(overrides: ThemeTokenOverrides | undefined): string[] {
-  if (!overrides)
-    return []
-  const out: string[] = []
-  for (const theme of Object.values(overrides)) {
-    for (const [key, value] of Object.entries(theme ?? {})) {
-      if (typeof value === 'string')
-        out.push(key)
-      else
-        out.push(...Object.keys(value ?? {}))
-    }
-  }
-  return out
-}
-
 function stripRanges(text: string, ranges: readonly CssDeclarationOccurrence[]): string {
   const sorted = [...ranges].sort((a, b) => a.start - b.start)
   let out = ''
@@ -105,7 +91,6 @@ function stripRanges(text: string, ranges: readonly CssDeclarationOccurrence[]):
 export interface PlanTokenPruneInput {
   readonly resolution: GranumResolution
   readonly options: GranumPruneTokensOptions | undefined
-  readonly tokenOverrides: ThemeTokenOverrides | undefined
   readonly inlined: readonly PrunableSection[]
   readonly componentCss: readonly string[]
   /** Потребление исходниками приложения, с `--`. */
@@ -156,10 +141,6 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
       keep(token, { kind: 'engine-css' })
   }
 
-  // R3 — ключи tokenOverrides, сырые, до strictTokens.
-  for (const token of overrideTokens(input.tokenOverrides))
-    keep(token, { kind: 'override' })
-
   // R4 — шаблоны приложения и `dynamic` выбранных компонентов.
   const patterns: { label: string, match: (t: string) => boolean }[] = []
   for (const pattern of input.options?.keep ?? [])
@@ -175,7 +156,8 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
   for (const token of input.appConsumes)
     keep(strip(token), { kind: 'app-source' })
 
-  // R6 — структурные слои: значения из той же раскладки, что сериализует эмиссия.
+  // R3 — значения приложения: `define`, override (сырые, до `strictTokens`), тема-объект.
+  // Значения темы и компонентов из манифестов — пакетный слой, их держит только достижимость.
   const values = new Map<string, string[]>()
   const addValue = (token: string, value: string): void => {
     const list = values.get(token)
@@ -184,19 +166,20 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
     else
       values.set(token, [value])
   }
-  for (const blocks of input.resolution.tokenLayers.values()) {
-    for (const block of blocks) {
-      for (const chain of block.tokens.values()) {
-        if (chain.effective === undefined)
-          continue
-        keep(chain.token, { kind: 'structural' })
-        addValue(chain.token, chain.effective)
-      }
+  const themeTokens = new Set<string>()
+  for (const set of [input.resolution.tokens.active, ...input.resolution.tokens.previews]) {
+    for (const chain of allTokenChains(set)) {
+      if (chain.layers.some(layer => layer.source.startsWith('app-')))
+        keep(chain.token, { kind: 'app-value' })
+      if (chain.effective === undefined)
+        continue
+      themeTokens.add(chain.token)
+      addValue(chain.token, chain.effective)
     }
   }
 
-  const declaredInPrunable = new Set<string>()
-  const allDeclared = new Set<string>()
+  const declaredInPrunable = new Set<string>(themeTokens)
+  const allDeclared = new Set<string>(themeTokens)
   for (const [section, decls] of declarationsBySection) {
     const prunable = section.source.kind !== 'base'
     for (const decl of decls) {

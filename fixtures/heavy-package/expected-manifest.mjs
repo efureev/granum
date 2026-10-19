@@ -4,11 +4,14 @@ import { join } from 'node:path'
 export default function ({ manifest, distDir, check }) {
   const c = manifest.components
   check(manifest.id === '@granum-fixtures/heavy', 'id')
-  // Фундамент скопирован из зеркального src/theme и объявлен в манифесте.
-  for (const path of ['theme/tokens.css', 'theme/base.css', 'theme/light.css', 'theme/dark.css'])
+  // Фундамент скопирован из зеркального src и объявлен в манифесте; тема — данные.
+  for (const path of ['theme/tokens.css', 'theme/base.css', 'themes/heavy.json'])
     check(existsSync(join(distDir, path)), `theme file ${path}`)
-  check(manifest.theme.defaultThemes.join(',') === 'light', 'defaultThemes')
-  // Объявленные токены — полный скан, включая блоки внутри @supports.
+  check(manifest.theme.defaultTheme === 'heavy', `defaultTheme: ${manifest.theme.defaultTheme}`)
+  check(manifest.theme.catalog.heavy.modes.join(',') === 'light,dark', `heavy.modes: ${manifest.theme.catalog.heavy.modes}`)
+  const heavy = JSON.parse(readFileSync(join(distDir, 'themes/heavy.json'), 'utf8'))
+  check(heavy.modes.light.fallbacks?.[0]?.supports === 'not (color: color-mix(in oklab, red, blue))', 'фолбэк светлого режима')
+  // Объявленные токены — данные темы, включая фолбэки, и тема-независимые файлы.
   check(manifest.theme.declares.includes('--xh-accent-hover') && manifest.theme.declares.includes('--xh-space-2') && manifest.theme.declares.includes('--xh-elevated-fg'), `declares: ${manifest.theme.declares.length}`)
 
   // Граф: XhPanel объявляет всех, кого импортирует; общий модуль overlayZ ребром не является.

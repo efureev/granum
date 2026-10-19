@@ -7,13 +7,13 @@ import { xxCardConfig } from '../components/XxCard/config.ts'
 export const PROVIDER_ID = '@granum-fixtures/mini-ds'
 
 /**
- * Миниатюрная дизайн-система: фундамент (токены, база, две темы) и два
- * компонента. Пути темы — относительно корня раскладки `dist`; исходники
- * лежат зеркально в `src/styles/`, копирует их плагин сборки.
+ * Миниатюрная дизайн-система: фундамент (токены, база, тема `mini` с режимами
+ * light и dark) и два компонента. Пути темы — относительно корня раскладки
+ * `dist`; исходники лежат зеркально в `src/styles/`, копирует их плагин сборки.
  */
 export const miniDsProvider = defineGranumProvider({
   id: PROVIDER_ID,
-  contractVersion: 1,
+  contractVersion: 2,
   components: [
     // <granum:components:registry>
     xxBadgeConfig,
@@ -23,11 +23,8 @@ export const miniDsProvider = defineGranumProvider({
   theme: {
     tokensCss: 'styles/tokens.css',
     baseCss: 'styles/base.css',
-    themes: {
-      light: 'styles/themes/light.css',
-      dark: 'styles/themes/dark.css',
-    },
-    defaultThemes: ['light'],
+    defaultTheme: 'mini',
+    catalog: { mini: { title: 'Mini', data: 'styles/themes/mini.json' } },
   },
 })
 

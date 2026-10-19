@@ -32,7 +32,7 @@ async function buildProvider(): Promise<string> {
     exports: { '.': './dist/index.js', './granum.manifest.json': './dist/granum.manifest.json', './components/Card': './dist/components/Card/index.js', './components/Panel': './dist/components/Panel/index.js', './components/Table': './dist/components/Table/index.js' },
   }))
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-unused:1px}')
-  write(root, 'src/theme/dark.css', '.dark{--t-bg:#000}')
+  write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: {}, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
   write(root, 'src/components/Card/Card.vue', `<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space)}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/components/Panel/Panel.vue', `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="flex gap-2"><Card /></section></template>\n`)
@@ -44,13 +44,13 @@ async function buildProvider(): Promise<string> {
   const url = (name: string): string => pathToFileURL(join(root, `src/components/${name}/config.ts`)).href
   const provider = defineGranumProvider({
     id: '@t/kit',
-    contractVersion: 1,
+    contractVersion: 2,
     components: [
       defineGranumComponent(url('Card'), { name: 'Card', safelist: ['shadow-legacy'] }),
       defineGranumComponent(url('Panel'), { name: 'Panel', dependencies: ['Card'] }),
       defineGranumComponent(url('Table'), { name: 'Table' }),
     ],
-    theme: { tokensCss: 'theme/tokens.css', themes: { dark: 'theme/dark.css' }, defaultThemes: ['light', 'dark'], tokenDefinitions: { light: { tokens: { 't-bg': '#fff' } } } },
+    theme: { tokensCss: 'theme/tokens.css', defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: 'themes/kit.json' } } },
   })
   await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
   return root
@@ -179,7 +179,7 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).toContain('.p-4{padding:1rem')
     expect(app.css).toContain('.mx-auto{')
     expect(app.css).toContain('--t-bg: #fff')
-    expect(app.css).toContain('.dark{--t-bg:#000')
+    expect(app.css).toContain('[data-theme="kit-dark"] {\n  color-scheme: dark;\n  --t-bg: #000;')
     expect(app.report?.selection.map((s: { key: string }) => s.key)).toEqual(['@t/kit:Card', '@t/kit:Panel'])
     expect(app.report?.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@t/kit:Card'] }])
     expect(app.report?.prune.removable).toEqual(['t-unused'])
@@ -203,7 +203,7 @@ describe('granum() с настоящим Vite', async () => {
     )
     expect(app.js).toContain('t-card')
     // Бандлер печатает объект манифеста литералом со своим форматированием — ищем ключи.
-    expect(app.js).toContain('defaultTheme')
+    expect(app.js).toContain('kit-dark')
     expect(app.js).toContain('activation')
     expect(app.report).toBeUndefined()
   })
@@ -308,7 +308,7 @@ describe('granum() с настоящим Vite', async () => {
     it('ассет на каждый непустой слой, ссылки в порядке слоёв, объявление порядка одно', async () => {
       const app = await buildApp(
         providerRoot,
-        { components: ['@t/kit:Card'], themes: { names: ['light', 'dark'] }, css: { split: true } },
+        { components: ['@t/kit:Card'], modes: { names: ['light', 'dark'] }, css: { split: true } },
         `<template><div class="p-4"/></template>`,
       )
       const layerFiles = app.cssFiles.filter(f => /^granum\.[a-z]+-/.test(f))
@@ -377,7 +377,7 @@ describe('granum() с настоящим Vite', async () => {
     it('без split — один ассет со всеми слоями', async () => {
       const app = await buildApp(
         providerRoot,
-        { components: ['@t/kit:Card'], themes: { names: ['light', 'dark'] } },
+        { components: ['@t/kit:Card'], modes: { names: ['light', 'dark'] } },
         `<template><div class="p-4"/></template>`,
       )
       expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])

@@ -19,11 +19,11 @@
  * его перезагружать — иначе обновление поднимается до входа приложения, и Vite
  * перезагружает страницу.
  *
- * Третий сценарий — темы, которые провайдер поставил файлами
- * (`@granum-fixtures/mini-ds`). `tokenOverrides` обязан менять вычисленное значение
- * токена под активной темой и не задевать соседнюю. Манифест тем выводит
- * активацию из селектора файла при любой селекции, и собранный
- * `createThemeController` переключает темы на странице.
+ * Третий сценарий — тема и её режимы (`@granum-fixtures/themed-ds` поверх
+ * владельца тем, которого приложение не перечисляет): собранный
+ * `createThemeController` переключает пары, остров режима и вложенный остров
+ * пересчитывают значения и формулы на своём элементе, превью другой темы не
+ * задевает корень, а значение в браузере совпадает с `granum tokens`.
  *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
@@ -215,31 +215,36 @@ finally {
 }
 
 /*
- * Каскад тем: override тёмной темы, поставленной файлом, побеждает файл.
+ * Каскад тем и режимов: одна тема на `:root`, режимы — пары в атрибуте, остров
+ * режима и превью другой темы пересчитывают значения на своём элементе.
  * Страница — один CSS сборки, без dev-сервера: проверяется каскад, а не HMR.
  */
 const OVERRIDE = '#4fd1e0'
+const appsRoot = fileURLToPath(new URL('../apps/app-components/', import.meta.url))
 try {
   const app = await prepareApp({
     engine: windEngine(),
-    providers: ['@granum-fixtures/mini-ds'],
-    themes: { names: ['light', 'dark'], tokenOverrides: { dark: { 'xxx-bg': OVERRIDE } } },
-  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
+    providers: ['@granum-fixtures/themed-ds'],
+    theme: 'ink',
+    previews: ['paper'],
+    modes: { define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } },
+  }, appsRoot)
   const { css } = await emitCss(app)
 
-  // Активация темы-файла — из селектора файла, а не из того, какие компоненты выбраны.
-  const activations = manifest => JSON.stringify(Object.fromEntries(manifest.themes.map(t => [t.name, t.activation])))
-  const expectedActivations = JSON.stringify({ light: { type: 'root' }, dark: { type: 'attribute', name: 'data-theme', value: 'dark' } })
+  // Манифест — пары активной темы; от селекции компонентов он не зависит.
+  const pairsOf = manifest => manifest.modes.map(mode => mode.value).join(',')
   const manifest = getThemeManifest(app.resolution)
-  check(activations(manifest) === expectedActivations, `манифест тем, все компоненты: ${activations(manifest)}`)
-  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/mini-ds'], components: [], themes: { names: ['light', 'dark'] } }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
-  check(activations(getThemeManifest(bare.resolution)) === expectedActivations, `манифест тем, селекция []: ${activations(getThemeManifest(bare.resolution))}`)
+  check(pairsOf(manifest) === 'ink-light,ink-dark,ink-dim,ink-ocean', `пары манифеста: ${pairsOf(manifest)}`)
+  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], theme: 'ink', modes: { define: { ocean: { extends: 'dark' } } } }, appsRoot)
+  check(pairsOf(getThemeManifest(bare.resolution)) === pairsOf(manifest), `пары манифеста при селекции []: ${pairsOf(getThemeManifest(bare.resolution))}`)
 
   // Страница с CSS сборки и собранным `@feugene/granum/runtime`: файлы `dist` отдаёт route.
   const runtimeDir = fileURLToPath(new URL('../packages/granum/dist/', import.meta.url))
-  const html = `<!doctype html><html><head><style>${css}</style></head><body><script type="module">`
+  const body = '<div id="island" data-theme="ink-dark"><div id="nested" data-theme="ink-dim"></div></div>'
+    + '<div id="preview" data-theme="paper-dark"></div>'
+  const html = `<!doctype html><html><head><style>${css}</style></head><body>${body}<script type="module">`
     + `import { createThemeController } from '/runtime.js';`
-    + `window.themes = createThemeController(${JSON.stringify(manifest)}, { storage: null })</script></body></html>`
+    + `window.themes = createThemeController(${JSON.stringify(manifest)}, { storage: null, prefersDark: () => false })</script></body></html>`
   browser = await chromium.launch()
   const page = await browser.newPage()
   await page.route('http://granum.test/**', (route) => {
@@ -253,72 +258,57 @@ try {
   page.on('pageerror', error => pageErrors.push(error.message))
   await page.goto('http://granum.test/')
   await page.waitForFunction(() => window.themes !== undefined, undefined, { timeout: 5000 })
-    .catch(() => { throw new Error(`контроллер тем не создан: ${pageErrors.join('; ') || 'без ошибки страницы'}`) })
-  const viaController = theme => page.evaluate((name) => {
-    window.themes.set(name)
-    return getComputedStyle(document.documentElement).getPropertyValue('--xxx-bg').trim()
-  }, theme)
-  const controllerDark = await viaController('dark')
-  const controllerLight = await viaController('light')
-  check(controllerDark === OVERRIDE, `контроллер включил тёмную тему-файл: ${controllerDark}`)
-  check(controllerLight === '#ffffff', `контроллер вернул светлую тему-файл: ${controllerLight}`)
+    .catch(() => { throw new Error(`контроллер режимов не создан: ${pageErrors.join('; ') || 'без ошибки страницы'}`) })
 
-  const bg = activate => page.evaluate((how) => {
-    const root = document.documentElement
-    root.removeAttribute('data-theme')
-    root.classList.remove('dark')
-    if (how === 'attribute')
-      root.setAttribute('data-theme', 'dark')
-    if (how === 'class')
-      root.classList.add('dark')
-    return getComputedStyle(root).getPropertyValue('--xxx-bg').trim()
-  }, activate)
+  const read = (selector, token) => page.evaluate(([sel, name]) => getComputedStyle(sel === 'html' ? document.documentElement : document.querySelector(sel)).getPropertyValue(name).trim(), [selector, token])
+  const attribute = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'))
 
-  const light = await bg('none')
-  const byAttribute = await bg('attribute')
-  const byClass = await bg('class')
-  check(byAttribute === OVERRIDE, `тёмная тема-файл: override действует под [data-theme=dark]: ${byAttribute}`)
-  check(byClass === OVERRIDE, `тёмная тема-файл: override действует под .dark: ${byClass}`)
-  check(light === '#ffffff', `светлая тема не задета override тёмной: ${light}`)
+  check(await attribute() === 'ink-light', `контроллер выставил пару режима по умолчанию: ${await attribute()}`)
+  check(await read('html', '--th-bg') === '#ffffff', `ink-light: --th-bg корня: ${await read('html', '--th-bg')}`)
+  await page.evaluate(() => window.themes.setMode('dim'))
+  check(await attribute() === 'ink-dim', `контроллер переключил режим: ${await attribute()}`)
+  check(await read('html', '--th-bg') === '#1e293b', `ink-dim: --th-bg корня: ${await read('html', '--th-bg')}`)
+  check(await read('html', '--td-button-shadow') === 'none', `ink-dim: токен кнопки по цепочкам dim → dark, ink → paper: ${await read('html', '--td-button-shadow')}`)
+  await page.evaluate(() => window.themes.setMode('light'))
 
-  // Тема приложения поверх темы-файла: `extends` наследует значения файла.
-  const OCEAN_FG = '#4fd1e0'
-  const oceanApp = await prepareApp({
-    engine: windEngine(),
-    providers: ['@granum-fixtures/mini-ds'],
-    themes: { names: ['light', 'ocean'], define: { ocean: { extends: 'dark', selector: '[data-theme="ocean"]', tokens: { 'xxx-fg': OCEAN_FG } } } },
-  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
-  check(oceanApp.resolution.warnings.length === 0, `ocean extends dark: предупреждения ${JSON.stringify(oceanApp.resolution.warnings)}`)
-  const oceanPage = await browser.newPage()
-  await oceanPage.setContent(`<!doctype html><html data-theme="ocean"><head><style>${(await emitCss(oceanApp)).css}</style></head><body></body></html>`)
-  const [oceanBg, oceanFg] = await oceanPage.evaluate(() => ['--xxx-bg', '--xxx-fg'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim()))
-  check(oceanBg === '#0b1120', `тема приложения ocean унаследовала --xxx-bg из dark.css: ${oceanBg}`)
-  check(oceanFg === OCEAN_FG, `тема приложения ocean перекрыла --xxx-fg своим значением: ${oceanFg}`)
+  // Остров режима на светлой странице и вложенный остров внутри него.
+  check(await read('#island', '--th-bg') === '#0f172a', `остров ink-dark: --th-bg: ${await read('#island', '--th-bg')}`)
+  check(await read('#island', '--th-line') === '#123456', `остров ink-dark: override режима: ${await read('#island', '--th-line')}`)
+  check(await read('#nested', '--th-bg') === '#1e293b', `вложенный остров ink-dim: --th-bg: ${await read('#nested', '--th-bg')}`)
+  // Формула под общей границей пересчитана на острове по его ролям, а не унаследована от корня.
+  const resolvedShade = sel => page.evaluate(s => {
+    const probe = document.createElement('i')
+    probe.style.color = 'var(--th-shade)'
+    document.querySelector(s).append(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  }, sel)
+  check(await resolvedShade('#island') !== await resolvedShade('body'), `--th-shade острова посчитана по его ролям: ${await resolvedShade('#island')} vs ${await resolvedShade('body')}`)
 
-  // Тема-файл под `:root`: override светлой темы обязан победить файл. В слое
-  // tokens он проигрывал бы файлу, а `granum tokens` называл бы его значение.
-  const ROOT_OVERRIDE = '#123456'
-  const rootApp = await prepareApp({
-    engine: windEngine(),
-    providers: ['@granum-fixtures/heavy'],
-    themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': ROOT_OVERRIDE } } },
-  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
-  const rootPage = await browser.newPage()
-  await rootPage.setContent(`<!doctype html><html><head><style>${(await emitCss(rootApp)).css}</style></head><body></body></html>`)
-  const rootAccent = await rootPage.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--xh-accent').trim())
-  const rootReported = resolveTokenValue(rootApp.resolution, 'light', 'xh-accent')
-  check(rootAccent === ROOT_OVERRIDE, `тема-файл под :root: override светлой темы действует в браузере: ${rootAccent}`)
-  check(rootReported === rootAccent, `тема-файл под :root: granum tokens называет то же значение: ${rootReported}`)
+  // Превью другой темы: полный блок своей пары, корень не задет.
+  check(await read('#preview', '--th-radius') === '6px', `превью paper-dark: свой --th-radius: ${await read('#preview', '--th-radius')}`)
+  check(await read('#preview', '--th-accent') === '#60a5fa', `превью paper-dark: --th-accent: ${await read('#preview', '--th-accent')}`)
+  check(await read('html', '--th-radius') === '2px', `корень остался ink: --th-radius: ${await read('html', '--th-radius')}`)
+
+  // Режим приложения: наследует dark и дописывает своё.
+  await page.evaluate(() => window.themes.setMode('ocean'))
+  check(await read('html', '--th-fg') === OVERRIDE, `режим приложения ocean: своё значение: ${await read('html', '--th-fg')}`)
+  check(await read('html', '--th-bg') === '#0f172a', `режим приложения ocean: унаследовал --th-bg из dark: ${await read('html', '--th-bg')}`)
+
+  // Значение в браузере — то же, что называет `granum tokens`.
+  const reported = resolveTokenValue(app.resolution, 'ocean', 'th-fg')
+  check(reported === OVERRIDE, `granum tokens называет то же значение ocean: ${reported}`)
 }
 catch (error) {
-  failures.push(`каскад тем: прогон упал: ${error?.message ?? error}`)
+  failures.push(`каскад тем и режимов: прогон упал: ${error?.message ?? error}`)
 }
 finally {
   await browser?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, темы-файлы mini-ds и heavy)\n  ${steps.join('\n  ')}\n`)
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ слои, HMR и темы-файлы подтверждены в браузере\n'
+  ? '✓ слои, HMR, режимы и превью подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1

@@ -4,21 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>granum app-5 — темы провайдера</title>
+    <title>granum app-5 — режимы темы провайдера</title>
   </head>
   <body>
     <header class="demo-head">
       <p class="demo-kicker">granum · демо-стенд <code>app-5</code></p>
-      <h1>Темы провайдера</h1>
+      <h1>Режимы темы провайдера</h1>
       <p class="demo-lead">
-        Провайдер поставляет темы <code>light</code> и <code>dark</code>. Блоки токенов обеих
-        уже в CSS, а манифест тем уходит в рантайм через <code>virtual:granum/themes</code>.
-        Переключение меняет только активацию на корне документа.
+        Тему <code>paper</code> с режимами <code>light</code> и <code>dark</code> даёт пакет
+        <code>@granum-fixtures/themes</code>, токены для неё компонент кладёт в свой
+        <code>themesDir</code>. Блоки обоих режимов уже в CSS, а манифест с парами уходит в
+        рантайм через <code>virtual:granum/themes</code>. Переключение меняет только пару
+        <code>data-theme</code> на корне документа.
       </p>
       <h2>Что видно</h2>
       <ul class="demo-notes">
         <li>Образец красится токеном <code>--x-tokenized</code>: <code>red</code> в light, <code>yellow</code> в dark.</li>
-        <li><code>cycle</code> переключает темы по кругу, в порядке манифеста.</li>
+        <li><code>cycle</code> переключает режимы по кругу, в порядке манифеста.</li>
       </ul>
       <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-5 verify</code></p>
     </header>

@@ -7,10 +7,10 @@ export default function ({ manifest, distDir, check }) {
   check(Object.keys(c).join(',') === 'XxBadge,XxCard', `состав: ${Object.keys(c)}`)
 
   // Фундамент скопирован из зеркального src/styles и объявлен в манифесте.
-  for (const path of ['styles/tokens.css', 'styles/base.css', 'styles/themes/light.css', 'styles/themes/dark.css'])
+  for (const path of ['styles/tokens.css', 'styles/base.css', 'styles/themes/mini.json'])
     check(existsSync(join(distDir, path)), `theme file ${path}`)
-  check(manifest.theme.defaultThemes.join(',') === 'light', 'defaultThemes')
-  check(Object.keys(manifest.theme.themes).sort().join(',') === 'dark,light', 'две темы')
+  check(manifest.theme.defaultTheme === 'mini', `defaultTheme: ${manifest.theme.defaultTheme}`)
+  check(manifest.theme.catalog.mini.modes.join(',') === 'light,dark', 'тема mini: light и dark')
 
   // Объявленные токены: обе темы и тема-независимый слой, включая мёртвый груз.
   for (const token of ['--xxx-space-1', '--xxx-space-2', '--xxx-radius', '--xxx-font-sm', '--xxx-bg', '--xxx-fg', '--xxx-line', '--xxx-accent', '--xxx-accent-fg', '--xxx-muted'])

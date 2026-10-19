@@ -78,6 +78,13 @@ export interface EngineInput {
   readonly preflights?: readonly GranumPreflight[]
   /** Источник каждого правила/варианта из `rules`/`variants` для `matched.source`: id провайдера или `'app'`. */
   readonly sources?: ReadonlyMap<GranumRule | GranumVariant, string>
+  /**
+   * Селектор тёмных режимов активной темы для варианта `dark:`:
+   * `[data-theme="slate-dark"], [data-theme="slate-ocean"]`. Приходит входом, а
+   * не опцией фабрики: от него не зависит отпечаток словаря (E-20, E-21). Без
+   * поля движок строит вариант по своему умолчанию.
+   */
+  readonly darkSelector?: string
 }
 
 export interface EngineMatch {

@@ -236,3 +236,28 @@ describe('windEngine: альфа на цвете в скобках', () => {
     expect(await body('bg-[length:10px_10px]/50')).toBeUndefined()
   })
 })
+
+/**
+ * Вариант `dark:` по селектору тёмных режимов (E-20…E-22): селектор приходит
+ * входом и отпечатка словаря не меняет — иначе приложение пересчитывало бы
+ * классы всех манифестов из-за одной темы.
+ */
+describe('windEngine: вариант dark: по парам режимов', () => {
+  const darkSelector = '[data-theme="ink-dark"], [data-theme="ink-dim"]'
+
+  it('предок с парой каждого тёмного режима; без поля — класс .dark по умолчанию', async () => {
+    const themed = await engine.generate({ classes: new Set(['dark:bg-red-500']), darkSelector })
+    expect(themed.css).toContain('[data-theme="ink-dark"] .dark\\:bg-red-500')
+    expect(themed.css).toContain('[data-theme="ink-dim"] .dark\\:bg-red-500')
+    expect(themed.css).not.toContain('.dark .dark')
+    const plain = await engine.generate({ classes: new Set(['dark:bg-red-500']) })
+    expect(plain.css).toContain('.dark .dark\\:bg-red-500')
+  })
+
+  it('отпечаток словаря от селектора не зависит', async () => {
+    const before = engine.vocabulary
+    await engine.generate({ classes: new Set(['dark:p-1']), darkSelector })
+    expect(engine.vocabulary).toBe(before)
+    expect(windEngine().vocabulary).toBe(before)
+  })
+})

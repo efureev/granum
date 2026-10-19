@@ -368,13 +368,13 @@ export function granumAuditDist(options: AuditDistOptions): AuditDistReport {
     }
     const packageDist = dirname(manifestPath)
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as GranumManifest
-    for (const token of manifest.theme.declares)
+    for (const token of manifest.theme.declares ?? [])
       packageTokens.add(token.replace(/^--/, ''))
     providers.push({
       id: manifest.id,
       version: manifest.version ?? null,
       components: Object.keys(manifest.components).length,
-      declaredTokens: manifest.theme.declares.length,
+      declaredTokens: manifest.theme.declares?.length ?? 0,
       manifest: true,
     })
     for (const [name, component] of Object.entries(manifest.components)) {

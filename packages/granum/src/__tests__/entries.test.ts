@@ -11,9 +11,9 @@ import * as vite from '../vite'
 
 /** Каждая точка входа отдаёт свой публичный API. */
 describe('entry points', () => {
-  it('contract exposes contract version 1', () => {
-    expect(GRANUM_CONTRACT_VERSION).toBe(1)
-    expect(root.GRANUM_CONTRACT_VERSION).toBe(1)
+  it('contract exposes contract version 2', () => {
+    expect(GRANUM_CONTRACT_VERSION).toBe(2)
+    expect(root.GRANUM_CONTRACT_VERSION).toBe(2)
   })
 
   it('root re-exports the package version, contract helpers and the resolver', () => {
@@ -38,8 +38,9 @@ describe('entry points', () => {
     expect(typeof node.readManifestSync).toBe('function')
     expect(typeof node.prepareApp).toBe('function')
     expect(typeof node.emitCss).toBe('function')
-    expect(node.GRANUM_CONTRACT_VERSION).toBe(1)
+    expect(node.GRANUM_CONTRACT_VERSION).toBe(2)
     expect(typeof runtime.createThemeController).toBe('function')
+    expect(typeof runtime.createThemeScript).toBe('function')
     expect(typeof codegen.runRegistryCodegen).toBe('function')
   })
 })

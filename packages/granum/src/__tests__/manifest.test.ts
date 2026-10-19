@@ -23,17 +23,20 @@ type Draft = Omit<GranumManifest, 'hash'>
 
 function draft(patch: Partial<Draft> = {}): Draft {
   return {
-    granum: 2,
-    contractVersion: 1,
+    granum: 3,
+    contractVersion: 2,
     id: '@x/heavy',
     version: '0.1.0',
     generatedBy: '@feugene/granum@0.0.0-test',
     dependencies: ['@x/simple'],
     theme: {
       tokensCss: 'theme/tokens.css',
-      themes: { light: 'theme/light.css', dark: 'theme/dark.css' },
-      defaultThemes: ['light', 'dark'],
-      tokenDefinitions: { dark: { selector: '.dark', tokens: { bg: '#000' } } },
+      registry: 'themes/registry.json',
+      defaultTheme: 'paper',
+      catalog: {
+        paper: { title: 'Бумага', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' },
+        ink: { title: 'Чернила', extends: 'paper', data: 'themes/ink.json', modes: ['light', 'dim', 'dark'], defaultMode: 'light' },
+      },
       declares: ['--xh-bg', '--xh-accent'],
     },
     engine: { dialect: 'unocss/preset-wind3+granum@66', vocabulary: 'fnv64-0123456789abcdef', name: 'granum-engine-wind', version: '66.7.5', module: null },
@@ -46,7 +49,7 @@ function draft(patch: Partial<Draft> = {}): Draft {
         dependencies: ['XhCard', '@x/simple:XTest1'],
         classes: ['gap-2', 'flex'],
         safelist: ['p-2'],
-        tokens: { declares: { light: { tokens: { panel: '#fff' } } }, consumes: ['--xh-space-2', '--xh-panel-bg'], dynamic: [] },
+        tokens: { themes: { paper: { modes: { light: { panel: '#fff' } } } }, consumes: ['--xh-space-2', '--xh-panel-bg'], dynamic: [] },
         hash: 'sha256-panel',
       },
       XhCard: {
@@ -57,7 +60,7 @@ function draft(patch: Partial<Draft> = {}): Draft {
         dependencies: [],
         classes: ['p-4'],
         safelist: [],
-        tokens: { declares: {}, consumes: [], dynamic: ['--xh-z-*'] },
+        tokens: { consumes: [], dynamic: ['--xh-z-*'] },
         hash: 'sha256-card',
       },
     },
@@ -82,9 +85,10 @@ describe('каноническая сериализация', () => {
     expect(m.components.XhPanel!.dependencies).toEqual(['@x/simple:XTest1', 'XhCard'])
     expect(m.components.XhPanel!.tokens.consumes).toEqual(['--xh-panel-bg', '--xh-space-2'])
     expect(m.theme.declares).toEqual(['--xh-accent', '--xh-bg'])
-    // `css` и `defaultThemes` — порядок семантичен.
+    // `css` и режимы каталога — порядок семантичен: режим по умолчанию первым.
     expect(m.components.XhPanel!.css).toEqual(['components/XhPanel/styles.css', 'components/XhPanel/extra.css'])
-    expect(m.theme.defaultThemes).toEqual(['light', 'dark'])
+    expect(m.theme.catalog!.ink!.modes).toEqual(['light', 'dim', 'dark'])
+    expect(Object.keys(m.theme.catalog!)).toEqual(['ink', 'paper'])
     expect(text.endsWith('\n')).toBe(true)
   })
 
@@ -129,13 +133,45 @@ describe('parseManifest — порядок проверок', () => {
     expect(() => parseManifest('{', BASE)).toThrow(InvalidManifestError)
     expect(() => parseManifest('[]', BASE)).toThrow(InvalidManifestError)
     try {
-      parseManifest(ok.replace('"granum": 2', '"granum": 1'), BASE, 'f.json')
+      parseManifest(ok.replace('"granum": 3', '"granum": 1'), BASE, 'f.json')
       throw new Error('should have thrown')
     }
     catch (e) {
       expect(e).toBeInstanceOf(UnsupportedManifestVersionError)
       expect((e as UnsupportedManifestVersionError).version).toBe(1)
       expect((e as Error).message).toContain('f.json')
+    }
+  })
+
+  /**
+   * Формат 2 у провайдера без тем читается (M-11): спутнику ради чужой смены
+   * контракта тем пересобираться незачем. С темами — громкий отказ.
+   */
+  it('2а: формат 2 без тем читается и приводится к форме 3; с темами — отказ с подсказкой', () => {
+    const legacy = (theme: Record<string, unknown>, declares: Record<string, unknown> = {}): string => {
+      const base = draft()
+      const v2 = {
+        ...base,
+        granum: 2,
+        contractVersion: 1,
+        theme,
+        components: Object.fromEntries(Object.entries(base.components).map(([name, c]) => [name, { ...c, tokens: { declares, consumes: c.tokens.consumes, dynamic: c.tokens.dynamic } }])),
+      }
+      return serializeManifest(v2 as unknown as Draft)
+    }
+    const bare = parseManifest(legacy({ tokensCss: 'theme/tokens.css', themes: {}, defaultThemes: ['light'], tokenDefinitions: {}, declares: ['--xh-space'] }), BASE)
+    expect(bare.manifest.granum).toBe(2)
+    expect(bare.manifest.theme).toEqual({ tokensCss: 'theme/tokens.css', declares: ['--xh-space'] })
+    expect(bare.manifest.components.XhPanel!.tokens).toEqual({ consumes: ['--xh-panel-bg', '--xh-space-2'], dynamic: [] })
+    expect(toProviderNode(bare).theme.catalog).toEqual({})
+
+    for (const [theme, declares] of [
+      [{ themes: { light: 'theme/light.css' }, defaultThemes: [], tokenDefinitions: {}, declares: [] }, {}],
+      [{ themes: {}, defaultThemes: [], tokenDefinitions: { dark: { tokens: { a: '1' } } }, declares: [] }, {}],
+      [{ themes: {}, defaultThemes: [], tokenDefinitions: {}, declares: [] }, { light: { tokens: { a: '1' } } }],
+    ] as const) {
+      expect(() => parseManifest(legacy(theme, declares), BASE)).toThrow(UnsupportedManifestVersionError)
+      expect(() => parseManifest(legacy(theme, declares), BASE)).toThrow(/rebuild the provider with @feugene\/granum 3/)
     }
   })
 
@@ -189,7 +225,7 @@ describe('parseManifest — порядок проверок', () => {
   })
 
   it('версия контракта проверяется строго', () => {
-    const text = serializeManifest({ ...draft(), contractVersion: 2 as unknown as 1 })
+    const text = serializeManifest({ ...draft(), contractVersion: 1 })
     expect(() => parseManifest(text, BASE)).toThrow(UnsupportedContractVersionError)
   })
 
@@ -262,8 +298,9 @@ describe('parseManifest — порядок проверок', () => {
       expect((e as InvalidManifestError).reason).toBe('entry-layout')
     }
 
+    const panel = draft().components.XhPanel!
     const badToken = serializeManifest(draft({
-      theme: { ...draft().theme, tokenDefinitions: { dark: { tokens: { '--bg': '#000' } } } },
+      components: { ...draft().components, XhPanel: { ...panel, tokens: { ...panel.tokens, themes: { paper: { modes: { dark: { '--bg': '#000' } } } } } } },
     }))
     try {
       parseManifest(badToken, BASE)
@@ -271,18 +308,22 @@ describe('parseManifest — порядок проверок', () => {
     }
     catch (e) {
       expect((e as InvalidManifestError).reason).toBe('token-key-prefix')
-      expect((e as InvalidManifestError).path).toBe('theme.tokenDefinitions.dark.tokens')
+      expect((e as InvalidManifestError).path).toBe('components.XhPanel.tokens.themes.paper.modes.dark')
     }
+    for (const catalog of [{ Paper: draft().theme.catalog!.paper! }, { paper: { ...draft().theme.catalog!.paper!, modes: ['dark', 'light'] } }, { paper: { ...draft().theme.catalog!.paper!, modes: ['light', 'dark-blue'] } }])
+      expect(() => parseManifest(serializeManifest(draft({ theme: { ...draft().theme, catalog } })), BASE)).toThrow(expect.objectContaining({ reason: 'schema' }))
   })
 
   it('результат разбора пригоден резолверу', () => {
     const loaded = parseManifest(ok, BASE)
-    const simple = parseManifest(serializeManifest(draft({ id: '@x/simple', dependencies: [], components: { XTest1: { ...draft().components.XhCard!, entry: 'components/XTest1/index.js', group: null } } })), 'file:///simple/dist/')
-    const r = resolveGranum({ providers: [loaded, simple], components: ['@x/heavy:XhPanel'] })
+    const simple = parseManifest(serializeManifest(draft({ id: '@x/simple', dependencies: [], theme: { declares: [] }, components: { XTest1: { ...draft().components.XhCard!, entry: 'components/XTest1/index.js', group: null } } })), 'file:///simple/dist/')
+    const paper = { id: 'paper', title: 'Бумага', root: {}, modes: { light: { colorScheme: 'light' as const, tokens: {} }, dark: { colorScheme: 'dark' as const, tokens: {} } } }
+    const r = resolveGranum({ providers: [loaded, simple], components: ['@x/heavy:XhPanel'], themeData: { '@x/heavy': { paper } } })
     // Зависимости в манифесте отсортированы, поэтому post-order детерминирован.
     expect(r.selection.order).toEqual(['@x/simple:XTest1', '@x/heavy:XhCard', '@x/heavy:XhPanel'])
     expect(r.classes).toEqual(['flex', 'gap-2', 'p-4'])
-    expect(r.themes.names).toEqual(['light', 'dark'])
+    expect(r.themes.modes.map(m => m.value)).toEqual(['paper-light', 'paper-dark'])
+    expect(r.tokens.active!.modes.get('light')!.get('panel')!.effective).toBe('#fff')
   })
 })
 

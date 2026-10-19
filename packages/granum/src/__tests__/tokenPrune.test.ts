@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { planTokenPrune } from '../node/tokenPrune'
-import { makeManifest, makeProvider } from './helpers'
+import { makeManifest, themeData } from './helpers'
 
 const TOKENS_CSS = [
   ':root {',
@@ -20,16 +20,26 @@ const tokensSection = { source: { path: '/x/tokens.css', kind: 'tokens' as const
 const baseSection = { source: { path: '/x/base.css', kind: 'base' as const, providerId: 'pkg' }, css: ':root { --from-base: 4px } body{margin:var(--seed)}' }
 
 const manifest = makeManifest('pkg', {
-  A: { safelist: ['bg-[var(--seed)]'], tokens: { declares: {}, consumes: ['--seed'], dynamic: [] } },
-  B: { tokens: { declares: {}, consumes: [], dynamic: ['--by-pattern'] } },
+  A: { safelist: ['bg-[var(--seed)]'], tokens: { consumes: ['--seed'], dynamic: [] } },
+  B: { tokens: { consumes: [], dynamic: ['--by-pattern'] } },
+}, { theme: { defaultTheme: 'paper', catalog: { paper: { title: 'P', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' } }, declares: [] } })
+
+/** Данные темы — пакетный слой: обрезаются по достижимости (T-14). */
+const PAPER = themeData('paper', {
+  light: { 'role': 'var(--seed)', 'role-unused': '#999', 'only-light': '#aaa' },
+  dark: { 'role': 'var(--seed)', 'role-unused': '#000', 'only-dark': 'var(--lonely)' },
 })
 
-function plan(input: Partial<Parameters<typeof planTokenPrune>[0]> & { components?: 'all' | string[] } = {}): ReturnType<typeof planTokenPrune> {
-  const resolution = resolveGranum({ providers: [manifest], components: input.components ?? 'all', ...(input.tokenOverrides ? { themes: { tokenOverrides: input.tokenOverrides } } : {}) })
+function plan(input: Partial<Parameters<typeof planTokenPrune>[0]> & { components?: 'all' | string[], overrides?: Record<string, Record<string, string>>, define?: Record<string, { extends: string, tokens: Record<string, string> }> } = {}): ReturnType<typeof planTokenPrune> {
+  const resolution = resolveGranum({
+    providers: [manifest],
+    components: input.components ?? 'all',
+    themeData: { pkg: { paper: PAPER } },
+    modes: { ...(input.overrides ? { tokenOverrides: input.overrides } : {}), ...(input.define ? { define: input.define } : {}) },
+  })
   return planTokenPrune({
     resolution,
     options: input.options,
-    tokenOverrides: input.tokenOverrides,
     inlined: input.inlined ?? [tokensSection],
     componentCss: input.componentCss ?? [],
     appConsumes: input.appConsumes ?? [],
@@ -50,9 +60,10 @@ describe('planTokenPrune: корни', () => {
     expect(plan({ components: ['pkg:B'], componentCss: ['.x{color:var(--lonely)}'] }).kept.get('lonely')?.kind).toBe('component-css')
   })
 
-  it('ключи tokenOverrides в обеих формах — корни', () => {
-    expect(plan({ tokenOverrides: { light: { 'by-override': '#0f0' } } }).kept.get('by-override')?.kind).toBe('override')
-    expect(plan({ tokenOverrides: { light: { '.dark': { 'by-override': '#0f0' } } } }).kept.has('by-override')).toBe(true)
+  it('значения приложения — корни: override (root и режим) и режим define', () => {
+    expect(plan({ overrides: { light: { 'by-override': '#0f0' } } }).kept.get('by-override')?.kind).toBe('app-value')
+    expect(plan({ overrides: { root: { lonely: '#0f0' } } }).kept.get('lonely')?.kind).toBe('app-value')
+    expect(plan({ define: { ocean: { extends: 'dark', tokens: { 'by-app': '#0ff' } } } }).kept.get('by-app')?.kind).toBe('app-value')
   })
 
   it('исходники приложения — корень', () => {
@@ -115,11 +126,14 @@ describe('planTokenPrune: замыкание', () => {
     expect(p.kept.get('chain-b')?.kind).toBe('referenced-by')
   })
 
-  it('структурные слои дают корни и значения для замыкания', () => {
-    const structural = makeProvider('s', { theme: { tokenDefinitions: { light: { tokens: { role: 'var(--seed)' } } } } })
-    const resolution = resolveGranum({ providers: [structural, manifest], components: ['pkg:B'] })
-    const p = planTokenPrune({ resolution, options: undefined, tokenOverrides: undefined, inlined: [tokensSection], componentCss: [], appConsumes: [] })
-    expect(p.kept.get('role')?.kind).toBe('structural')
-    expect(p.kept.get('seed')?.kind).toBe('referenced-by')
+  it('данные темы не корень: недостижимый токен темы — removable во всех режимах (T-14, T-15)', () => {
+    const p = plan({ components: ['pkg:B'] })
+    expect(p.removable).toContain('role-unused')
+    expect(p.removable).toContain('only-dark')
+    expect(p.kept.has('role')).toBe(false)
+    // Достижимый из потребления — держит и то, на что ссылается его значение.
+    const used = plan({ components: ['pkg:B'], componentCss: ['.x{color:var(--only-dark)}'] })
+    expect(used.kept.get('only-dark')?.kind).toBe('component-css')
+    expect(used.kept.get('lonely')?.kind).toBe('referenced-by')
   })
 })

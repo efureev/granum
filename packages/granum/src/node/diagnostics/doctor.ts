@@ -4,13 +4,14 @@
  * не раскрыта, граница нарушена); `warn` — законно, но подозрительно; падает
  * только под `--strict`.
  */
-import type { ResolvedThemeWarning, ThemeNamesSource } from '../../core/resolveThemes'
+import type { ModesSource, ResolvedThemeWarning, ThemeSource } from '../../core/resolveThemes'
 import type { ProviderClassSource } from '../dialects'
 import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { isLoadedManifest } from '../../contract/manifest'
 import { sortedUnique } from '../../core/dedupe'
+import { allTokenChains, describeLayer } from '../../core/tokenLayers'
 import { stripCssComments } from '../../engine/extract'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
@@ -47,8 +48,8 @@ export interface DoctorComponentInfo {
 }
 
 export interface DoctorTokenConflict {
-  readonly theme: string
-  readonly selector: string
+  /** Режим или `root`. */
+  readonly mode: string
   readonly token: string
   readonly sources: readonly string[]
   readonly finalValue: string
@@ -58,7 +59,9 @@ export type DoctorDiagnosticCode
   = | 'missing-file'
     | 'apply-not-expanded'
     | 'boundary'
-    | 'theme-warning'
+    | 'component-theme-unknown'
+    | 'mode-extends-unresolved'
+    | 'mode-extends-cycle'
     | 'token-conflict'
     | 'token-undefined'
     | 'safelist-redundant'
@@ -99,10 +102,14 @@ export interface DoctorReport {
   }
   readonly providers: readonly DoctorProviderInfo[]
   readonly components: readonly DoctorComponentInfo[]
+  /** Тема и режимы (D-10): что собрано и откуда. */
   readonly themes: {
-    readonly names: readonly string[]
-    readonly namesSource: ThemeNamesSource
-    readonly blocks: readonly { readonly theme: string, readonly selector: string, readonly tokens: number }[]
+    readonly theme: string | null
+    readonly themeSource: ThemeSource | null
+    readonly owner: string | null
+    readonly modes: readonly { readonly name: string, readonly value: string, readonly colorScheme: 'light' | 'dark', readonly origin: 'theme' | 'define', readonly tokens: number }[]
+    readonly modesSource: ModesSource
+    readonly previews: readonly string[]
     readonly warnings: readonly ResolvedThemeWarning[]
   }
   readonly tokenConflicts: readonly DoctorTokenConflict[]
@@ -118,27 +125,20 @@ export interface DoctorReport {
 
 function themeWarningSubject(w: ResolvedThemeWarning): string {
   switch (w.kind) {
-    case 'theme-extends-cycle': return w.chain.join(' → ')
-    case 'multiple-default-themes': return w.themes.join(', ')
-    case 'default-theme-without-source': return `${w.providerId}:${w.theme}`
-    default: return w.theme
+    case 'component-theme-unknown': return `${w.providerId}:${w.component}`
+    case 'mode-extends-unresolved': return w.mode
+    case 'mode-extends-cycle': return w.chain.join(' → ')
   }
 }
 
 export function formatThemeWarning(w: ResolvedThemeWarning): string {
   switch (w.kind) {
-    case 'theme-extends-unresolved':
-      return `theme "${w.theme}" extends "${w.base}", but there is nothing to inherit: ${w.reason === 'unknown' ? 'no provider supplies a theme with that name' : 'the theme file has no readable flat block of tokens'}`
-    case 'theme-extends-partial':
-      return `theme "${w.theme}" extends "${w.base}" only in part: the theme file of ${w.providers.join(', ')} has blocks with another selector, nested or under an at-rule — their values are not inherited`
-    case 'theme-extends-cycle':
-      return `cycle in themes.define[].extends: ${w.chain.join(' → ')} — the chain is cut`
-    case 'default-theme-without-source':
-      return `${w.providerId} lists "${w.theme}" in defaultThemes but does not supply it`
-    case 'partial-theme':
-      return `theme "${w.theme}" is not covered by every provider — missing from: ${w.providersWithout.join(', ')}`
-    case 'multiple-default-themes':
-      return `several themes are active by default: [${w.themes.join(', ')}] — with overlapping selectors the last one wins`
+    case 'component-theme-unknown':
+      return `component ${w.providerId}:${w.component} ships tokens for theme "${w.theme}", which no catalog in the graph declares — they are not used`
+    case 'mode-extends-unresolved':
+      return `modes.define.${w.mode} extends "${w.base}", which is neither a theme mode nor a defined mode — it inherits the default mode instead`
+    case 'mode-extends-cycle':
+      return `cycle in modes.define[].extends: ${w.chain.join(' → ')} — the chain is cut at the default mode`
   }
 }
 
@@ -160,7 +160,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
       form: p.form,
       ...(isLoadedManifest(p.source) ? { version: p.source.manifest.version } : {}),
       components: p.components.length,
-      hasTheme: Object.keys(p.theme.themes).length > 0 || p.theme.tokensCss !== undefined || p.theme.baseCss !== undefined || Object.keys(p.theme.tokenDefinitions).length > 0,
+      hasTheme: Object.keys(p.theme.catalog).length > 0 || p.theme.tokensCss !== undefined || p.theme.baseCss !== undefined,
       hasEngine: p.engine !== undefined || (p.engineArtifact?.module ?? null) !== null,
       dialect: decision?.dialect ?? p.engineArtifact?.dialect ?? null,
       vocabulary: decision?.vocabulary ?? p.engineArtifact?.vocabulary ?? null,
@@ -225,22 +225,17 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     ...(component.group ? { group: component.group } : {}),
   }))
 
-  const blocks: { theme: string, selector: string, tokens: number }[] = []
-  for (const [theme, entry] of Object.entries(resolution.themes.tokenRegistry)) {
-    for (const block of entry.blocks)
-      blocks.push({ theme, selector: block.selector, tokens: Object.keys(block.tokens).length })
-  }
-
-  // Конфликты — по тем же слоям, из которых эмитится CSS.
+  // Конфликты — по тем же слоям, из которых эмитится CSS. Конфликт — два
+  // пакетных слоя на один токен: значения приложения перекрывают пакет
+  // намеренно. Режимы `define` — копии своей базы, их не считаем повторно.
   const tokenConflicts: DoctorTokenConflict[] = []
-  for (const layerBlocks of resolution.tokenLayers.values()) {
-    for (const block of layerBlocks) {
-      for (const chain of block.tokens.values()) {
-        const emitted = chain.layers.filter(l => l.skipped === undefined)
-        if (emitted.length >= 2)
-          tokenConflicts.push({ theme: chain.theme, selector: chain.selector, token: chain.token, sources: emitted.map(l => l.source), finalValue: chain.effective! })
-      }
-    }
+  const definedModes = new Set(resolution.themes.definitions.map(mode => mode.name))
+  for (const chain of allTokenChains(resolution.tokens.active)) {
+    if (definedModes.has(chain.scope))
+      continue
+    const emitted = chain.layers.filter(l => l.skipped === undefined && (l.source === 'theme' || l.source === 'component'))
+    if (emitted.length >= 2)
+      tokenConflicts.push({ mode: chain.scope, token: chain.token, sources: chain.layers.filter(l => l.skipped === undefined).map(describeLayer), finalValue: chain.effective! })
   }
 
   // Файлы: тема, компоненты, entry — существуют ли; заодно проверки содержимого.
@@ -256,7 +251,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     return readFileSync(path, 'utf8')
   }
   for (const source of resolveInlinedCssSources(resolution))
-    readIfExists(source.path, `${source.providerId} (${source.kind}${source.theme ? ` ${source.theme}` : ''})`)
+    readIfExists(source.path, `${source.providerId} (${source.kind})`)
   for (const { provider, component } of resolution.selection.entries) {
     const key = `${provider.id}:${component.name}`
     for (const path of component.css) {
@@ -338,12 +333,12 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   }
 
   for (const w of resolution.themes.warnings)
-    warn('theme-warning', themeWarningSubject(w), formatThemeWarning(w))
+    warn(w.kind, themeWarningSubject(w), formatThemeWarning(w))
   for (const c of tokenConflicts)
-    warn('token-conflict', `${c.theme}:${c.token}`, `${c.selector} { --${c.token} } is written by several layers (${c.sources.join(' → ')}), final value: ${c.finalValue}`)
+    warn('token-conflict', `${c.mode}:${c.token}`, `--${c.token} in ${c.mode === 'root' ? 'the mode-independent tokens' : `mode '${c.mode}'`} is written by several layers (${c.sources.join(' → ')}), final value: ${c.finalValue}`)
   for (const w of resolution.warnings) {
     if (w.kind === 'override-skipped')
-      warn('override-skipped', `${w.theme}:${w.token}`, `strictTokens dropped the override of '--${w.token}' in theme '${w.theme}': no package layer declares it`)
+      warn('override-skipped', `${w.mode}:${w.token}`, `strictTokens dropped the override of '--${w.token}' in ${w.mode === 'root' ? 'root' : `mode '${w.mode}'`}: neither the theme data nor the component tokens declare it`)
   }
   for (const w of app.warnings) {
     if (w.kind === 'provider-without-manifest')
@@ -378,7 +373,21 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     },
     providers,
     components,
-    themes: { names: resolution.themes.names, namesSource: resolution.themes.namesSource, blocks, warnings: resolution.themes.warnings },
+    themes: {
+      theme: resolution.themes.theme?.id ?? null,
+      themeSource: resolution.themes.themeSource ?? null,
+      owner: resolution.themes.owner ?? null,
+      modes: resolution.themes.modes.map(mode => ({
+        name: mode.name,
+        value: mode.value,
+        colorScheme: mode.colorScheme,
+        origin: mode.origin,
+        tokens: resolution.tokens.active?.modes.get(mode.name)?.size ?? 0,
+      })),
+      modesSource: resolution.themes.modesSource,
+      previews: resolution.themes.previews.map(preview => preview.theme.id),
+      warnings: resolution.themes.warnings,
+    },
     tokenConflicts,
     undefinedTokens,
     files: { checked, missing },
@@ -400,11 +409,15 @@ export function countDoctorDiagnostics(report: DoctorReport): { errors: number, 
   return { errors, warnings }
 }
 
-const NAMES_SOURCE_TEXT: Record<ThemeNamesSource, string> = {
-  'explicit': 'themes.names',
-  'app-defined': 'keys of themes.define',
-  'provider-defaults': 'providers\' defaultThemes',
-  'fallback': 'core fallback',
+const THEME_SOURCE_TEXT: Record<ThemeSource, string> = {
+  app: 'application theme object',
+  provider: 'theme in granum.config',
+  default: 'defaultTheme of the catalog owner',
+}
+
+const MODES_SOURCE_TEXT: Record<ModesSource, string> = {
+  explicit: 'modes.names',
+  theme: 'all modes of the theme and modes.define',
 }
 
 /** Опции текстового вывода доктора. JSON они не касаются. */
@@ -443,7 +456,9 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'provider-without-manifest',
   'provider-scanned',
   'unused-provider',
-  'theme-warning',
+  'component-theme-unknown',
+  'mode-extends-unresolved',
+  'mode-extends-cycle',
 ]
 
 function severityOf(code: string): number {
@@ -547,9 +562,13 @@ export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOp
   }
   push()
 
-  push(`Themes: [${report.themes.names.join(', ') || '—'}] (source: ${NAMES_SOURCE_TEXT[report.themes.namesSource]})`)
-  for (const b of report.themes.blocks)
-    push(`  • ${b.theme} → ${b.selector} (${b.tokens} token(s))`)
+  const t = report.themes
+  push(`Theme: ${t.theme ?? '—'}${t.themeSource ? ` (source: ${THEME_SOURCE_TEXT[t.themeSource]}${t.owner ? `, catalog of ${t.owner}` : ''})` : ''}`)
+  push(`Modes: [${t.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[t.modesSource]})`)
+  for (const m of t.modes)
+    push(`  • ${m.name} → ${m.value} (${m.colorScheme}${m.origin === 'define' ? ', modes.define' : ''}, ${m.tokens} token(s))`)
+  if (t.previews.length > 0)
+    push(`Previews: ${t.previews.join(', ')}`)
   push()
   push(`Files checked: ${report.files.checked}${report.files.missing.length ? `, missing: ${report.files.missing.length}` : ''}`)
   push()

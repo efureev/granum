@@ -6,8 +6,9 @@
  * browser/node и пишет `granum.manifest.json`.
  */
 import type { Plugin, ResolvedConfig, Rolldown, UserConfig } from 'vite'
-import type { GranumComponentDescriptor, GranumManifest, GranumManifestWarning, GranumProvider } from '../contract'
+import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumManifest, GranumManifestCatalogEntry, GranumManifestWarning, GranumProvider, GranumThemeData } from '../contract'
 import type { ProviderNode } from '../core/providerNode'
+import type { TokenNature } from '../core/themeData'
 import type { GranumEngine } from '../engine/types'
 import type { BoundaryViolation, BundleAnalysis, BundleLike } from './graph'
 import { createHash } from 'node:crypto'
@@ -15,19 +16,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { builtinModules } from 'node:module'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { normalizePath } from 'vite'
-import { GRANUM_MANIFEST_VERSION } from '../contract'
+import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, ManifestNotFoundError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { ownerOf, toProviderNode } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
+import { checkThemeData, mergeThemePatch, missingRegistryTokens, themeModeOrder, themeTokenNames } from '../core/themeData'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { collectImportSpecifiers } from '../node/imports'
 import { loadPackageManifest, MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
-import { materializeProviderRefs } from '../node/materializeRefs'
 import { subcomponentsFromExports } from '../node/subcomponents'
+import { readComponentThemesDir, readRegistry, readThemeDataFile, themeDataError } from '../node/themeFiles'
 import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
@@ -38,7 +40,7 @@ import { findMissingPeers } from './peers'
 export interface GranumProviderPluginOptions {
   /** Объект контракта провайдера — браузерный entry пакета. */
   readonly provider: GranumProvider
-  /** Каталог исходников, зеркалящий раскладку `dist` для файлов темы (`src/theme/base.css` ↔ `theme/base.css`). По умолчанию `src`. */
+  /** Каталог исходников, зеркалящий раскладку `dist` для файлов темы (`src/theme/base.css` ↔ `theme/base.css`, `src/themes/slate.json` ↔ `themes/slate.json`). По умолчанию `src`. */
   readonly sourceDir?: string
   /** Корневой entry пакета (`index`). По умолчанию `src/index.ts`, если существует; `false` — не добавлять. */
   readonly indexEntry?: string | false
@@ -163,7 +165,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   const themePaths = {
     tokensCss: provider.theme?.tokensCss !== undefined ? packagePath(provider.theme.tokensCss, 'theme.tokensCss') : undefined,
     baseCss: provider.theme?.baseCss !== undefined ? packagePath(provider.theme.baseCss, 'theme.baseCss') : undefined,
-    themes: Object.fromEntries(Object.entries(provider.theme?.themes ?? {}).map(([name, path]) => [name, packagePath(path, `theme.themes.${name}`)])),
+    registry: provider.theme?.registry !== undefined ? packagePath(provider.theme.registry, 'theme.registry') : undefined,
+    catalog: Object.fromEntries(Object.entries(provider.theme?.catalog ?? {}).map(([id, entry]) => [id, packagePath(entry.data, `theme.catalog.${id}.data`)])),
   }
   const engineModule = options.engineModule ? packagePath(options.engineModule, 'engineModule') : null
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
@@ -443,7 +446,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       // 2. Файлы темы — из зеркального каталога исходников.
       const themeCss = new Map<string, string>()
       const theme = provider.theme
-      const copyTheme = (path: string | undefined, section: 'base' | 'tokens' | 'theme', subject: string): void => {
+      const copyTheme = (path: string | undefined, section: 'base' | 'tokens', subject: string): void => {
         if (path === undefined)
           return
         const from = join(sourceDir, path)
@@ -459,26 +462,76 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
       copyTheme(themePaths.tokensCss, 'tokens', 'tokens')
       copyTheme(themePaths.baseCss, 'base', 'base')
-      for (const [name, path] of Object.entries(themePaths.themes))
-        copyTheme(path, 'theme', name)
-
-      // 3. Ссылки на токены материализуются здесь, один раз.
-      const materialized = materializeProviderRefs(
-        provider.baseUrl !== undefined ? provider : { ...provider, baseUrl: `${pathToFileURL(sourceDir).href}/` },
-      )
       const declaredByTheme = new Set<string>()
       for (const css of themeCss.values()) {
         for (const decl of scanCssDeclarations(css))
           declaredByTheme.add(`--${decl.token}`)
       }
-      for (const set of Object.values(materialized.theme?.tokenDefinitions ?? {})) {
-        for (const token of Object.keys(set.tokens))
+
+      // 3. Реестр и каталог: данные тем с разрешённым `extends`, проверенные по реестру.
+      let registry: Record<string, TokenNature> | undefined
+      if (themePaths.registry !== undefined) {
+        registry = readRegistry(provider.id, join(sourceDir, themePaths.registry))
+        writeOut(outDir, themePaths.registry, `${JSON.stringify(registry, null, 2)}\n`)
+        for (const token of Object.keys(registry))
           declaredByTheme.add(`--${token}`)
+      }
+      const catalog: Record<string, GranumManifestCatalogEntry> = {}
+      const themeData = new Map<string, GranumThemeData>()
+      const buildTheme = (id: string): GranumThemeData => {
+        const done = themeData.get(id)
+        if (done)
+          return done
+        const entry = theme!.catalog![id]!
+        const path = themePaths.catalog[id]!
+        const meta = {
+          id,
+          title: entry.title,
+          ...(entry.description !== undefined ? { description: entry.description } : {}),
+          ...(entry.docs !== undefined ? { docs: entry.docs } : {}),
+        }
+        const source = readThemeDataFile(provider.id, id, join(sourceDir, path), { partial: entry.extends !== undefined })
+        const data = entry.extends !== undefined
+          ? mergeThemePatch(buildTheme(entry.extends), source, meta)
+          : { ...source, ...meta }
+        const issue = checkThemeData(data)
+        if (issue)
+          throw themeDataError(provider.id, id, issue)
+        if (registry) {
+          const missing = missingRegistryTokens(data, registry)
+          if (missing.length > 0) {
+            throw new InvalidProviderError(
+              provider.id,
+              'theme-incomplete',
+              `theme '${id}' misses ${missing.length} registry token(s): ${missing.slice(0, 20).join(', ')}${missing.length > 20 ? ', …' : ''}.`,
+              undefined,
+              missing,
+            )
+          }
+        }
+        themeData.set(id, data)
+        return data
+      }
+      for (const id of Object.keys(themePaths.catalog).sort()) {
+        const entry = theme!.catalog![id]!
+        const data = buildTheme(id)
+        writeOut(outDir, themePaths.catalog[id]!, `${JSON.stringify(data, null, 2)}\n`)
+        for (const token of themeTokenNames(data))
+          declaredByTheme.add(`--${token}`)
+        catalog[id] = {
+          title: entry.title,
+          ...(entry.description !== undefined ? { description: entry.description } : {}),
+          ...(entry.docs !== undefined ? { docs: entry.docs } : {}),
+          ...(entry.extends !== undefined ? { extends: entry.extends } : {}),
+          data: themePaths.catalog[id]!,
+          modes: themeModeOrder(data),
+          defaultMode: data.defaultMode ?? 'light',
+        }
       }
 
       // 4. Компоненты.
       const components: Record<string, GranumManifest['components'][string]> = {}
-      for (const descriptor of materialized.components) {
+      for (const descriptor of provider.components) {
         const info = analysis.components.get(descriptor.name)
         if (!info || !info.files.includes(componentEntryFileName(descriptor.name))) {
           throw new InvalidProviderError(
@@ -547,6 +600,12 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         for (const file of [...info.files, ...css].sort())
           digest.update(file).update(readOut(outDir, file, copiedCss))
 
+        let themes: Record<string, GranumComponentThemeTokens> | undefined
+        if (descriptor.themesDir !== undefined) {
+          const source = componentSources.get(descriptor.name)!
+          themes = readComponentThemesDir(provider.id, descriptor.name, join(source.dir, descriptor.themesDir.slice(`components/${descriptor.name}/`.length)))
+        }
+
         components[descriptor.name] = {
           entry: componentEntryFileName(descriptor.name),
           files: info.files,
@@ -556,7 +615,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           classes: info.classes,
           safelist,
           tokens: {
-            declares: descriptor.tokenDefinitions ?? {},
+            ...(themes !== undefined && Object.keys(themes).length > 0 ? { themes } : {}),
             consumes: sortedUnique(consumes),
             requires: sortedUnique(requires),
             dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
@@ -598,7 +657,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       const dependencyIds = sortedUnique((provider.dependencies ?? []).map(d => (typeof d === 'string' ? d : d.id)))
       writeManifestSync(join(outDir, manifestFile), {
         granum: GRANUM_MANIFEST_VERSION,
-        contractVersion: 1,
+        contractVersion: GRANUM_CONTRACT_VERSION,
         id: provider.id,
         version: pkg.version ?? '0.0.0',
         generatedBy: `@feugene/granum@${GRANUM_VERSION}`,
@@ -606,9 +665,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         theme: {
           ...(themePaths.tokensCss !== undefined ? { tokensCss: themePaths.tokensCss } : {}),
           ...(themePaths.baseCss !== undefined ? { baseCss: themePaths.baseCss } : {}),
-          themes: themePaths.themes,
-          defaultThemes: theme?.defaultThemes ?? [],
-          tokenDefinitions: materialized.theme?.tokenDefinitions ?? {},
+          ...(themePaths.registry !== undefined ? { registry: themePaths.registry } : {}),
+          ...(theme?.defaultTheme !== undefined ? { defaultTheme: theme.defaultTheme } : {}),
+          ...(Object.keys(catalog).length > 0 ? { catalog } : {}),
           declares: sortedUnique(declaredByTheme),
         },
         engine: engineBlock(engine, engineModule, components),

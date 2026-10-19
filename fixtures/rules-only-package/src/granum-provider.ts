@@ -8,7 +8,7 @@ import { brandRules } from './engine.ts'
  */
 export const rulesOnlyProvider = defineGranumProvider({
   id: '@granum-fixtures/rules-only',
-  contractVersion: 1,
+  contractVersion: 2,
   components: [],
   engine: { dialect: WIND_DIALECT_EXTRA, rules: brandRules },
 })

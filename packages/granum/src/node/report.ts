@@ -45,7 +45,14 @@ export interface GranumBuildReport {
     readonly gained: readonly string[]
   }[]
   readonly selection: readonly { readonly key: string, readonly dependencies: readonly string[] }[]
-  readonly themes: { readonly names: readonly string[], readonly namesSource: string }
+  /** Активная тема, режимы, превью и их источники (A-19). */
+  readonly themes: {
+    readonly theme: string | null
+    readonly themeSource: string | null
+    readonly modes: readonly string[]
+    readonly modesSource: string
+    readonly previews: readonly string[]
+  }
   readonly classes: {
     readonly input: number
     readonly matched: number
@@ -261,7 +268,13 @@ export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundle
       key: `${provider.id}:${component.name}`,
       dependencies: sortedUnique(component.dependencies.map(d => (typeof d === 'string' ? (d.includes(':') ? d : `${provider.id}:${d}`) : d.components.map(n => `${d.provider}:${n}`).join(',')))),
     })),
-    themes: { names: resolution.themes.names, namesSource: resolution.themes.namesSource },
+    themes: {
+      theme: resolution.themes.theme?.id ?? null,
+      themeSource: resolution.themes.themeSource ?? null,
+      modes: resolution.themes.modes.map(mode => mode.name),
+      modesSource: resolution.themes.modesSource,
+      previews: resolution.themes.previews.map(preview => preview.theme.id),
+    },
     classes: {
       input: css.engineInput.length,
       matched: css.engine.matched.size,

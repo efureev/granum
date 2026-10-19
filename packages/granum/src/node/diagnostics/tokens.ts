@@ -1,18 +1,22 @@
 /**
  * `granum tokens <providerId:Component> [--deep]`: какие токены компонент
- * объявляет и потребляет, откуда берётся значение — слой за слоем.
+ * объявляет и потребляет, откуда берётся значение — слой за слоем по каждому
+ * режиму активной темы (D-11): тема-источник токена компонента (`ink → paper`)
+ * и режим-источник (`dim → dark`) видны в слоях.
  */
 import type { ComponentKey } from '../../core/registry'
-import type { TokenLayerValue } from '../../core/tokenLayers'
+import type { TokenChain, TokenLayerValue } from '../../core/tokenLayers'
 import type { PreparedApp } from '../prepare'
 import { resolveComponentTarget, splitComponentKey } from '../../core/registry'
 import { collectDependencyClosure } from '../../core/resolveSelection'
+import { describeLayer } from '../../core/tokenLayers'
 
-export type TokenOrigin = 'own' | 'component' | 'provider' | 'app' | 'none'
+/** `theme` — данные активной темы; `provider` — только `declares` манифеста (тема-независимые файлы). */
+export type TokenOrigin = 'own' | 'component' | 'theme' | 'provider' | 'app' | 'none'
 
 export interface TokensValueChain {
-  readonly theme: string
-  readonly selector: string
+  /** Режим или `root`. */
+  readonly mode: string
   readonly layers: readonly TokenLayerValue[]
   readonly effective?: string
 }
@@ -30,8 +34,10 @@ export interface TokensUsage {
 
 export interface TokensDeclaration {
   readonly token: string
-  readonly theme: string
-  readonly selector: string
+  /** Режим или `root`. */
+  readonly mode: string
+  /** Тема и режим, чей файл компонента дал значение: `paper/dark`. */
+  readonly from: string
   readonly declaredBy: string
   readonly value: string
   readonly layers: readonly TokenLayerValue[]
@@ -55,11 +61,11 @@ export interface TokensReport {
 }
 
 function originOf(layer: TokenLayerValue, targetKey: string): { origin: TokenOrigin, declaredBy: string } {
-  if (layer.source === 'app-theme' || layer.source === 'app-override')
-    return { origin: 'app', declaredBy: layer.source }
+  if (layer.source.startsWith('app-'))
+    return { origin: 'app', declaredBy: describeLayer(layer) }
   if (layer.componentKey !== undefined)
     return { origin: layer.componentKey === targetKey ? 'own' : 'component', declaredBy: layer.componentKey }
-  return { origin: 'provider', declaredBy: layer.source }
+  return { origin: 'theme', declaredBy: describeLayer(layer) }
 }
 
 export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'deep' = 'own'): TokensReport {
@@ -86,14 +92,14 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
     for (const t of provider.theme.declares)
       declaredByProvider.set(t.replace(/^--/, ''), `provider:${provider.id}`)
   }
+  const active = resolution.tokens.active
+  const scopes: [string, ReadonlyMap<string, TokenChain>][] = active ? [['root', active.root], ...active.modes] : []
   const chainsOf = (token: string): TokensValueChain[] => {
     const out: TokensValueChain[] = []
-    for (const [theme, blocks] of resolution.tokenLayers) {
-      for (const block of blocks) {
-        const chain = block.tokens.get(token)
-        if (chain)
-          out.push({ theme, selector: block.selector, layers: chain.layers, ...(chain.effective !== undefined ? { effective: chain.effective } : {}) })
-      }
+    for (const [mode, chains] of scopes) {
+      const chain = chains.get(token)
+      if (chain)
+        out.push({ mode, layers: chain.layers, ...(chain.effective !== undefined ? { effective: chain.effective } : {}) })
     }
     return out
   }
@@ -140,25 +146,21 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
 
   const declares: TokensDeclaration[] = []
   for (const k of scopeKeys) {
-    const e = registry.components.get(k)
-    if (!e)
-      continue
-    for (const [theme, set] of Object.entries(e.component.tokenDefinitions)) {
-      const selector = set.selector ?? resolution.themes.tokenRegistry[theme]?.blocks[0]?.selector ?? ':root'
-      const block = resolution.tokenLayers.get(theme)?.find(b => b.selector === selector)
-      for (const [token, value] of Object.entries(set.tokens)) {
-        const chain = block?.tokens.get(token)
-        const effective = chain?.effective
+    for (const [mode, chains] of scopes) {
+      for (const chain of chains.values()) {
+        const layer = [...chain.layers].reverse().find(l => l.source === 'component' && l.componentKey === k)
+        if (!layer)
+          continue
         declares.push({
-          token,
-          theme,
-          selector,
+          token: chain.token,
+          mode,
+          from: `${layer.theme}/${layer.mode}`,
           declaredBy: k,
-          value,
-          layers: chain?.layers ?? [],
-          ...(effective !== undefined ? { effective } : {}),
-          overridden: effective !== undefined && effective !== value,
-          unusedInScope: consumers(token).length === 0,
+          value: layer.value,
+          layers: chain.layers,
+          ...(chain.effective !== undefined ? { effective: chain.effective } : {}),
+          overridden: chain.effective !== undefined && chain.effective !== layer.value,
+          unusedInScope: consumers(chain.token).length === 0,
         })
       }
     }
@@ -169,7 +171,7 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
     scope,
     components: scopeKeys,
     included,
-    declares: declares.sort((a, b) => a.theme.localeCompare(b.theme, 'en') || a.token.localeCompare(b.token, 'en')),
+    declares: declares.sort((a, b) => a.mode.localeCompare(b.mode, 'en') || a.token.localeCompare(b.token, 'en')),
     uses: uses.sort((a, b) => a.token.localeCompare(b.token, 'en')),
     undefinedCount: uses.filter(u => u.origin === 'none').length,
     ...(resolved.part ? { part: resolved.part } : {}),
@@ -195,14 +197,14 @@ export function formatTokensReport(report: TokensReport): string {
   push()
   push(`Declares (${report.declares.length}):${report.declares.length ? '' : ' —'}`)
   for (const d of report.declares)
-    push(`  • [${d.theme}] ${d.selector} --${d.token}: ${d.value}${d.overridden ? ` → ${d.effective} (overridden)` : ''}${d.unusedInScope ? ' (unused)' : ''}`)
+    push(`  • [${d.mode}] --${d.token}: ${d.value} (from ${d.from})${d.overridden ? ` → ${d.effective} (overridden)` : ''}${d.unusedInScope ? ' (unused)' : ''}`)
   push()
   push(`Uses (${report.uses.length}, undefined: ${report.undefinedCount}):${report.uses.length ? '' : ' —'}`)
   for (const u of report.uses) {
     const where = u.origin === 'none' ? 'defined by no layer' : `${u.origin}${u.declaredBy ? ` (${u.declaredBy})` : ''}`
     push(`  • --${u.token}${u.dynamic ? ' (dynamic)' : ''} — ${where}${u.alsoUsedBy.length ? `; also used by ${u.alsoUsedBy.join(', ')}` : ''}`)
     for (const v of u.values)
-      push(`      [${v.theme}] ${v.selector}: ${v.layers.map(l => `${l.source}=${l.value}${l.skipped ? ' (skipped)' : ''}`).join(' → ')}${v.effective !== undefined ? ` ⇒ ${v.effective}` : ''}`)
+      push(`      [${v.mode}] ${v.layers.map(l => `${describeLayer(l)}=${l.value}`).join(' → ')}${v.effective !== undefined ? ` ⇒ ${v.effective}` : ''}`)
   }
   return lines.join('\n')
 }

@@ -1,8 +1,60 @@
 # Changelog
 
-## 2.1.1 — не выпущено
+## 3.0.0 — не выпущено
 
-### Fixed
+Темы — данные провайдера, режимы — активация приложения (ADR-11). Контракт
+провайдера — версия 2, манифест — формат 3. Переход — `MIGRATION.md`,
+раздел «From 2.x to 3.0».
+
+### Изменено (ломающее)
+
+- **Тема — дизайн-язык, режим — вариант внутри неё.** Провайдер объявляет
+  каталог тем (`theme.catalog`, `theme.registry`, `theme.defaultTheme`), тема —
+  JSON `GranumThemeData` без селекторов: `root` и режимы с `colorScheme`,
+  `extends`, `tokens`, `fallbacks`. `theme.themes`, `defaultThemes`,
+  `tokenDefinitions` и `tokenDefinitionsRef` удалены
+  (`legacy-token-definitions`).
+- **Токены компонентов по темам — `themesDir`.** Папка
+  `<тема>/root.{json,css}` и `<тема>/modes/<режим>.{json,css}` материализуется в
+  манифест (`components.*.tokens.themes`); токены для темы чужого каталога
+  применяются, когда она активна. `tokens.declares` компонента удалён.
+- **Одна тема на сборку.** Конфиг: `theme` (id каталога, `providerId:id` или
+  тема-объект приложения), `previews`, `modes { names, define, activation,
+  tokenOverrides, strictTokens, system }`; ключи `themes.*` — `InvalidConfigError`
+  с подсказкой нового места.
+- **Активация — пара в атрибуте.** `data-theme="<тема>-<режим>"`: режим по
+  умолчанию под `:root` и своей парой, остальные — под парой, формулы — под общей
+  границей `:root, [data-theme]`, превью — полными блоками своих пар. Классов
+  `.light`/`.dark` нет.
+- **Рантайм по режимам.** `virtual:granum/themes` отдаёт тему, режимы с парами,
+  режим по умолчанию и `extensions`; `createThemeController` — `mode`,
+  `modes()`, `setMode()`, хранит имя режима и узнаёт уже выставленную пару.
+- **Отчёт и `doctor`.** `themes { theme, themeSource, modes, modesSource,
+  previews }`; предупреждения тем — своими кодами `component-theme-unknown`,
+  `mode-extends-unresolved`, `mode-extends-cycle` вместо `theme-warning`;
+  `token-conflict` — только пакетные слои.
+- **Обрезка.** Данные темы и токены компонентов — пакетный слой: при
+  `pruneTokens: 'on'` недостижимые режутся во всех режимах.
+
+### Добавлено
+
+- Сборка провайдера сливает тему с `extends` с родителем, проверяет каждую
+  тему по реестру (`theme-incomplete` с перечнем) и форму данных
+  (`default-mode-missing`, `mode-extends-*`, `invalid-mode-name`).
+- Владелец тем подгружается по строковой зависимости провайдера от его
+  каталога (`theme-owner-missing`, если тема без владельца не соберётся);
+  компоненты подгруженного донора `'all'` не выбирает.
+- `createThemeScript` — режим до первого кадра (опция плагина `themeScript`),
+  `createCookieStorage`, `modeFromCookie`, `themeRootAttributes` — для SSR.
+- `granum themes` — каталог по индексу манифеста; `granum tokens --deep`
+  показывает тему и режим, из которых пришло значение.
+- Тема-объект приложения с `extends` (цепочка токенов компонентов) и
+  `sources`: правка этих файлов в dev перезапускает сервер.
+- Вариант `dark:` движка строится по парам тёмных режимов
+  (`EngineInput.darkSelector`); отпечаток словаря от него не зависит.
+- Манифест формата 2 у провайдера без тем читается и приводится к форме 3.
+
+### Исправлено
 
 - **Override темы, чей файл стоит под `:root`, проигрывал самому файлу.**
   `tokenOverrides` и `define` светлой темы-файла с селектором `:root` вставали

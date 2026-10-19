@@ -1,120 +1,121 @@
-import type { GranumProvider } from '../contract'
-import { describe, expect, it, vi } from 'vitest'
-import { toProviderNode } from '../core/providerNode'
-import { resolveThemes } from '../core/resolveThemes'
-import { collectTokenLayers } from '../core/tokenLayers'
-import { makeProvider } from './helpers'
+import type { GranumComponentThemeTokens, GranumLoadedManifest } from '../contract'
+import type { GranumModesInput, GranumThemeChoice } from '../core/resolveThemes'
+import { describe, expect, it } from 'vitest'
+import { resolveGranum, resolveTokenValue } from '../core/resolve'
+import { describeLayer } from '../core/tokenLayers'
+import { INK, makeManifest, PAPER, themeData } from './helpers'
 
-function themed(theme: GranumProvider['theme'], components: GranumProvider['components'] = []): ReturnType<typeof resolveThemes> {
-  const node = toProviderNode(makeProvider('p', { ...(theme ? { theme } : {}), components }))
-  return resolveThemes([node], { names: theme?.tokenDefinitions ? Object.keys(theme.tokenDefinitions) : ['light'] }, node.components)
+const OWNER = makeManifest('@p/ds', {}, {
+  theme: {
+    defaultTheme: 'paper',
+    catalog: {
+      paper: { title: 'Бумага', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' },
+      ink: { title: 'Чернила', extends: 'paper', data: 'themes/ink.json', modes: ['light', 'dark', 'dim'], defaultMode: 'light' },
+    },
+    declares: [],
+  },
+})
+
+function ui(components: Record<string, Readonly<Record<string, GranumComponentThemeTokens>>>): GranumLoadedManifest {
+  return makeManifest('@p/ui', Object.fromEntries(Object.entries(components).map(([name, themes]) => [name, { tokens: { themes, consumes: [], dynamic: [] } }])))
 }
 
-function flatten(result: ReturnType<typeof collectTokenLayers>): Record<string, Record<string, Record<string, string | undefined>>> {
-  const out: Record<string, Record<string, Record<string, string | undefined>>> = {}
-  for (const [theme, blocks] of result) {
-    const perTheme: Record<string, Record<string, string | undefined>> = {}
-    for (const block of blocks) {
-      const perSelector: Record<string, string | undefined> = {}
-      for (const [token, chain] of block.tokens)
-        perSelector[token] = chain.effective
-      perTheme[block.selector] = perSelector
-    }
-    out[theme] = perTheme
-  }
-  return out
+const BUTTON = ui({
+  Button: {
+    paper: { root: { 'b-gap': '8px' }, modes: { light: { 'b-bg': 'var(--p-accent)', 'b-shadow': 'soft' }, dark: { 'b-shadow': 'none' } } },
+    ink: { modes: { light: { 'b-shadow': 'line' } } },
+  },
+})
+
+function resolve(theme: GranumThemeChoice | undefined, modes?: GranumModesInput, extra: GranumLoadedManifest[] = [BUTTON]) {
+  return resolveGranum({
+    providers: [OWNER, ...extra],
+    ...(theme !== undefined ? { theme } : {}),
+    ...(modes ? { modes } : {}),
+    themeData: { '@p/ds': { paper: PAPER, ink: INK } },
+  })
 }
 
-describe('collectTokenLayers: цепочки слоёв', () => {
-  it('провайдер → компонент → app-override, в порядке применения', () => {
-    const themes = themed(
-      { tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#aaa' } } } },
-      [{ name: 'Card', tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#bbb' } } } }],
-    )
-    const chain = collectTokenLayers(themes, { light: { brd: '#ccc' } }).get('light')![0]!.tokens.get('brd')!
-    expect(chain.layers).toEqual([
-      { source: 'provider:p', value: '#aaa' },
-      { source: 'component:Card', value: '#bbb', componentKey: 'p:Card' },
-      { source: 'app-override', value: '#ccc' },
-    ])
-    expect(chain.effective).toBe('#ccc')
+describe('данные темы (T-7 слой 1, T-10)', () => {
+  it('root отдельно от режимов; режим наследует предков по extends', () => {
+    const r = resolve('ink')
+    expect(r.tokens.active!.root.get('p-radius')!.effective).toBe('2px')
+    expect(resolveTokenValue(r, 'dim', 'p-bg')).toBe('#1e293b')
+    expect(resolveTokenValue(r, 'dim', 'p-accent')).toBe('#60a5fa')
+    expect(r.tokens.active!.modes.get('dim')!.get('p-accent')!.layers[0]).toMatchObject({ source: 'theme', theme: 'ink', mode: 'dark' })
   })
 
-  it('токен без overrides несёт один слой и своё значение', () => {
-    const chain = collectTokenLayers(themed({ tokenDefinitions: { light: { tokens: { brd: '#aaa' } } } }), undefined)
-      .get('light')![0]!
-      .tokens
-      .get('brd')!
-    expect(chain.layers).toEqual([{ source: 'provider:p', value: '#aaa' }])
-    expect(chain.effective).toBe('#aaa')
+  it('токен из одного режима получает значение в каждом — из режима по умолчанию', () => {
+    const data = themeData('solo', { light: { 'p-bg': '#fff', 'p-only': 'x' }, dark: { 'p-bg': '#000' } })
+    const r = resolve(data)
+    expect(resolveTokenValue(r, 'dark', 'p-only')).toBe('x')
+    expect(r.tokens.active!.modes.get('dark')!.get('p-only')!.layers[0]!.mode).toBe('light')
   })
 })
 
-describe('collectTokenLayers: strictTokens', () => {
-  const themes = themed({ tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#aaa' } } } })
-
-  it('отброшенный override остаётся в layers с пометкой, но не становится effective', () => {
-    const onSkippedOverride = vi.fn()
-    const result = collectTokenLayers(themes, { light: { brd: '#ccc', unknown: '#ddd' } }, { strictTokens: true, onSkippedOverride })
-    const block = result.get('light')![0]!
-    expect(block.tokens.get('brd')!.effective).toBe('#ccc')
-    expect(block.tokens.get('unknown')!.effective).toBeUndefined()
-    expect(block.tokens.get('unknown')!.layers).toEqual([{ source: 'app-override', value: '#ddd', skipped: 'strict-tokens' }])
-    expect(onSkippedOverride).toHaveBeenCalledExactlyOnceWith('light', 'unknown')
+describe('токены компонентов (A-24)', () => {
+  it('по токену: сначала режим и его предки, внутри — цепочка тем', () => {
+    const r = resolve('ink')
+    // ink-light: своё значение темы ink.
+    expect(resolveTokenValue(r, 'light', 'b-shadow')).toBe('line')
+    // ink-dark: у ink нет dark — берётся paper/dark, а не ink/light.
+    expect(resolveTokenValue(r, 'dark', 'b-shadow')).toBe('none')
+    // ink-dim: dim → dark → paper/dark.
+    expect(resolveTokenValue(r, 'dim', 'b-shadow')).toBe('none')
+    expect(r.tokens.active!.modes.get('dim')!.get('b-shadow')!.layers[0]).toMatchObject({ source: 'component', theme: 'paper', mode: 'dark', componentKey: '@p/ui:Button' })
+    // Токен только в режиме по умолчанию — во всех режимах.
+    expect(resolveTokenValue(r, 'dim', 'b-bg')).toBe('var(--p-accent)')
+    // root — по цепочке тем.
+    expect(r.tokens.active!.root.get('b-gap')!.layers[0]).toMatchObject({ theme: 'paper', mode: 'root' })
   })
 
-  it('без strictTokens неизвестный override пишется как есть', () => {
-    const chain = collectTokenLayers(themes, { light: { unknown: '#ddd' } }).get('light')![0]!.tokens.get('unknown')!
-    expect(chain.effective).toBe('#ddd')
-    expect(chain.layers[0]!.skipped).toBeUndefined()
+  it('компонент без токенов для цепочки активной темы ничего не даёт', () => {
+    const r = resolve('paper', undefined, [ui({ Chart: { ink: { modes: { light: { 'c-grid': '#ccc' } } } } })])
+    expect(resolveTokenValue(r, 'light', 'c-grid')).toBeUndefined()
+    expect(resolveTokenValue(resolve('ink', undefined, [ui({ Chart: { ink: { modes: { light: { 'c-grid': '#ccc' } } } } })]), 'light', 'c-grid')).toBe('#ccc')
   })
 
-  it('known — имена по всей теме, поверх всех селекторов', () => {
-    const dark = themed({ tokenDefinitions: { dark: { selector: '.dark', tokens: { brd: '#111' } } } })
-    const result = collectTokenLayers(dark, { dark: { '[data-theme="dark"]': { brd: '#222' } } }, { strictTokens: true })
-    const target = result.get('dark')!.find(b => b.selector === '[data-theme="dark"]')!
-    expect(target.tokens.get('brd')!.effective).toBe('#222')
-    expect(target.tokens.get('brd')!.layers.at(-1)!.skipped).toBeUndefined()
+  it('тема-объект приложения перекрывает токены компонентов (A-27) и наследует их через extends', () => {
+    const brand = { ...themeData('brand', { light: { 'p-bg': '#fafafa', 'b-shadow': 'brand' }, dark: { 'p-bg': '#111' } }), extends: 'ink' }
+    const r = resolve(brand)
+    const chain = r.tokens.active!.modes.get('light')!.get('b-shadow')!
+    expect(chain.layers.map(l => l.source)).toEqual(['component', 'app-theme'])
+    expect(chain.effective).toBe('brand')
+    expect(resolveTokenValue(r, 'dark', 'b-shadow')).toBe('none')
   })
 })
 
-describe('collectTokenLayers: раскладка по селекторам', () => {
-  it('вложенная форма занимает место в порядке даже при отброшенных токенах', () => {
-    const themes = themed({ tokenDefinitions: { light: { selector: ':root', tokens: { brd: '#aaa' } } } })
-    const result = collectTokenLayers(themes, { light: { '.a': { nope: '1' }, '.b': { brd: '#222' } } }, { strictTokens: true })
-    expect(result.get('light')!.map(b => b.selector)).toEqual([':root', '.a', '.b'])
-    expect(result.get('light')![1]!.tokens.get('nope')!.effective).toBeUndefined()
+describe('режимы приложения и override (T-7 слои 4–5)', () => {
+  it('define берёт итог базы и дописывает своё', () => {
+    const r = resolve('paper', { define: { ocean: { extends: 'dark', tokens: { 'p-accent': '#0ea5e9' } } } })
+    expect(resolveTokenValue(r, 'ocean', 'p-accent')).toBe('#0ea5e9')
+    expect(resolveTokenValue(r, 'ocean', 'b-shadow')).toBe('none')
+    expect(r.tokens.active!.modes.get('ocean')!.get('p-accent')!.layers.at(-1)).toMatchObject({ source: 'app-mode', mode: 'ocean' })
   })
 
-  it('плоский override уходит в первичный селектор темы, а не в :root', () => {
-    const themes = themed({ tokenDefinitions: { dark: { selector: '.dark', tokens: { brd: '#111' } } } })
-    const result = collectTokenLayers(themes, { dark: { brd: '#222' } })
-    expect(result.get('dark')!.map(b => b.selector)).toEqual(['.dark'])
-    expect(result.get('dark')![0]!.tokens.get('brd')!.effective).toBe('#222')
+  it('tokenOverrides: root — в корень, режим — в режим; последний слой', () => {
+    const r = resolve('paper', { tokenOverrides: { root: { 'p-radius': '3px' }, dark: { 'p-bg': '#050505' } } })
+    expect(r.tokens.active!.root.get('p-radius')!.effective).toBe('3px')
+    expect(resolveTokenValue(r, 'dark', 'p-bg')).toBe('#050505')
+    expect(resolveTokenValue(r, 'light', 'p-bg')).toBe('#ffffff')
+    expect(describeLayer(r.tokens.active!.modes.get('dark')!.get('p-bg')!.layers.at(-1)!)).toBe('app override')
   })
 
-  it('тема без вкладов: с overrides попадает в результат, без — пропускается', () => {
-    const empty = themed({})
-    expect(flatten(collectTokenLayers(empty, { light: { brd: '#222' } }))).toEqual({ light: { ':root': { brd: '#222' } } })
-    expect(collectTokenLayers(empty, undefined).has('light')).toBe(false)
+  it('strictTokens отбрасывает override неизвестного токена — с предупреждением и слоем skipped', () => {
+    const r = resolve('paper', { strictTokens: true, tokenOverrides: { light: { 'p-bg': '#eee', 'nobody': '1' } } })
+    expect(resolveTokenValue(r, 'light', 'nobody')).toBeUndefined()
+    expect(r.tokens.active!.modes.get('light')!.get('nobody')!.layers[0]!.skipped).toBe('strict-tokens')
+    expect(resolveTokenValue(r, 'light', 'p-bg')).toBe('#eee')
+    expect(r.warnings).toContainEqual({ kind: 'override-skipped', mode: 'light', token: 'nobody' })
   })
+})
 
-  it('мультиселекторная тема сохраняет оба блока в порядке появления', () => {
-    const a = toProviderNode(makeProvider('a', { theme: { tokenDefinitions: { dark: { selector: '.dark', tokens: { x: '1' } } } } }))
-    const b = toProviderNode(makeProvider('b', { theme: { tokenDefinitions: { dark: { selector: '[data-theme="dark"]', tokens: { y: '2' } } } } }))
-    expect(flatten(collectTokenLayers(resolveThemes([a, b], { names: ['dark'] }), undefined)))
-      .toEqual({ dark: { '.dark': { x: '1' }, '[data-theme="dark"]': { y: '2' } } })
-  })
-
-  it('значение, унаследованное через extends, материализовало приложение: слой app-theme', () => {
-    // Вклад провайдера записан в тему `light`; в теме `e` его нет ни в одном
-    // item — значение принесло определение приложения, и провенанс честно
-    // говорит `app-theme`, а не приписывает его провайдеру.
-    const node = toProviderNode(makeProvider('p', { theme: { tokenDefinitions: { light: { tokens: { bg: '#fff' } } } } }))
-    const themes = resolveThemes([node], { names: ['e'], define: { e: { extends: 'light', tokens: { fg: '#000' } } } })
-    const block = collectTokenLayers(themes, undefined).get('e')![0]!
-    expect(block.selector).toBe('[data-theme="e"]')
-    expect(block.tokens.get('bg')!.layers).toEqual([{ source: 'app-theme', value: '#fff' }])
-    expect(block.tokens.get('fg')!.layers).toEqual([{ source: 'app-theme', value: '#000' }])
+describe('превью (A-32)', () => {
+  it('полный набор своей темы; значение превью — по id темы', () => {
+    const r = resolve('ink', undefined, [BUTTON])
+    const withPreview = resolveGranum({ providers: [OWNER, BUTTON], theme: 'ink', previews: ['paper'], themeData: { '@p/ds': { paper: PAPER, ink: INK } } })
+    expect(withPreview.tokens.previews.map(p => p.themeId)).toEqual(['paper'])
+    expect(resolveTokenValue(withPreview, 'light', 'b-shadow', 'paper')).toBe('soft')
+    expect(resolveTokenValue(r, 'light', 'b-shadow')).toBe('line')
   })
 })

@@ -5,32 +5,32 @@
  * Node-only. Всё ниже (CSS, JS, токены, отчёт) читает только `PreparedApp`.
  */
 import type { GranumConfig } from '../config'
-import type { GranumProvider, GranumProviderInput } from '../contract'
+import type { GranumComponentThemeTokens, GranumProvider, GranumProviderInput, GranumThemeData } from '../contract'
 import type { ProviderNode } from '../core/providerNode'
-import type { GranumResolution, GranumThemesInput } from '../core/resolve'
+import type { GranumResolution } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
-import type { GranumAppThemeDefinition, ThemeFileFacts, ThemeFilesInput } from '../core/resolveThemes'
+import type { GranumModeDefinition, GranumModesInput, ThemePick } from '../core/resolveThemes'
 import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
 import type { ProviderEngineDecision } from './dialects'
 import { resolve as resolvePath } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { sortedUnique } from '../core/dedupe'
-import { DuplicateProviderIdError, TokenRefError } from '../core/errors'
-import { ownerOf, toProviderNode, uniqueDeclarers } from '../core/providerNode'
+import { DuplicateProviderIdError, ThemeDataError, ThemeResolutionError, TokenRefError } from '../core/errors'
+import { ownerOf, ownsThemes, toProviderNode, uniqueDeclarers } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
-import { APP_THEME_SOURCE, resolveNeededThemeNames } from '../core/resolveThemes'
+import { APP_THEME_SOURCE, planThemes } from '../core/resolveThemes'
+import { checkThemeData } from '../core/themeData'
 import { scanAppSources } from './appSources'
-import { readCssSync } from './css'
-import { parseCssTokenBlocksFromText, tokenSetFromCssSync } from './cssTokens'
+import { tokenSetFromCssSync } from './cssTokens'
 import { reconcileProviderEngines } from './dialects'
 import { resolveProviderPath } from './inlinedCss'
 import { loadPackageManifest } from './manifest'
-import { materializeProviderRefs } from './materializeRefs'
 import { collectProviderInstances, scanObjectProvider } from './scanProvider'
+import { readJsonFile, readObjectComponentThemes } from './themeFiles'
 
 export interface PreparedApp {
   readonly config: GranumConfig
@@ -68,23 +68,22 @@ export type PreparedWarning
     | { readonly kind: 'app-sources-unset' }
 
 /**
- * Провайдер по имени пакета — манифест через `exports`; объект —
- * материализованный.
+ * Провайдер по имени пакета — манифест через `exports`; объект — как есть.
  *
  * Объектные доноры из `dependencies` подключаются наравне с перечисленными:
- * каждый инстанс материализуется один раз, а ссылки на него в `dependencies`
- * сводятся к `id`. Иначе материализация (и скан по `dist`) давала бы донору
- * новый объект, `dependencies` соседа держали бы старый, и проверка
- * идентичности в графе видела бы два инстанса с одним `id` там, где он один.
+ * каждый инстанс подаётся один раз, а ссылки на него в `dependencies`
+ * сводятся к `id`. Иначе скан по `dist` давал бы донору новый объект,
+ * `dependencies` соседа держали бы старый, и проверка идентичности в графе
+ * видела бы два инстанса с одним `id` там, где он один.
  * Строковая зависимость задаёт порядок так же, как объектная, —
  * так же, как в синтетическом манифесте медленного пути.
  *
- * Ссылки на токены объектов читаются только для тем, которые понадобятся
- * резолву: активных и баз `extends`. Набор зависит от `defaultThemes` всех
- * провайдеров, поэтому материализация идёт после сбора графа — иначе сломанная
- * ссылка темы, которую приложение не включало, валила бы сборку.
+ * Строковая зависимость, которой нет в `providers`, подгружается как пакет с
+ * манифестом от каталога зависимого провайдера (A-31): при строгой раскладке
+ * `node_modules` от корня приложения транзитивный пакет не виден. Ids таких
+ * доноров попадают в `donors` — их компоненты селекция `'all'` не выбирает.
  */
-export function loadProviderInputs(config: Pick<GranumConfig, 'providers' | 'themes'>, root: string): GranumProviderInput[] {
+export function loadProviderInputs(config: Pick<GranumConfig, 'providers'>, root: string, donors?: Set<string>): GranumProviderInput[] {
   const out: GranumProviderInput[] = []
   const seen = new Map<string, GranumProvider>()
 
@@ -115,8 +114,67 @@ export function loadProviderInputs(config: Pick<GranumConfig, 'providers' | 'the
       addObject(entry, [])
   }
 
-  const needed = resolveNeededThemeNames(out.map(toProviderNode), config.themes)
-  return out.map(input => (isLoadedManifest(input) ? input : materializeProviderRefs(input, needed)))
+  const ids = new Set(out.map(providerIdOf))
+  const unresolved: { readonly id: string, readonly from: string }[] = []
+  for (let i = 0; i < out.length; i++) {
+    const input = out[i]!
+    const from = providerDirOf(input) ?? root
+    for (const dep of stringDependencies(input)) {
+      if (ids.has(dep))
+        continue
+      let donor: GranumProviderInput
+      try {
+        donor = loadPackageManifest(dep, from)
+      }
+      catch {
+        unresolved.push({ id: dep, from: providerIdOf(input) })
+        continue
+      }
+      ids.add(dep)
+      donors?.add(dep)
+      out.push(donor)
+    }
+  }
+  if (unresolved.length > 0)
+    assertThemeOwnerPresent(out, unresolved)
+  return out
+}
+
+function providerIdOf(input: GranumProviderInput): string {
+  return isLoadedManifest(input) ? input.manifest.id : input.id
+}
+
+function stringDependencies(input: GranumProviderInput): readonly string[] {
+  return isLoadedManifest(input)
+    ? input.manifest.dependencies
+    : (input.dependencies ?? []).filter((dep): dep is string => typeof dep === 'string')
+}
+
+/** Каталог, от которого разрешаются зависимости провайдера: директория манифеста или `baseUrl` объекта. */
+function providerDirOf(input: GranumProviderInput): string | undefined {
+  const base = input.baseUrl
+  return base?.startsWith('file:') ? fileURLToPath(base) : undefined
+}
+
+/**
+ * Зависимость не разрешилась, а провайдеры с токенами компонентов по темам
+ * остались без владельца каталога: тема не соберётся, и это точнее, чем «нет
+ * провайдера с таким id» (A-31). Без тем — прежняя ошибка графа.
+ */
+function assertThemeOwnerPresent(inputs: readonly GranumProviderInput[], unresolved: readonly { readonly id: string, readonly from: string }[]): void {
+  const nodes = inputs.map(toProviderNode)
+  if (nodes.some(ownsThemes))
+    return
+  const themed = nodes.filter(node => node.components.some(component => Object.keys(component.themeTokens).length > 0 || component.themesDir !== undefined))
+  const missing = unresolved.filter(dep => themed.some(node => node.id === dep.from))
+  if (missing.length === 0)
+    return
+  throw new ThemeResolutionError(
+    'theme-owner-missing',
+    `${missing.map(dep => `'${dep.from}' depends on '${dep.id}'`).join(', ')}, which cannot be resolved from the dependent package, `
+    + `and no provider in the graph declares a theme catalog — the themes of its components have no owner. Install '${missing[0]!.id}' or add it to 'providers'.`,
+    missing[0]!.id,
+  )
 }
 
 /**
@@ -158,16 +216,15 @@ export async function scanProviderInputs(inputs: readonly GranumProviderInput[],
 }
 
 /**
- * `themes.define[*].tokensRef` → литеральные `tokens` (как у провайдеров):
- * относительный путь считается от корня приложения, `as` ссылки становится
- * селектором темы, если явный не задан; литеральные `tokens` важнее файла.
+ * `modes.define[*].tokensRef` → литеральные `tokens`: относительный путь
+ * считается от корня приложения; литеральные `tokens` важнее файла.
  */
-export function materializeAppThemes(themes: GranumThemesInput | undefined, root: string): GranumThemesInput | undefined {
-  if (!themes?.define)
-    return themes
+export function materializeAppModes(modes: GranumModesInput | undefined, root: string): GranumModesInput | undefined {
+  if (!modes?.define)
+    return modes
   let changed = false
-  const define: Record<string, GranumAppThemeDefinition> = {}
-  for (const [name, definition] of Object.entries(themes.define)) {
+  const define: Record<string, GranumModeDefinition> = {}
+  for (const [name, definition] of Object.entries(modes.define)) {
     if (!definition.tokensRef) {
       define[name] = definition
       continue
@@ -179,7 +236,6 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
     try {
       parsed = tokenSetFromCssSync(url, {
         ...(ref.selector !== undefined ? { selector: ref.selector } : {}),
-        ...(ref.as !== undefined ? { as: ref.as } : {}),
         ...(ref.strict !== undefined ? { strict: ref.strict } : {}),
       })
     }
@@ -187,13 +243,48 @@ export function materializeAppThemes(themes: GranumThemesInput | undefined, root
       throw new TokenRefError(APP_THEME_SOURCE, name, undefined, ref.url, { cause })
     }
     const { tokensRef: _dropped, ...rest } = definition
-    define[name] = {
-      ...rest,
-      tokens: { ...parsed.tokens, ...definition.tokens },
-      ...(definition.selector === undefined && ref.as !== undefined ? { selector: ref.as } : {}),
-    }
+    define[name] = { ...rest, tokens: { ...parsed.tokens, ...definition.tokens } }
   }
-  return changed ? { ...themes, define } : themes
+  return changed ? { ...modes, define } : modes
+}
+
+/**
+ * Данные тем, которые собирает сборка: активная и превью из каталога (T-6).
+ * Остальные темы каталога не читаются.
+ */
+export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], providers: readonly ProviderNode[]): Record<string, Record<string, GranumThemeData>> {
+  const out: Record<string, Record<string, GranumThemeData>> = {}
+  for (const pick of picks) {
+    if (pick?.kind !== 'catalog' || out[pick.providerId]?.[pick.id])
+      continue
+    const provider = providers.find(p => p.id === pick.providerId)!
+    const url = resolveProviderPath(pick.data, provider.baseUrl)
+    const file = url.startsWith('file:') ? fileURLToPath(url) : url
+    let raw: unknown
+    try {
+      raw = readJsonFile(file)
+    }
+    catch (cause) {
+      throw new ThemeDataError(pick.providerId, pick.id, file, (cause as Error).message, { cause })
+    }
+    const issue = checkThemeData(raw)
+    if (issue)
+      throw new ThemeDataError(pick.providerId, pick.id, file, `${issue.path ? `'${issue.path}': ` : ''}${issue.details}`)
+    const byTheme = out[pick.providerId] ??= {}
+    byTheme[pick.id] = raw as GranumThemeData
+  }
+  return out
+}
+
+/** Токены `themesDir` объектных провайдеров, которых медленный путь не превратил в манифест. */
+function readComponentThemes(inputs: readonly GranumProviderInput[]): Record<string, Record<string, Record<string, GranumComponentThemeTokens>>> {
+  const out: Record<string, Record<string, Record<string, GranumComponentThemeTokens>>> = {}
+  for (const input of inputs) {
+    if (isLoadedManifest(input) || !input.components.some(component => component.themesDir !== undefined))
+      continue
+    out[input.id] = readObjectComponentThemes(input, providerDirOf(input))
+  }
+  return out
 }
 
 /**
@@ -248,7 +339,8 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
    * ничего.
    */
   const started = performance.now()
-  const loaded = loadProviderInputs(config, root)
+  const donors = new Set<string>()
+  const loaded = loadProviderInputs(config, root, donors)
   const appScanStarted = performance.now()
   const appScan = scanAppSources(config.appSources, root, engine)
   const appScanMs = performance.now() - appScanStarted
@@ -273,14 +365,25 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     if (!config.appSources)
       warnings.push({ kind: 'app-sources-unset' })
     components = config.components
+    // Донор, подгруженный по зависимости, компонентов не выбирает (C-4): `'all'` — это провайдеры приложения.
+    if ((components === undefined || components === 'all') && donors.size > 0)
+      components = inputs.map(providerIdOf).filter(id => !donors.has(id)).map(provider => ({ provider, names: 'all' as const }))
   }
 
-  const themes = materializeAppThemes(config.themes, root)
+  const modes = materializeAppModes(config.modes, root)
+  const nodes = inputs.map(toProviderNode)
+  const plan = planThemes(nodes, {
+    ...(config.theme !== undefined ? { theme: config.theme } : {}),
+    ...(config.previews !== undefined ? { previews: config.previews } : {}),
+  })
   const resolution = resolveGranum({
     providers: inputs,
     ...(components !== undefined ? { components } : {}),
-    ...(themes ? { themes } : {}),
-    themeFiles: readThemeFiles(inputs, resolveNeededThemeNames(inputs.map(toProviderNode), themes)),
+    ...(config.theme !== undefined ? { theme: config.theme } : {}),
+    ...(config.previews !== undefined ? { previews: config.previews } : {}),
+    ...(modes ? { modes } : {}),
+    themeData: readPlannedThemeData([plan.active, ...plan.previews], nodes),
+    componentThemes: readComponentThemes(inputs),
   })
   for (const w of resolution.warnings) {
     if (w.kind === 'provider-without-manifest')
@@ -304,42 +407,4 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     reextractLost: sortedUnique(resolution.selection.order.flatMap(key => reconciled.lostByComponent.get(key) ?? [])),
     warnings,
   }
-}
-
-/**
- * Селектор и токены файлов тем провайдеров — для блоков без своего селектора у
- * темы-файла и для `strictTokens`: ядро файлов не читает. Файл, который не
- * читается или не содержит плоских блоков токенов, фактов не даёт; ошибку чтения
- * назовёт эмиссия.
- *
- * Читаются ровно те файлы, факты которых возьмёт резолвер: темы из `needed`, у
- * которых провайдер не дал структурного определения — оно побеждает файл.
- */
-function readThemeFiles(inputs: readonly GranumProviderInput[], needed: ReadonlySet<string>): ThemeFilesInput {
-  const out: Record<string, Record<string, ThemeFileFacts>> = {}
-  for (const input of inputs) {
-    const node = toProviderNode(input)
-    const baseUrl = input.baseUrl
-    for (const [theme, ref] of Object.entries(node.theme.themes)) {
-      if (!needed.has(theme) || node.theme.tokenDefinitions[theme] !== undefined || node.theme.tokenDefinitionsRef[theme] !== undefined)
-        continue
-      let parsed
-      try {
-        parsed = parseCssTokenBlocksFromText(readCssSync(resolveProviderPath(ref, baseUrl)))
-      }
-      catch {
-        continue
-      }
-      const [first, ...others] = parsed.blocks
-      if (!first)
-        continue
-      const tokens = [...new Set(parsed.blocks.flatMap(block => Object.keys(block.tokens)))]
-      // Разбор сливает блоки одного селектора, так что первый блок — вся тема
-      // под её селектором; прочие блоки и пропущенные разбором — то, что
-      // `extends` унаследовать не может.
-      const partial = others.length > 0 || parsed.skipped.length > 0
-      ;(out[node.id] ??= {})[theme] = { selector: first.selector, tokens, values: first.tokens, partial }
-    }
-  }
-  return out
 }

@@ -16,8 +16,12 @@ function mk(id: string, dependencies: readonly (GranumProvider | string)[] = [])
 
 describe('expandProviders', () => {
   it('бросает UnsupportedContractVersionError при чужой версии контракта', () => {
-    const bad = { id: 'legacy', contractVersion: 2, components: [] } as unknown as GranumProvider
+    const bad = { id: 'future', contractVersion: 3, components: [] } as unknown as GranumProvider
     expect(() => expandProviders([bad])).toThrow(UnsupportedContractVersionError)
+    // Контракт 1 — только без тем: так читается спутник, которому темы не нужны.
+    const legacy = { id: 'legacy', contractVersion: 1, components: [{ name: 'X', themesDir: 'components/X/themes' }] } as unknown as GranumProvider
+    expect(() => expandProviders([legacy])).toThrow(UnsupportedContractVersionError)
+    expect(expandProviders([{ id: 'plain', contractVersion: 1, components: [] } as unknown as GranumProvider])).toHaveLength(1)
   })
 
   it('проверяет рукописный объект так же, как defineGranumProvider', () => {

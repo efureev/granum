@@ -1,7 +1,7 @@
 # `fixtures/mini-ds-package`
 
-Миниатюрная дизайн-система на контракте granum: две темы, базовые токены,
-глобальный слой и **два** компонента. Пакет намеренно маленький и намеренно
+Миниатюрная дизайн-система на контракте granum: тема `mini` с режимами
+`light` и `dark`, базовые токены, глобальный слой и **два** компонента. Пакет намеренно маленький и намеренно
 избыточный: его объявления шире того, что берёт любое приложение, и на этом
 разрыве стоит стенд [`apps/dist-audit`](../../apps/dist-audit/README.md).
 
@@ -11,14 +11,15 @@
 src/
   styles/tokens.css          --xxx-space-1, --xxx-space-2, --xxx-radius, --xxx-font-sm
   styles/base.css            сброс и типографика; объявлений токенов нет
-  styles/themes/light.css    :root — тема по умолчанию
-  styles/themes/dark.css     .dark, [data-theme="dark"]
+  styles/themes/mini.json    каталог из одной темы: режимы light (по умолчанию) и dark
   components/XxCard/         две утилиты + собственный styles.css
   components/XxBadge/        четыре утилиты, своего CSS нет
 ```
 
 Префикс токенов — `--xxx-*`. В раскладке `dist` пути темы лежат зеркально
-(`styles/tokens.css`), копирует их плагин сборки.
+(`styles/tokens.css`, `styles/themes/mini.json`), копирует их плагин сборки.
+Пакет — владелец каталога: `defaultTheme: 'mini'`, селекторы режимов назначает
+приложение (`data-theme="mini-dark"`).
 
 ## Мёртвый груз — часть фикстуры
 

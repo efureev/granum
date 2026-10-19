@@ -3,7 +3,7 @@
  * Единственное, что импортирует браузерный код провайдера. Без `node:`,
  * без внешних зависимостей, хелперы чисты.
  */
-import type { GranumComponentDependency, GranumComponentDescriptor, GranumProvider, GranumTokenRef, GranumTokenSet } from './types'
+import type { GranumComponentDependency, GranumComponentDescriptor, GranumProvider } from './types'
 import { assertComponentDescriptor, validateProvider } from './validate'
 
 export type * from './manifest'
@@ -29,16 +29,15 @@ export interface DefineGranumComponentOptions<Name extends string = string> {
   readonly dynamicTokens?: readonly string[]
   /** Пути относительно `config.ts`: `'./styles.css'`, `'./css/extra.css'`. */
   readonly cssFiles?: readonly string[]
-  readonly tokenDefinitions?: Readonly<Record<string, GranumTokenSet>>
-  /** Ссылки на CSS с токенами; строка — сокращение для `{ url }`. */
-  readonly tokenDefinitionsRef?: Readonly<Record<string, GranumTokenRef | string>>
+  /** Папка токенов компонента по темам относительно `config.ts`: `'./themes'`. */
+  readonly themesDir?: string
   readonly group?: string
 }
 
 /**
- * Создаёт дескриптор компонента: `cssFiles` нормализуются к путям
- * относительно корня раскладки (`components/<Name>/<file>`), ссылки на токены
- * получают абсолютный `url`, исходное расположение сохраняется в `sourceUrl`.
+ * Создаёт дескриптор компонента: `cssFiles` и `themesDir` нормализуются к путям
+ * относительно корня раскладки (`components/<Name>/<file>`), исходное
+ * расположение сохраняется в `sourceUrl`.
  *
  * Хелпер чистый, и бандлер вправе выбросить вызов, чей результат не нужен:
  * дескриптор, реэкспортированный из entry компонента, клиенту приложения обычно
@@ -60,12 +59,13 @@ export function defineGranumComponent<Name extends string>(
     safelist: [...(options.safelist ?? [])],
     dynamicTokens: [...(options.dynamicTokens ?? [])],
     cssFiles: (options.cssFiles ?? []).map(file => componentRelativePath(options.name, file)),
-    ...(options.tokenDefinitions ? { tokenDefinitions: options.tokenDefinitions } : {}),
-    ...(options.tokenDefinitionsRef
-      ? { tokenDefinitionsRef: resolveTokenRefs(options.tokenDefinitionsRef, importMetaUrl) }
-      : {}),
+    ...(options.themesDir !== undefined ? { themesDir: componentRelativePath(options.name, options.themesDir, 'themesDir') } : {}),
     ...(options.group ? { group: options.group } : {}),
     sourceUrl: importMetaUrl,
+  }
+  for (const key of ['tokenDefinitions', 'tokenDefinitionsRef']) {
+    if ((options as unknown as Record<string, unknown>)[key] !== undefined)
+      assertComponentDescriptor({ ...descriptor, [key]: (options as unknown as Record<string, unknown>)[key] } as GranumComponentDescriptor<Name>)
   }
   assertComponentDescriptor(descriptor)
   return descriptor
@@ -75,35 +75,22 @@ export function defineGranumComponent<Name extends string>(
  * `./styles.css` → `components/<Name>/styles.css`. Путь, выходящий за
  * директорию компонента, отклоняется: в раскладке ему негде лежать.
  */
-function componentRelativePath(name: string, file: string): string {
+function componentRelativePath(name: string, file: string, field: 'cssFiles' | 'themesDir' = 'cssFiles'): string {
   const segments: string[] = []
   for (const segment of file.replace(/\\/g, '/').split('/')) {
     if (segment === '' || segment === '.')
       continue
     if (segment === '..') {
       if (segments.length === 0)
-        throw new TypeError(`defineGranumComponent: cssFiles entry '${file}' escapes 'components/${name}/'`)
+        throw new TypeError(`defineGranumComponent: ${field} entry '${file}' escapes 'components/${name}/'`)
       segments.pop()
       continue
     }
     segments.push(segment)
   }
   if (segments.length === 0)
-    throw new TypeError(`defineGranumComponent: cssFiles entry '${file}' is not a file path`)
+    throw new TypeError(`defineGranumComponent: ${field} entry '${file}' is not a path inside the component`)
   return `components/${name}/${segments.join('/')}`
-}
-
-/** Приводит ссылки к объектной форме с абсолютным `url`. */
-export function resolveTokenRefs(
-  refs: Readonly<Record<string, GranumTokenRef | string>>,
-  importMetaUrl: string,
-): Record<string, GranumTokenRef> {
-  return Object.fromEntries(
-    Object.entries(refs).map(([theme, ref]) => {
-      const normalized: GranumTokenRef = typeof ref === 'string' ? { url: ref } : ref
-      return [theme, { ...normalized, url: new URL(normalized.url, importMetaUrl).href }]
-    }),
-  )
 }
 
 /**

@@ -1,0 +1,17 @@
+{
+  "name": "@granum-fixtures/themes",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Theme owner without components: token registry, a catalog of two themes with modes, theme-independent formulas.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./themes/*": "./dist/themes/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs"
+  }
+}

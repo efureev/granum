@@ -3,8 +3,8 @@
  * — browser-safe; загрузка и валидация формы — в `./vite` и `./node`.
  */
 import type { GranumProviderInput } from './contract'
-import type { GranumThemesInput } from './core/resolve'
 import type { ComponentSelection } from './core/resolveSelection'
+import type { GranumModesInput, GranumThemeChoice } from './core/resolveThemes'
 import type { GranumEngine } from './engine/types'
 
 export type GranumPruneMode = 'off' | 'report' | 'on'
@@ -81,7 +81,16 @@ export interface GranumConfig {
   readonly providers: readonly (string | GranumProviderInput)[]
   /** `'all'`, список или `'imports'` — по импортам в `appSources`. По умолчанию `'all'`. */
   readonly components?: ComponentSelection | 'imports'
-  readonly themes?: GranumThemesInput
+  /**
+   * Активная тема — одна на сборку: id каталога владельца тем (`'slate'`),
+   * квалифицированный id (`'@acme/tokens:slate'`) или тема-объект приложения.
+   * По умолчанию — `defaultTheme` владельца каталога.
+   */
+  readonly theme?: GranumThemeChoice
+  /** Темы для показа рядом с активной полными блоками пар — дизайн-система, портал. */
+  readonly previews?: readonly GranumThemeChoice[]
+  /** Режимы активной темы: набор, режимы приложения, активация, точечные значения. */
+  readonly modes?: GranumModesInput
   /**
    * Движок утилит — инстанс, а не имя и не опции. Выбор реализации и её
    * настройка принадлежат приложению: `windEngine()` из

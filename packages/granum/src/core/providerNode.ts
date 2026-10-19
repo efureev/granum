@@ -4,26 +4,35 @@
  */
 import type {
   GranumComponentDependency,
+  GranumComponentThemeTokens,
   GranumEngineContribution,
   GranumLoadedManifest,
   GranumManifestEngine,
   GranumProvider,
   GranumProviderInput,
-  GranumTokenRef,
-  GranumTokenSet,
 } from '../contract'
 import { isLoadedManifest } from '../contract/manifest'
 
 export type ProviderForm = 'object' | 'manifest'
 
+/** Запись каталога тем. `modes`/`defaultMode` — индекс манифеста; у объектной формы их нет до чтения данных. */
+export interface ThemeCatalogNode {
+  readonly title: string
+  readonly description?: string
+  readonly docs?: string
+  readonly extends?: string
+  /** Путь к JSON данных темы относительно базы провайдера. */
+  readonly data: string
+  readonly modes?: readonly string[]
+  readonly defaultMode?: string
+}
+
 export interface ThemeNode {
   readonly baseCss?: string
   readonly tokensCss?: string
-  readonly themes: Readonly<Record<string, string>>
-  readonly defaultThemes: readonly string[]
-  readonly tokenDefinitions: Readonly<Record<string, GranumTokenSet>>
-  /** Только у объектной формы: манифест приходит уже материализованным. */
-  readonly tokenDefinitionsRef: Readonly<Record<string, GranumTokenRef | string>>
+  readonly registry?: string
+  readonly defaultTheme?: string
+  readonly catalog: Readonly<Record<string, ThemeCatalogNode>>
   /** Только у манифеста: объявленные токены, с `--`. */
   readonly declares: readonly string[]
 }
@@ -37,8 +46,15 @@ export interface ComponentNode {
   readonly classes: readonly string[]
   /** CSS компонента: пути относительно базы провайдера, в порядке эмиссии. */
   readonly css: readonly string[]
-  readonly tokenDefinitions: Readonly<Record<string, GranumTokenSet>>
-  readonly tokenDefinitionsRef: Readonly<Record<string, GranumTokenRef>>
+  /**
+   * Токены компонента по темам. У манифеста — материализованные сборкой; у
+   * объектной формы — те, что прочитал node-слой из `themesDir` (до чтения пусто).
+   */
+  readonly themeTokens: Readonly<Record<string, GranumComponentThemeTokens>>
+  /** Папка токенов по темам — только у объектной формы, путь от корня раскладки. */
+  readonly themesDir?: string
+  /** `import.meta.url` конфига компонента — только у объектной формы. */
+  readonly sourceUrl?: string
   readonly consumesTokens: readonly string[]
   /**
    * Подмножество `consumesTokens`, значение которого обязан дать кто-то извне.
@@ -94,8 +110,9 @@ function fromObject(provider: GranumProvider): ProviderNode {
       safelist: descriptor.safelist ?? EMPTY,
       classes: EMPTY,
       css: descriptor.cssFiles ?? EMPTY,
-      tokenDefinitions: descriptor.tokenDefinitions ?? EMPTY_RECORD,
-      tokenDefinitionsRef: descriptor.tokenDefinitionsRef ?? EMPTY_RECORD,
+      themeTokens: EMPTY_RECORD,
+      ...(descriptor.themesDir !== undefined ? { themesDir: descriptor.themesDir } : {}),
+      ...(descriptor.sourceUrl !== undefined ? { sourceUrl: descriptor.sourceUrl } : {}),
       consumesTokens: EMPTY,
       requiresTokens: EMPTY,
       dynamicTokens: descriptor.dynamicTokens ?? EMPTY,
@@ -104,10 +121,9 @@ function fromObject(provider: GranumProvider): ProviderNode {
     theme: {
       ...(theme?.baseCss !== undefined ? { baseCss: theme.baseCss } : {}),
       ...(theme?.tokensCss !== undefined ? { tokensCss: theme.tokensCss } : {}),
-      themes: theme?.themes ?? EMPTY_RECORD,
-      defaultThemes: theme?.defaultThemes ?? EMPTY,
-      tokenDefinitions: theme?.tokenDefinitions ?? EMPTY_RECORD,
-      tokenDefinitionsRef: theme?.tokenDefinitionsRef ?? EMPTY_RECORD,
+      ...(theme?.registry !== undefined ? { registry: theme.registry } : {}),
+      ...(theme?.defaultTheme !== undefined ? { defaultTheme: theme.defaultTheme } : {}),
+      catalog: theme?.catalog ?? EMPTY_RECORD,
       declares: EMPTY,
     },
     engine: provider.engine,
@@ -135,8 +151,7 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
       safelist: component.safelist,
       classes: component.classes,
       css: component.css,
-      tokenDefinitions: component.tokens.declares,
-      tokenDefinitionsRef: EMPTY_RECORD,
+      themeTokens: component.tokens.themes ?? EMPTY_RECORD,
       consumesTokens: component.tokens.consumes,
       requiresTokens: component.tokens.requires ?? component.tokens.consumes,
       dynamicTokens: component.tokens.dynamic,
@@ -145,11 +160,10 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
     theme: {
       ...(manifest.theme.baseCss !== undefined ? { baseCss: manifest.theme.baseCss } : {}),
       ...(manifest.theme.tokensCss !== undefined ? { tokensCss: manifest.theme.tokensCss } : {}),
-      themes: manifest.theme.themes,
-      defaultThemes: manifest.theme.defaultThemes,
-      tokenDefinitions: manifest.theme.tokenDefinitions,
-      tokenDefinitionsRef: EMPTY_RECORD,
-      declares: manifest.theme.declares,
+      ...(manifest.theme.registry !== undefined ? { registry: manifest.theme.registry } : {}),
+      ...(manifest.theme.defaultTheme !== undefined ? { defaultTheme: manifest.theme.defaultTheme } : {}),
+      catalog: manifest.theme.catalog ?? EMPTY_RECORD,
+      declares: manifest.theme.declares ?? EMPTY,
     },
     engine: undefined,
     engineArtifact: manifest.engine,
@@ -201,20 +215,7 @@ export function uniqueDeclarers(providers: readonly ProviderNode[]): ReadonlyMap
   return out
 }
 
-/** Все имена тем, для которых у провайдера есть хоть какой-то вклад (уровень пакета и компонентов). */
-export function suppliedThemeNames(node: ProviderNode): Set<string> {
-  const names = new Set<string>()
-  for (const name of Object.keys(node.theme.themes))
-    names.add(name)
-  for (const name of Object.keys(node.theme.tokenDefinitions))
-    names.add(name)
-  for (const name of Object.keys(node.theme.tokenDefinitionsRef))
-    names.add(name)
-  for (const component of node.components) {
-    for (const name of Object.keys(component.tokenDefinitions))
-      names.add(name)
-    for (const name of Object.keys(component.tokenDefinitionsRef))
-      names.add(name)
-  }
-  return names
+/** Провайдер — владелец каталога тем: объявляет хоть одну тему. */
+export function ownsThemes(node: ProviderNode): boolean {
+  return Object.keys(node.theme.catalog).length > 0
 }

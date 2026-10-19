@@ -1,0 +1,25 @@
+{
+  "name": "@granum-fixtures/themed-ds",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Components on top of another provider's themes: per-theme component tokens in themesDir, the theme owner as a string dependency.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/TdBadge": "./dist/components/TdBadge/index.js",
+    "./components/TdButton": "./dist/components/TdButton/index.js",
+    "./components/TdCard": "./dist/components/TdCard/index.js"
+  },
+  "dependencies": {
+    "@granum-fixtures/themes": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=Td --exports=import"
+  }
+}

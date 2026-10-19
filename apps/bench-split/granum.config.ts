@@ -4,7 +4,7 @@ import { windEngine } from '@feugene/granum-engine-wind'
 /**
  * Стенд разделения CSS по слоям (`css.split`).
  *
- * Набор намеренно совпадает с `bench-one`: тот же компонент, те же две темы, тот
+ * Набор намеренно совпадает с `bench-one`: тот же компонент, те же два режима, тот
  * же фундамент. Отличие ровно одно — `css.split: true`, — и поэтому разницу в
  * дистрибутиве можно приписать опции, а не составу.
  *
@@ -16,7 +16,7 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/heavy'],
   components: ['@granum-fixtures/heavy:XhPanel'],
-  themes: { names: ['light', 'dark'] },
+  modes: { names: ['light', 'dark'] },
   appSources: { dirs: ['src'] },
   css: { split: true },
 })
