@@ -150,6 +150,35 @@ describe('override по селектору и `strictTokens` у темы-фай�
   })
 })
 
+describe('тема-файл под `:root`', () => {
+  const rootLight = `:root {\n  --p-bg: #ffffff;\n  --p-primary: #2563eb;\n}\n`
+
+  it('override — в слое themes после файла, а не в слое tokens', async () => {
+    const { root, provider } = fileThemeProvider({ light: rootLight })
+    const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'p-bg': '#fafafa' } } } }, root)
+    const { css, at } = await themesLayer(app)
+    expect((await emitCss(app)).layers.tokens).not.toContain('#fafafa')
+    expect(blockOf(css, '--p-bg: #fafafa')).toMatch(/^:root \{/)
+    expect(at('--p-bg: #fafafa')).toBeGreaterThan(at('--p-bg: #ffffff'))
+    expect(at('--p-bg: #fafafa')).toBeLessThan(at('--p-bg: #0f172a'))
+    expect(resolveTokenValue(app.resolution, 'light', 'p-bg')).toBe('#fafafa')
+  })
+
+  it('`define` темы без `extends` — туда же', async () => {
+    const { root, provider } = fileThemeProvider({ light: rootLight })
+    const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'], define: { light: { tokens: { 'p-primary': '#1d4ed8' } } } } }, root)
+    const { at } = await themesLayer(app)
+    expect((await emitCss(app)).layers.tokens).not.toContain('#1d4ed8')
+    expect(at('--p-primary: #1d4ed8')).toBeGreaterThan(at('--p-primary: #2563eb'))
+  })
+
+  it('блок `:root` темы, чей файл под другим селектором, остаётся в слое tokens', async () => {
+    const { root, provider } = fileThemeProvider()
+    const app = await prepareTestApp({ providers: [provider], components: ['@p/ds:Plain'], themes: { names: ['light', 'dark'], tokenOverrides: { light: { ':root': { 'p-gap': '4px' } } } } }, root)
+    expect((await emitCss(app)).layers.tokens).toContain('--p-gap: 4px')
+  })
+})
+
 describe('факты о файле темы читает подготовка', () => {
   it('провайдер объектной формы: селектор файла берётся по его `baseUrl`', async () => {
     const { root, dist } = fileThemeProvider()

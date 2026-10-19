@@ -35,6 +35,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
+import { resolveTokenValue } from '@feugene/granum'
 import { emitCss, getThemeManifest, prepareApp } from '@feugene/granum/node'
 import { windEngine } from '@feugene/granum-engine-wind'
 import { chromium } from 'playwright'
@@ -293,6 +294,21 @@ try {
   const [oceanBg, oceanFg] = await oceanPage.evaluate(() => ['--xxx-bg', '--xxx-fg'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim()))
   check(oceanBg === '#0b1120', `тема приложения ocean унаследовала --xxx-bg из dark.css: ${oceanBg}`)
   check(oceanFg === OCEAN_FG, `тема приложения ocean перекрыла --xxx-fg своим значением: ${oceanFg}`)
+
+  // Тема-файл под `:root`: override светлой темы обязан победить файл. В слое
+  // tokens он проигрывал бы файлу, а `granum tokens` называл бы его значение.
+  const ROOT_OVERRIDE = '#123456'
+  const rootApp = await prepareApp({
+    engine: windEngine(),
+    providers: ['@granum-fixtures/heavy'],
+    themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': ROOT_OVERRIDE } } },
+  }, fileURLToPath(new URL('../apps/app-components/', import.meta.url)))
+  const rootPage = await browser.newPage()
+  await rootPage.setContent(`<!doctype html><html><head><style>${(await emitCss(rootApp)).css}</style></head><body></body></html>`)
+  const rootAccent = await rootPage.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--xh-accent').trim())
+  const rootReported = resolveTokenValue(rootApp.resolution, 'light', 'xh-accent')
+  check(rootAccent === ROOT_OVERRIDE, `тема-файл под :root: override светлой темы действует в браузере: ${rootAccent}`)
+  check(rootReported === rootAccent, `тема-файл под :root: granum tokens называет то же значение: ${rootReported}`)
 }
 catch (error) {
   failures.push(`каскад тем: прогон упал: ${error?.message ?? error}`)
@@ -301,7 +317,7 @@ finally {
   await browser?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема-файл mini-ds)\n  ${steps.join('\n  ')}\n`)
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, темы-файлы mini-ds и heavy)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
   ? '✓ слои, HMR и темы-файлы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)

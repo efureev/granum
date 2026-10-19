@@ -10,6 +10,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { extractLayerBlocks } from '@feugene/granum/node'
 import { auditFailure } from './audit-dist.mjs'
 
 const dir = process.cwd()
@@ -22,19 +23,28 @@ const read = ext => readdirSync(assetsDir).filter(f => f.endsWith(ext)).map(f =>
 const expected = (await import(pathToFileURL(join(dir, 'expected.mjs')).href)).default
 const failures = []
 
-function match(haystack, { present = [], absent = [] }, field) {
+/**
+ * `layer` у ожидания сужает поиск до блоков `@layer granum.<layer>` собранного
+ * CSS: «значение в слое themes» и «значение где-то в CSS» — разные утверждения,
+ * и слой решает, победит ли значение в каскаде.
+ */
+function match(haystack, { present = [], absent = [] }, field, layers) {
+  const where = item => (item.layer === undefined ? haystack : layers?.get(item.layer) ?? '')
+  const label = item => (item.layer === undefined ? item.what : `${item.what} (слой ${item.layer})`)
   for (const item of present) {
-    if (!haystack.includes(item[field]))
-      failures.push(`ОЖИДАЛОСЬ, но нет: ${item.what}\n      искали: ${JSON.stringify(item[field])}`)
+    if (!where(item).includes(item[field]))
+      failures.push(`ОЖИДАЛОСЬ, но нет: ${label(item)}\n      искали: ${JSON.stringify(item[field])}`)
   }
   for (const item of absent) {
-    if (haystack.includes(item[field]))
-      failures.push(`НЕ ДОЛЖНО БЫТЬ, но есть: ${item.what}\n      нашли: ${JSON.stringify(item[field])}`)
+    if (where(item).includes(item[field]))
+      failures.push(`НЕ ДОЛЖНО БЫТЬ, но есть: ${label(item)}\n      нашли: ${JSON.stringify(item[field])}`)
   }
 }
 
-if (expected.css)
-  match(read('.css'), expected.css, 'css')
+if (expected.css) {
+  const css = read('.css')
+  match(css, expected.css, 'css', extractLayerBlocks(css, 'granum').blocks)
+}
 if (expected.js)
   match(read('.js'), expected.js, 'js')
 if (expected.report) {
