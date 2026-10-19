@@ -1,7 +1,7 @@
 {
   "name": "@feugene/granum-engine-wind",
   "description": "Utility engine for @feugene/granum: a vendored fork of the UnoCSS core with preset-wind3, exposed as a GranumEngine instance with an explicit dialect and vocabulary fingerprint.",
-  "version": "3.0.0-next.1",
+  "version": "3.0.0-next.2",
   "license": "MIT",
   "author": {
     "name": "Evgeniy Fureev",
@@ -49,11 +49,11 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@feugene/granum": "^3.0.0-next.1"
+    "@feugene/granum": "^3.0.0-next.2"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.1.0",
-    "@feugene/granum": "3.0.0-next.1",
+    "@feugene/granum": "3.0.0-next.2",
     "@types/node": "^26.1.1",
     "@unocss/core": "66.7.5",
     "@unocss/extractor-arbitrary-variants": "66.7.5",
