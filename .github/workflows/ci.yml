@@ -192,15 +192,25 @@ jobs:
         with:
           name: granum-engine-wind-dist
           path: packages/granum-engine-wind/dist
+      # Предрелиз (`v3.0.0-next.1`) уходит под тегом `next`: без `--tag` npm ставит
+      # любую публикацию в `latest`, и `npm install @feugene/granum` без версии
+      # поставил бы предрелиз всем.
+      - name: Resolve npm dist-tag
+        id: dist-tag
+        run: |
+          case "${GITHUB_REF_NAME#v}" in
+            *-*) echo "tag=next" >> "$GITHUB_OUTPUT" ;;
+            *) echo "tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
       # Ядро первым: движок ссылается на него как на peer, и порядок публикации
       # определяет, что увидит потребитель, поставивший пару сразу после релиза.
       - name: Publish core to npm
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag "${{ steps.dist-tag.outputs.tag }}"
         working-directory: packages/granum
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish engine to npm
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag "${{ steps.dist-tag.outputs.tag }}"
         working-directory: packages/granum-engine-wind
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
