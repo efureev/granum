@@ -11,7 +11,7 @@ export {
   type GranumThemeStorage,
   type GranumThemeTarget,
 } from './runtime/controller'
-export { type GranumModeEntry, type GranumThemeManifest, resolveThemeActivation } from './runtime/manifest'
+export { type GranumModeEntry, type GranumPreviewEntry, type GranumThemeManifest, resolveThemeActivation, themeModeValue } from './runtime/manifest'
 export {
   createCookieStorage,
   createThemeScript,

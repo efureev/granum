@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { getThemeManifest } from '../node/themeManifest'
-import { createCookieStorage, createThemeController, createThemeScript, modeFromCookie, resolveThemeActivation, themeRootAttributes } from '../runtime'
+import { createCookieStorage, createThemeController, createThemeScript, modeFromCookie, resolveThemeActivation, themeModeValue, themeRootAttributes } from '../runtime'
 import { INK, makeManifest, PAPER } from './helpers'
 
 function createTarget(initial?: Record<string, string>): GranumThemeTarget & { attributes: Map<string, string>, writes: number } {
@@ -56,8 +56,20 @@ describe('getThemeManifest — из той же резолюции, что и CS
     expect(manifest.modes.map(m => `${m.name}:${m.value}:${m.colorScheme}`)).toEqual(['light:ink-light:light', 'dark:ink-dark:dark', 'dim:ink-dim:dark', 'sepia:ink-sepia:light'])
     expect(manifest.modes[3]!.title).toBe('Сепия')
     expect(manifest.defaultMode).toBe('light')
-    expect(manifest.activation).toEqual({ attribute: 'data-theme' })
+    expect(manifest.activation).toEqual({ attribute: 'data-theme', value: '{theme}-{mode}' })
+    expect(manifest.previews).toBeUndefined()
     expect(manifest.extensions).toEqual({ granularity: { componentDefaults: { Button: { size: 'm' } } } })
+  })
+
+  it('превью — темы с парами по шаблону сборки', () => {
+    const manifest = getThemeManifest(resolve({ theme: 'ink', previews: ['paper'], modes: { activation: { attribute: 'data-look', value: '{mode}@{theme}' } } }))
+    expect(manifest.activation).toEqual({ attribute: 'data-look', value: '{mode}@{theme}' })
+    expect(manifest.previews).toEqual([{ theme: { id: 'paper', title: 'Бумага' }, modes: [
+      { name: 'light', colorScheme: 'light', value: 'light@paper' },
+      { name: 'dark', colorScheme: 'dark', value: 'dark@paper' },
+    ] }])
+    expect(themeModeValue(manifest, 'dark', 'paper')).toBe('dark@paper')
+    expect(themeModeValue(manifest, 'dim')).toBe('dim@ink')
   })
 
   it('от селекции компонентов не зависит', () => {
@@ -75,6 +87,14 @@ describe('resolveThemeActivation — пара обратно в режим (RT-5
     expect(resolveThemeActivation(MANIFEST, 'ink-dim')?.name).toBe('dim')
     expect(resolveThemeActivation(MANIFEST, 'paper-dark')).toBeUndefined()
     expect(resolveThemeActivation(MANIFEST, null)).toBeUndefined()
+  })
+})
+
+describe('themeModeValue — пара для острова или превью', () => {
+  it('режим активной темы; темы и режима вне сборки — undefined', () => {
+    expect(themeModeValue(MANIFEST, 'dim')).toBe('ink-dim')
+    expect(themeModeValue(MANIFEST, 'sepia')).toBeUndefined()
+    expect(themeModeValue(MANIFEST, 'dark', 'paper')).toBeUndefined()
   })
 })
 
@@ -110,6 +130,27 @@ describe('createThemeController (RT-1)', () => {
     const themes = createThemeController(MANIFEST, { target, storage: memoryStorage({ 'granum-theme': 'dim' }) })
     expect(themes.mode).toBe('dark')
     expect(target.writes).toBe(0)
+  })
+
+  it('setMode с persist: false применяет режим, но выбор не запоминает', () => {
+    const target = createTarget()
+    const storage = memoryStorage({ 'granum-theme': 'dim' })
+    const themes = createThemeController(MANIFEST, { target, storage, initial: 'light' })
+    themes.setMode('dark', { persist: false })
+    expect(themes.mode).toBe('dark')
+    expect(target.attributes.get('data-theme')).toBe('ink-dark')
+    expect(storage.data.get('granum-theme')).toBe('dim')
+  })
+
+  it('хранилище, бросающее на чтении и записи, не роняет контроллер', () => {
+    const storage: GranumThemeStorage = {
+      getItem: () => { throw new Error('SecurityError') },
+      setItem: () => { throw new Error('QuotaExceededError') },
+    }
+    const themes = createThemeController(MANIFEST, { target: createTarget(), storage, prefersDark: () => true })
+    expect(themes.mode).toBe('dark')
+    themes.setMode('dim')
+    expect(themes.mode).toBe('dim')
   })
 
   it('ошибки: неизвестный режим, пустой манифест', () => {

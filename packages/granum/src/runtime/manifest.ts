@@ -20,13 +20,25 @@ export interface GranumModeEntry {
   readonly value: string
 }
 
+/** Тема превью (A-32): её пары есть в CSS сборки, но корень она не занимает. */
+export interface GranumPreviewEntry {
+  readonly theme: { readonly id: string, readonly title: string }
+  readonly modes: readonly GranumModeEntry[]
+}
+
 export interface GranumThemeManifest {
   /** Активная тема сборки: только чтение, рантайм её не меняет. */
   readonly theme: { readonly id: string, readonly title: string }
   /** Режимы в порядке блоков CSS: режим по умолчанию первым. */
   readonly modes: readonly GranumModeEntry[]
   readonly defaultMode: string
-  readonly activation: { readonly attribute: string }
+  /**
+   * `value` — шаблон пары с `{theme}` и `{mode}` (`modes.activation.value`).
+   * Манифест, собранный руками, может его не нести: тогда `{theme}-{mode}`.
+   */
+  readonly activation: { readonly attribute: string, readonly value?: string }
+  /** Темы превью в порядке конфига; без превью поля нет. */
+  readonly previews?: readonly GranumPreviewEntry[]
   /** `extensions` данных темы как есть: granum их не интерпретирует. */
   readonly extensions?: Readonly<Record<string, unknown>>
 }
@@ -39,4 +51,16 @@ export function resolveThemeActivation(manifest: GranumThemeManifest, value: str
   if (value === null || value === undefined)
     return undefined
   return manifest.modes.find(mode => mode.value === value)
+}
+
+/**
+ * Пара режима активной темы или темы превью — для острова (`mode`) или превью
+ * (`theme`) на поддереве. `undefined`, если такой пары в CSS сборки нет:
+ * собранное по шаблону значение не совпало бы ни с одним селектором молча.
+ */
+export function themeModeValue(manifest: GranumThemeManifest, mode: string, theme: string = manifest.theme.id): string | undefined {
+  const modes = theme === manifest.theme.id
+    ? manifest.modes
+    : manifest.previews?.find(preview => preview.theme.id === theme)?.modes
+  return modes?.find(entry => entry.name === mode)?.value
 }

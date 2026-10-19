@@ -50,8 +50,13 @@ export interface GranumThemeController {
   readonly mode: string
   /** Режимы в порядке манифеста. */
   modes: () => readonly GranumModeEntry[]
-  /** Переключить режим: атрибут на корне + сохранение + уведомление подписчиков. */
-  setMode: (name: string) => void
+  /**
+   * Переключить режим: атрибут на корне + сохранение + уведомление подписчиков.
+   * `persist: false` — применить без записи в хранилище: режим вслед за
+   * системной схемой или за сменой в другой вкладке не должен становиться
+   * выбором пользователя.
+   */
+  setMode: (name: string, options?: { readonly persist?: boolean }) => void
   /** Следующий режим по кругу — удобно для одной кнопки. */
   cycle: () => string
   /** Подписка на смену режима. Возвращает функцию отписки. */
@@ -127,6 +132,23 @@ export function createThemeController(
     target?.setAttribute(attribute, entry(name).value)
   }
 
+  // Хранилище бросает и на записи (Safari в приватном режиме, квота): выбор
+  // тогда просто не запоминается.
+  const readStored = (): string | null => {
+    try {
+      return storage?.getItem(storageKey) ?? null
+    }
+    catch {
+      return null
+    }
+  }
+  const writeStored = (name: string): void => {
+    try {
+      storage?.setItem(storageKey, name)
+    }
+    catch {}
+  }
+
   const pickInitial = (): { name: string, applied: boolean } => {
     const requested = options.initial ?? 'auto'
     if (requested !== 'auto')
@@ -137,7 +159,7 @@ export function createThemeController(
     if (present)
       return { name: present.name, applied: true }
 
-    const stored = storage?.getItem(storageKey)
+    const stored = readStored()
     if (stored && byName.has(stored))
       return { name: stored, applied: false }
 
@@ -158,10 +180,11 @@ export function createThemeController(
     },
     modes: () => manifest.modes,
 
-    setMode(name) {
+    setMode(name, setOptions) {
       apply(name)
       current = name
-      storage?.setItem(storageKey, name)
+      if (setOptions?.persist !== false)
+        writeStored(name)
       for (const listener of listeners)
         listener(name)
     },

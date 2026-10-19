@@ -73,27 +73,29 @@ interface ComponentSourceEntry {
 
 /**
  * Ядро granum — peer пакета провайдера, а не его содержимое: в сборку не
- * вклеивается. Кроме `./contract`: его хелперы встраиваются, иначе
- * дескриптор, реэкспортированный из entry компонента, тянул бы granum в рантайм
- * и SSR с внешними пакетами падал бы без него.
+ * вклеивается. Кроме `./contract` и `./runtime`: они без зависимостей и
+ * безопасны для браузера, а внешним импортом дескриптор, реэкспортированный из
+ * entry компонента, или контроллер режимов библиотеки тянули бы granum в
+ * рантайм — и SSR с внешними пакетами падал бы без него.
  */
-const GRANUM_EXTERNAL = /^@feugene\/granum(?:\/(?!contract$).*)?$/
+const GRANUM_EXTERNAL = /^@feugene\/granum(?:\/(?!(?:contract|runtime)$).*)?$/
 const GRANUM_CONTRACT = '@feugene/granum/contract'
+const GRANUM_RUNTIME = '@feugene/granum/runtime'
 /** Любая точка входа granum в импортах `dist`. */
 const GRANUM_PACKAGE = /^@feugene\/granum(?:\/|$)/
 
 /**
- * Точка входа `./contract` того granum, что собирает провайдер, и каталог его
- * модулей. Встраивается свой контракт, а не найденный в `node_modules`
- * провайдера: так код в `dist` совпадает с `generatedBy` манифеста. Раскладок
- * две — исходники (тесты гоняют плагин из `src`) и собранный пакет
+ * Точки входа `./contract` и `./runtime` того granum, что собирает провайдер,
+ * и каталог его модулей. Встраивается свой код, а не найденный в
+ * `node_modules` провайдера: так `dist` совпадает с `generatedBy` манифеста.
+ * Раскладок две — исходники (тесты гоняют плагин из `src`) и собранный пакет
  * (`dist/build.js` рядом с `dist/contract.js`).
  */
-function ownContract(): { readonly entry: string, readonly dir: string } {
-  for (const [entry, dir] of [['./contract.js', './'], ['../contract/index.ts', '../']] as const) {
+function ownContract(): { readonly entry: string, readonly runtime: string, readonly dir: string } {
+  for (const [entry, runtime, dir] of [['./contract.js', './runtime.js', './'], ['../contract/index.ts', '../runtime.ts', '../']] as const) {
     const path = fileURLToPath(new URL(entry, import.meta.url))
     if (existsSync(path))
-      return { entry: path, dir: normalizePath(fileURLToPath(new URL(dir, import.meta.url))) }
+      return { entry: path, runtime: fileURLToPath(new URL(runtime, import.meta.url)), dir: normalizePath(fileURLToPath(new URL(dir, import.meta.url))) }
   }
   throw new Error(`granumProvider: cannot locate the @feugene/granum/contract module next to ${import.meta.url}`)
 }
@@ -249,12 +251,14 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
     },
 
-    // Свой контракт — раньше `vite:resolve`: тот нашёл бы granum в
+    // Свои контракт и рантайм — раньше `vite:resolve`: тот нашёл бы granum в
     // `node_modules` провайдера, а его может и не быть.
     resolveId: {
       order: 'pre',
       handler(source) {
-        return source === GRANUM_CONTRACT ? contract.entry : null
+        if (source === GRANUM_CONTRACT)
+          return contract.entry
+        return source === GRANUM_RUNTIME ? contract.runtime : null
       },
     },
 

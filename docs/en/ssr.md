@@ -45,22 +45,31 @@ manifest.modes
 ```
 
 If the browser picks the mode after hydration, the first frame is always wrong: the
-server sent one mode, the client immediately switched to another. So the decision is
-made on the server and written into the opening tag of the document — as a pair, for the
-default mode too: the client reads it back.
+server sent one mode, the client immediately switched to another. So when the server
+knows the user's choice, it writes the pair into the opening tag of the document, and
+the client reads it back.
 
 ```ts
 // src/entry-server.ts
 import { modeFromCookie, themeRootAttributes } from '@feugene/granum/runtime'
 
-const mode = modeFromCookie(manifest, request.headers.cookie)?.name ?? manifest.defaultMode
-const attrs = themeRootAttributes(manifest, mode)   // { 'data-theme': 'slate-dark' }
+const mode = modeFromCookie(manifest, request.headers.cookie)
+const attrs = mode ? themeRootAttributes(manifest, mode.name) : {}   // { 'data-theme': 'slate-dark' }
 ```
 
 The user's choice reaches the server in a cookie: on the client it is written by
 `createCookieStorage()`, the server reads it with `modeFromCookie`. A name that is not
 among the build's modes is never returned by `modeFromCookie`: no CSS blocks were emitted
-for it. Serve the default mode rather than a page without tokens.
+for it.
+
+Without the cookie the server does not know the choice — it may live in `localStorage`
+or follow the system scheme. Leave the root without a pair and put the script from the
+next section into `<head>`: it decides before the first frame. Do not set the default
+mode's pair "just in case": the script leaves a pair from the server alone, and the
+user's choice would be lost. Without the attribute the page still gets the default
+mode — its block is under `:root`. The default pair is right only when the markup itself
+depends on the mode and the choice is kept in the cookie alone, as in `apps/app-ssr`:
+then no cookie means no choice.
 
 ## Without a server: a script before the first frame
 

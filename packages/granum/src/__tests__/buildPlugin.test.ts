@@ -49,7 +49,7 @@ function makeFixture(options: {
   /** Дескрипторы в `config.ts` и реэкспорт из entry компонента — как фикстура heavy и ядро granularity. */
   runtimeConfig?: boolean
   /** Реэкспорт из другой точки входа granum в корне пакета — рантайм-зависимость от granum. */
-  runtimeImport?: boolean
+  rootImport?: boolean
   /** Поля `package.json` поверх стандартных (`peerDependencies` и т.п.). */
   packageJson?: Record<string, unknown>
   /** Имя пакета и id провайдера; по умолчанию `@t/kit`. */
@@ -58,7 +58,7 @@ function makeFixture(options: {
   catalog?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, runtimeImport = false, packageJson = {}, name = '@t/kit', catalog = true } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, rootImport = false, packageJson = {}, name = '@t/kit', catalog = true } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
@@ -71,7 +71,7 @@ function makeFixture(options: {
       : { '.': './dist/index.js' },
     ...packageJson,
   }))
-  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n${runtimeImport ? `export { createThemeController } from '@feugene/granum/runtime'\n` : ''}`)
+  write(root, 'src/index.ts', `export * from './components/Card/index.ts'\nexport * from './components/Panel/index.ts'\n${rootImport ? `export { defineGranumProvider } from '@feugene/granum'\n` : ''}`)
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-bg:#fff}\n@supports (x:1){:root{--t-fallback:1}}')
   write(root, 'src/themes/registry.json', JSON.stringify({ 't-bg': 'mode', 't-radius': 'root' }))
   write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: { 't-radius': '4px' }, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
@@ -428,9 +428,9 @@ describe('granumProvider с настоящим Vite', () => {
   })
 
   it('рантайм-импорт другой точки входа granum без peer — peer-missing; с peer — тишина', async () => {
-    const missing = await run(makeFixture({ runtimeImport: true }))
+    const missing = await run(makeFixture({ rootImport: true }))
     expect(missing.manifest.warnings).toContainEqual({ code: 'peer-missing', provider: '@feugene/granum' })
-    const declared = await run(makeFixture({ runtimeImport: true, packageJson: { peerDependencies: { '@feugene/granum': '^2.0.0' } } }))
+    const declared = await run(makeFixture({ rootImport: true, packageJson: { peerDependencies: { '@feugene/granum': '^2.0.0' } } }))
     expect(declared.manifest.warnings).not.toContainEqual(expect.objectContaining({ provider: '@feugene/granum' }))
   })
 
@@ -441,7 +441,7 @@ describe('granumProvider с настоящим Vite', () => {
    */
   it('external функцией: внешними остаются и имена пользователя, и @feugene/granum', async () => {
     const fixture = makeFixture()
-    writeFileSync(join(fixture.root, 'src/index.ts'), `${readFileSync(join(fixture.root, 'src/index.ts'), 'utf8')}export { createThemeController } from '@feugene/granum/runtime'\n`)
+    writeFileSync(join(fixture.root, 'src/index.ts'), `${readFileSync(join(fixture.root, 'src/index.ts'), 'utf8')}export { defineGranumProvider } from '@feugene/granum'\n`)
     await build({
       root: fixture.root,
       configFile: false,
@@ -451,7 +451,7 @@ describe('granumProvider с настоящим Vite', () => {
     })
     const dist = join(fixture.root, 'dist')
     expect(readManifestSync(join(dist, 'granum.manifest.json')).manifest.id).toBe(fixture.provider.id)
-    expect(readFileSync(join(dist, 'index.js'), 'utf8')).toContain('from "@feugene/granum/runtime"')
+    expect(readFileSync(join(dist, 'index.js'), 'utf8')).toContain('from "@feugene/granum"')
     const chunks = join(dist, 'components/Card/chunks')
     expect(readdirSync(chunks).map(f => readFileSync(join(chunks, f), 'utf8')).join('\n')).toContain('from "vue"')
   })
@@ -550,6 +550,17 @@ describe('встроенный контракт в dist провайдера', (
 
   it('node:-импорт в коде компонента ловится и с контрактом', async () => {
     await expect(run(makeFixture({ runtimeConfig: true, nodeImport: true }))).rejects.toBeInstanceOf(BoundaryViolationError)
+  })
+
+  it('рантайм режимов встраивается в чанк granum: dist без импортов granum и без peer-missing', async () => {
+    const fixture = makeFixture({ runtimeConfig: true })
+    write(fixture.root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\nexport { cardConfig } from './config.ts'\nexport { createThemeController } from '@feugene/granum/runtime'\n`)
+    const { dist, manifest } = await run(fixture)
+    expect(granumImports(dist)).toEqual([])
+    expect(readFileSync(join(dist, CONTRACT), 'utf8')).toContain('createThemeController: the manifest has no modes')
+    expect(importsOf(readFileSync(join(dist, CONTRACT), 'utf8'))).toEqual([])
+    expect(manifest.warnings).toEqual([])
+    expect(manifest.components.Card!.files.some(f => f.startsWith('granum/'))).toBe(false)
   })
 
   it('динамический импорт контракта встраивается в тот же чанк', async () => {
