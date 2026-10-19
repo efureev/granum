@@ -41,7 +41,7 @@ export {
   writeManifestSync,
 } from './node/manifest'
 export type { PreparedApp, PreparedWarning } from './node/prepare'
-export { loadProviderInputs, materializeAppModes, prepareApp, readPlannedThemeData, scanProviderInputs } from './node/prepare'
+export { loadProviderInputs, materializeAppModes, prepareApp, readComponentThemes, readPlannedThemeData, scanProviderInputs } from './node/prepare'
 export type { PruneCssResult } from './node/pruneCssDeclarations'
 export { pruneCssDeclarations } from './node/pruneCssDeclarations'
 export type { BuildReportOptions, GranumBuildReport, LayerSize } from './node/report'
@@ -59,6 +59,8 @@ export {
   readThemeDataFile,
 } from './node/themeFiles'
 export { getThemeManifest } from './node/themeManifest'
+export type { ThemeStylesheet, ThemeStylesheetOptions } from './node/themeStylesheet'
+export { emitThemeStylesheet } from './node/themeStylesheet'
 export type { PlanTokenPruneInput, PrunableSection, TokenKeepReason, TokenPrunePlan } from './node/tokenPrune'
 export { planTokenPrune } from './node/tokenPrune'
 export { extractTokenLiterals, extractTokenUses, scanTokenConsumption, unescapeCss } from './node/tokenScan'

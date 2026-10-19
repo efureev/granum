@@ -185,6 +185,26 @@ no `engine` block — its manifest carries `null` for both dialect and
 fingerprint, and any engine reads it without re-extraction. What follows for the
 application is in [engines and dialects](./engines-and-dialects.md).
 
+## A theme without granum
+
+An application without granum takes the theme as a ready stylesheet —
+`@scope/ds/themes/<id>.css`. Build it with `emitThemeStylesheet` from
+`@feugene/granum/node`: the `tokens`, `base` and `themes` layers by the same
+rules as an application build, with the theme tokens of all your components.
+Pass the provider object itself — its components are not scanned, the
+`themesDir` folders are read next to `config.ts`:
+
+```js
+import { emitThemeStylesheet } from '@feugene/granum/node'
+import { provider } from './src/granum-provider/index.ts'
+
+const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate', root: process.cwd() })
+```
+
+Tokens of companion packages are not in such a file: only an application build
+knows all the manifests. A `$`-prefixed key in a `themesDir` JSON file is a note
+for the reader (`"$comment"`), not a token.
+
 ## Build
 
 ```ts

@@ -67,13 +67,17 @@ function readTokenFile(providerId: string, componentName: string, scope: string,
   try {
     if (file.endsWith('.json')) {
       const raw = readJsonFile(file)
-      if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !Object.values(raw).every(v => typeof v === 'string'))
+      if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
         throw new TypeError('expected an object of "<token>": "<value>" strings')
-      for (const token of Object.keys(raw)) {
+      // Ключ с `$` — пояснение автора (`"$comment"`), а не токен: в JSON комментариев нет.
+      const tokens = Object.fromEntries(Object.entries(raw).filter(([key]) => !key.startsWith('$')))
+      if (!Object.values(tokens).every(v => typeof v === 'string'))
+        throw new TypeError('expected an object of "<token>": "<value>" strings')
+      for (const token of Object.keys(tokens)) {
         if (token.startsWith('--'))
           throw new InvalidTokenKeyError(providerId, token, scope, componentName)
       }
-      return raw as Record<string, string>
+      return tokens as Record<string, string>
     }
     const { blocks, skipped } = parseCssTokenBlocksFromText(readFileSync(file, 'utf8'))
     if (blocks.length !== 1 || skipped.length > 0) {

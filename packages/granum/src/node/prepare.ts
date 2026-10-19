@@ -277,7 +277,7 @@ export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], 
 }
 
 /** Токены `themesDir` объектных провайдеров, которых медленный путь не превратил в манифест. */
-function readComponentThemes(inputs: readonly GranumProviderInput[]): Record<string, Record<string, Record<string, GranumComponentThemeTokens>>> {
+export function readComponentThemes(inputs: readonly GranumProviderInput[]): Record<string, Record<string, Record<string, GranumComponentThemeTokens>>> {
   const out: Record<string, Record<string, Record<string, GranumComponentThemeTokens>>> = {}
   for (const input of inputs) {
     if (isLoadedManifest(input) || !input.components.some(component => component.themesDir !== undefined))

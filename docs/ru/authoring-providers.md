@@ -183,6 +183,26 @@ components/XhButton/themes/
 отпечаток равны `null`, и он читается любым движком без пересчёта. Что из этого
 следует приложению — в [движках и диалектах](./engines-and-dialects.md).
 
+## Тема без granum
+
+Приложение без granum берёт тему готовым листом —
+`@scope/ds/themes/<id>.css`. Соберите его `emitThemeStylesheet` из
+`@feugene/granum/node`: слои `tokens`, `base` и `themes` по тем же правилам, что у
+сборки приложения, с токенами тем всех ваших компонентов. Передайте сам объект
+провайдера — компоненты не сканируются, папки `themesDir` читаются рядом с
+`config.ts`:
+
+```js
+import { emitThemeStylesheet } from '@feugene/granum/node'
+import { provider } from './src/granum-provider/index.ts'
+
+const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate', root: process.cwd() })
+```
+
+Токенов пакетов-спутников в таком файле нет: все манифесты знает только сборка
+приложения. Ключ с `$` в JSON папки `themesDir` — пояснение для читателя
+(`"$comment"`), а не токен.
+
 ## Сборка
 
 ```ts
