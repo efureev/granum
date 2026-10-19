@@ -9,14 +9,16 @@
 
 ## 5. Контракт провайдера (`./contract`)
 
-Контракт granum версии **1**. Он наследует SPEC v1 §3–§6 с изменениями §15.2.
+Контракт granum версии **2**. Он наследует SPEC v1 §3–§6 с изменениями §15.2; от версии 1 отличается
+каталогом тем (§5.3), токенами компонентов по темам (§5.2, C-33…C-38) и подгрузкой донора по строковой
+зависимости (C-4, A-31).
 
 ### 5.1 `GranumProvider`
 
 ```ts
 interface GranumProvider {
   id: string                                   // npm-имя пакета
-  contractVersion: 1
+  contractVersion: 2
   components: readonly GranumComponentDescriptor[]
   theme?: GranumThemeContribution
   engine?: GranumEngineContribution            // словарь классов пакета и правила для движка
@@ -28,9 +30,9 @@ interface GranumProvider {
 | ID | Требование |
 |---|---|
 | C-1 | `id` MUST быть непустой строкой без пробелов, уникальной в графе приложения; MAY содержать `:` (разделитель ключа — последнее двоеточие, INV-SEL-1). |
-| C-2 | `contractVersion` MUST быть равен `1`; несовпадение, включая большее значение, — `UnsupportedContractVersionError` при регистрации. |
+| C-2 | `contractVersion` MUST быть равен `2`; `1` допустим только у провайдера без каталога тем и без токенов компонентов по темам — так читается манифест формата 2 спутника, которому смена контракта тем не нужна (M-11). Иное значение, включая большее, — `UnsupportedContractVersionError` при регистрации. |
 | C-3 | Имена компонентов внутри провайдера MUST быть уникальны и являться валидными сегментами пути: `/^[A-Za-z][\w-]*$/` (INV-CON-2, `InvalidComponentNameError`). |
-| C-4 | `dependencies`: объект-инстанс тянет донора в граф; строка — мягкое требование присутствия по `id` (SPEC v1 §3.2). Обе формы задают порядок графа: донор раньше зависящего независимо от порядка в `providers` (INV-SEL-2), цикл через любую из них — `CircularProviderDependencyError` (INV-SEL-3). Объявление зависимости MUST NOT выбирать компоненты донора. |
+| C-4 | `dependencies`: объект-инстанс тянет донора в граф; строка тянет донора, если разрешается как пакет с манифестом от каталога зависимого провайдера (A-31), иначе остаётся мягким требованием присутствия по `id` (SPEC v1 §3.2). Обе формы задают порядок графа: донор раньше зависящего независимо от порядка в `providers` (INV-SEL-2), цикл через любую из них — `CircularProviderDependencyError` (INV-SEL-3). Объявление зависимости MUST NOT выбирать компоненты донора. |
 | C-5 | Провайдер, ссылающийся на компоненты другого провайдера, MUST перечислить донора в `peerDependencies` (допустимы также `dependencies` и `optionalDependencies`). Сборка провайдера сверяет это с `package.json` и пишет в манифест предупреждение `peer-missing`. |
 | C-6 | `baseUrl`, если задан, MUST быть абсолютным URL с завершающим `/`. Провайдер MUST NOT вычислять его литералом `new URL('..', import.meta.url)` (бандлер подменяет на `data:`), а MUST использовать `resolvePackageBaseUrl`. Для манифестной формы поле не используется. |
 | C-7 | Поле `engine` MUST быть выражено в типах granum (`GranumRule`, `GranumVariant`, `GranumPreflight`), без импорта чужих пакетов. |
@@ -46,8 +48,7 @@ interface GranumComponentDescriptor {
   dependencies?: readonly GranumComponentDependency[]   // 'Name' | 'providerId:Name' | { provider, components }
   safelist?: readonly string[]
   cssFiles?: readonly string[]                          // после define*: `components/<Name>/<file>`, относительно корня раскладки
-  tokenDefinitions?: Readonly<Record<string, GranumTokenSet>>
-  tokenDefinitionsRef?: Readonly<Record<string, GranumTokenRef>>   // после define*: объект с абсолютным `url`
+  themesDir?: string                                    // токены компонента по темам: <dir>/<тема>/{root,modes/<режим>}.{json,css}
   dynamicTokens?: readonly string[]                     // токены, имена которых собираются в рантайме
   group?: string
   sourceUrl?: string                                    // `import.meta.url` модуля config.ts; нужен только сборке провайдера
@@ -60,27 +61,77 @@ interface GranumComponentDescriptor {
 | C-9 | `dependencies` MUST покрывать фактические импорты: если код компонента импортирует файл из директории другого компонента (напрямую или через общий чанк), тот MUST быть достижим из `dependencies`. Проверяется сборкой провайдера по графу модулей (не по тексту бандла, как в v1), нарушение — ошибка `undeclared-dependency` (INV-CON-5). |
 | C-10 | Общий код, который берут несколько компонентов, MUST лежать вне `components/<Name>/` — например в `components/shared/`; тогда он ребром графа не считается. Импорт файла ИЗ директории другого компонента ребро создаёт, даже если это константа или хелпер: на бандле хелпер от кода компонента не отличить (B-7). Объявлять такое ребро зависимостью SHOULD NOT — вместо этого общий модуль выносят, иначе компонент тянет чужой CSS и safelist. Импорт только типов (`import type`) до бандла не доживает и ребром не является. |
 | C-11 | Во вводе `defineGranumComponent` `cssFiles` — пути относительно `config.ts`; хелпер нормализует их к `components/<Name>/<file>` относительно корня раскладки и сохраняет `sourceUrl`, по которому сборка провайдера находит исходник. Путь, выходящий за директорию компонента, отклоняется: `defineGranumComponent` бросает `TypeError` (id провайдера в этот момент неизвестен), `validateProvider` — `InvalidProviderError` с `reason: 'css-file-escapes-component'`. Механизма `cssFileAssetNames` нет: в манифесте лежит один путь относительно манифеста (§15.2). |
-| C-12 | Ключи токенов в `tokenDefinitions` MUST NOT начинаться с `--`; префикс добавляет генератор. Ключ с `--` — ошибка регистрации `InvalidTokenKeyError` (в v1 было молчаливое `----x`). |
-| C-13 | `tokenDefinitionsRef` — ссылка на CSS, из которого токены читаются при сборке провайдера (а не приложения, как в v1) и материализуются в манифест. `strict` по умолчанию `true`. Значение токена берётся целиком — со строками, `url(…)` и скобками, внутри которых бывают `;` и `{}`; блоки с одним селектором объединяются, последнее объявление побеждает. Так же читается `themes.define[*].tokensRef` приложения. |
+| C-12 | Ключи токенов в данных тем, файлах токенов компонентов и конфиге MUST NOT начинаться с `--`; префикс добавляет генератор. Ключ с `--` — ошибка регистрации `InvalidTokenKeyError` у провайдера (в v1 было молчаливое `----x`) и `InvalidConfigError` с путём до поля у приложения. |
+| C-13 | CSS-файл токенов — файл компонента в `themesDir` (C-33) или `modes.define[*].tokensRef` приложения — читается на сборке строго: один плоский блок, другой селектор или вложенность — `TokenParseError`, а не пустой набор. Значение токена берётся целиком — со строками, `url(…)` и скобками, внутри которых бывают `;` и `{}`; повторное объявление — побеждает последнее. Файл компонента материализуется в манифест на сборке провайдера, приложению он не нужен. |
 | C-14 | `dynamicTokens` — имена (или префиксы с `*`) токенов, которые компонент читает в рантайме. Они MUST попадать в манифест отдельным полем `tokens.dynamic` (а не в `tokens.consumes`: источник у них другой, и это видно в диагностике) и MUST NOT удаляться обрезкой, пока компонент в селекции. |
 | C-15 | `group` включает сканирование `groups/<g>/shared/` при извлечении классов и учёт общих чанков в графе зависимостей. |
+| C-33 | `themesDir` — путь относительно `config.ts`; хелпер оставляет его путём (C-20), папку читает плагин сборки провайдера и материализует в манифест `components.<Name>.tokens.themes.<тема> = { root?, modes: { <режим>: tokens } }`. Файл значений — JSON `{ "<токен без -->": "<значение>" }` или CSS с одним плоским блоком `:root {}` (C-13); селектор файла игнорируется — селекторы назначает приложение (A-28, T-9). |
+| C-34 | Имя подпапки MUST быть id темы, имя файла режима — имя режима (C-24); `root` — режимонезависимые токены компонента. Нарушение — `InvalidProviderError('invalid-theme-dir')` на сборке провайдера. |
+| C-35 | Компонент MAY класть токены для темы чужого каталога (спутник — для темы дизайн-системы): применяются, когда эта тема активна (A-24). |
+| C-36 | Подпапка темы, которой нет ни в одном каталоге графа, — предупреждение резолюции `component-theme-unknown`, а не ошибка: спутник кладёт токены для тем, о которых приложение может не знать. |
+| C-37 | Токены компонента, одинаковые для всех тем, задаются значением по умолчанию в `var(--x, …)` или файлами базовой темы, от которой наследуют остальные (C-27): отдельной «темы для всех» в контракте нет. |
+| C-38 | `tokenDefinitions` и `tokenDefinitionsRef` дескриптора удалены: их место — `themesDir`. Дескриптор с ними — `InvalidProviderError('legacy-token-definitions')` с подсказкой. |
 
 ### 5.3 Темы и токены
 
-Наследуются SPEC v1 §6 целиком: именование без `--` (C-12), порядок определения
-активного набора тем (INV-THM-1), приоритет слоёв токенов (INV-THM-2), поведение
-`strictTokens` (INV-THM-3), правило «структурное определение побеждает файл темы».
+Тема — данные, а не CSS-файл: значения токенов без селекторов. Селекторы назначает приложение из
+активации режима (A-28, T-9), поэтому правила каскада едины для темы провайдера и темы приложения
+([ADR-11](../../docs/decisions.md)). Именование без `--` — C-12.
+
+```ts
+interface GranumThemeContribution {
+  tokensCss?: string            // тема-независимое: формулы производных и т. п. → слой tokens
+  baseCss?: string              // тема-независимое базовое → слой base
+  registry?: string             // JSON реестра: { "<токен без -->": "root" | "mode" }
+  defaultTheme?: string         // тема, если приложение не выбрало свою (A-22)
+  catalog?: Readonly<Record<string, {
+    title: string
+    description?: string
+    docs?: string               // абсолютный URL дизайн-системы темы
+    extends?: string            // родительская тема каталога
+    data: string                // JSON `GranumThemeData`; extends уже разрешён (C-27)
+  }>>
+}
+
+interface GranumThemeData {     // один тип для темы провайдера и темы приложения (A-22)
+  id: string
+  title: string
+  description?: string
+  docs?: string
+  root: Readonly<Record<string, string>>              // режимонезависимые токены
+  modes: Readonly<Record<string, GranumModeData>>
+  defaultMode?: string                                // по умолчанию 'light'
+  baseCss?: readonly string[]                         // @font-face и прочее режимонезависимое → слой base
+  extensions?: Readonly<Record<string, unknown>>      // прозрачно для granum (C-28)
+}
+
+interface GranumModeData {
+  title?: string
+  colorScheme: 'light' | 'dark'
+  extends?: string                                    // режим той же темы
+  tokens: Readonly<Record<string, string>>            // при extends — только отличия
+  fallbacks?: readonly { supports: string, tokens: Readonly<Record<string, string>> }[]
+}
+```
 
 | ID | Требование |
 |---|---|
-| C-16 | `theme.tokensCss`, `theme.baseCss`, `theme.themes[name]` — относительные пути; в манифест попадают относительно манифеста, нормализованными: без `./` и пустых сегментов (`./theme/tokens.css` → `theme/tokens.css`). Так же нормализуется `engineModule` плагина сборки. Путь абсолютный или выходящий за пакет — `InvalidProviderError` (`path-escapes-package`) при создании плагина. |
-| C-17 | Тема, объявленная в `defaultThemes`, SHOULD иметь источник: файл `themes[name]`, структурные `tokenDefinitions[name]` или `tokenDefinitionsRef[name]` — на уровне провайдера либо любого его компонента. Иначе резолвер приложения выдаёт предупреждение `default-theme-without-source`. |
+| C-16 | `theme.tokensCss`, `theme.baseCss`, `theme.registry`, `catalog[*].data` — относительные пути; в манифест попадают относительно манифеста, нормализованными: без `./` и пустых сегментов (`./theme/tokens.css` → `theme/tokens.css`). Так же нормализуется `engineModule` плагина сборки. Путь абсолютный или выходящий за пакет — `InvalidProviderError` (`path-escapes-package`) при создании плагина. |
+| C-24 | Id темы MUST соответствовать `/^[a-z][a-z0-9-]*$/`, имя режима — `/^[a-z][a-z0-9]*$/` (без дефиса — иначе пара `<тема>-<режим>` не разбирается однозначно); имя режима `root` запрещено. Нарушение — `InvalidProviderError('invalid-theme-id' \| 'invalid-mode-name')` при регистрации, у приложения — `InvalidConfigError` с путём до поля. |
+| C-25 | `defaultMode` MUST быть ключом `modes`; не задан — `light`, и тогда `modes.light` MUST существовать (`InvalidProviderError('default-mode-missing')`). |
+| C-26 | `extends` режима MUST ссылаться на режим той же темы; итоговые токены режима — цепочка предков, затем свои. Цикл — `InvalidProviderError('mode-extends-cycle')`. |
+| C-27 | Наследование темы от темы (`extends` в индексе каталога) разрешает тот, кто тему собирает: провайдер — на своей сборке, приложение — до передачи объекта в конфиг. `data` каталога MUST содержать полные данные; цепочка `extends` нужна приложению только для токенов компонентов (A-24). |
+| C-28 | `extensions` granum MUST NOT интерпретировать: поле уходит в `virtual:granum/themes` как есть (T-4). Через него дизайн-система передаёт приложению, например, пропы компонентов по умолчанию. |
+| C-29 | Индекс каталога в манифесте MUST содержать `title`, `extends?`, `docs?`, `data`, а также `modes` (порядок: режим по умолчанию первым) и `defaultMode`, вычисленные сборкой из данных: CLI и отчёт перечисляют темы, не читая данных. |
+| C-30 | Сборка провайдера MUST проверить каждую тему каталога по реестру: каждый токен `root` есть в `root`, каждый токен `mode` — в итоговых токенах каждого режима. Нехватка — `InvalidProviderError('theme-incomplete')` с перечнем токенов. Токены компонентов (C-33) и токены, которые читаются с значением по умолчанию в `var()`, в полноту не входят. |
+| C-31 | `theme.declares` MUST включать токены реестра и всех тем каталога; ключи каталога — по id (M-3). |
+| C-32 | Владелец каталога MAY не иметь компонентов: провайдер только с `theme` (как C-23 разрешает не объявлять `engine`). |
 
 ### 5.4 Хелперы
 
 | ID | Требование |
 |---|---|
-| C-18 | `defineGranumComponent(import.meta.url, options)` MUST нормализовать `cssFiles`, `tokenDefinitionsRef` и вернуть дескриптор, удовлетворяющий §5.2. Рукописный дескриптор MUST воспроизвести те же инварианты сам. |
+| C-18 | `defineGranumComponent(import.meta.url, options)` MUST нормализовать `cssFiles`, `themesDir` и вернуть дескриптор, удовлетворяющий §5.2. Рукописный дескриптор MUST воспроизвести те же инварианты сам. |
 | C-19 | `defineGranumProvider(provider)` MUST выполнять при вызове всё, что проверяется по одному объекту: форму `id` (C-1), версию контракта (C-2), имена компонентов (C-3), форму записей `dependencies` (C-4), `baseUrl` (C-6), пути `cssFiles` (C-11), ключи токенов (C-12) — fail-fast при регистрации (INV-ERR-1). Уникальность `id` в графе и удовлетворённость строковых зависимостей проверяются при разворачивании графа, `peerDependencies` (C-5) — сборкой провайдера (нужен `package.json`, а хелперам FS запрещена C-20), соответствие `engine` типам granum (C-7) — компилятором. |
 | C-20 | Хелперы MUST быть чистыми и не трогать файловую систему. |
 
@@ -110,7 +161,7 @@ interface GranumComponentDescriptor {
 | B-7 | Извлечение MUST выполняться по графу собранного бандла: файлы компонента — чанки, достижимые из его entry, кроме чанков чужих компонентов (любой файл директории другого компонента — ребро графа, а не файл этого). Ребро MUST считаться и по модулям чанка: бандлер кладёт в один чанк модули с одинаковым набором зависящих entry, и часть чужого компонента, импортированная общим SFC группы, лежит в `groups/<g>/shared/` — по пути файла такое ребро не видно. Файлы, не вошедшие в бандл, MUST NOT давать классов. |
 | B-8 | Плагин MUST вычислить фактический граф «компонент → компонент» по импортам в бандле (чанки чужих компонентов и внешние спецификаторы `<pkg>/components/<Name>`) и сравнить с транзитивным замыканием объявленных `dependencies`; неучтённое ребро — ошибка сборки `UndeclaredDependencyError` (опция `dependencyCheck: 'warn'` понижает до предупреждения). |
 | B-9 | Плагин MUST собрать потребляемые токены в `tokens.consumes`: `var(--x)` в CSS компонента, `var(--x)` и строковые литералы `'--x'` в JS его модулей. `dynamicTokens` дескриптора уезжают в `tokens.dynamic` (C-14). |
-| B-10 | Плагин MUST собрать объявленные токены: из `tokenDefinitions`, материализованных `tokenDefinitionsRef`, `theme.tokensCss`, `theme.baseCss` и файлов тем (полный скан, включая блоки внутри at-rules). Файлы темы провайдер объявляет путями относительно корня раскладки (`theme/base.css`), а исходники лежат зеркально в каталоге `sourceDir` (по умолчанию `src`): плагин копирует их в `dist`. |
+| B-10 | Плагин MUST собрать объявленные токены: из реестра, данных тем каталога, материализованных `themesDir` компонентов, `theme.tokensCss` и `theme.baseCss` (полный скан, включая блоки внутри at-rules). Файлы темы провайдер объявляет путями относительно корня раскладки (`theme/base.css`, `themes/slate.json`), а исходники лежат зеркально в каталоге `sourceDir` (по умолчанию `src`): плагин копирует их в `dist`. Данные темы с `extends` плагин дополняет из родителя (C-27) и проверяет по реестру (C-30) до записи. |
 | B-11 | `@apply` в CSS компонентов (объявленные `cssFiles` и стили SFC) MUST раскрываться на сборке провайдера движком (ADR-3) только внутри плоских правил: каждый класс директивы раскрывается в ровно одно правило верхнего уровня со своим селектором, и на место директивы встают его декларации. Директива завершается `;` либо стоит последней перед `}` без неё; директива в комментарии не считается. `ApplyExpansionError`: класс без правила (`unmatched-class`); вариант — селекторный (`hover:`) или через at-rule (`md:`, `print:`, `supports-[…]:`), — и класс из нескольких правил (`container`, утилита с `@keyframes`) (`non-flat-rule`); директива вне плоского правила или с собственным блоком (`nested-context`). В `dist` директивы MUST NOT оставаться. |
 
 ### 6.3 Манифест и реестры
@@ -141,14 +192,15 @@ interface GranumComponentDescriptor {
 |---|---|
 | M-1 | Манифест MUST порождаться только сборкой; ручное редактирование запрещено и обнаруживается по хешу содержимого (INV-MAN-1). |
 | M-2 | Все пути в манифесте MUST быть относительными к директории манифеста и MUST NOT содержать `..` или абсолютных путей (INV-MAN-2). |
-| M-3 | Манифест MUST быть детерминированным: порядок корневых ключей фиксирован, ключи вложенных объектов и массивы строк отсортированы, пробелы нормализованы. Исключения — массивы, чей порядок несёт смысл: `css` (порядок эмиссии), `defaultThemes` (порядок активации), `warnings` (порядок обнаружения). Полностью — [`manifest.md`](../../docs/manifest.md) §5 (INV-DET-1). |
-| M-4 | Манифест MUST содержать версию формата (`granum`, сейчас `2`) и версию контракта (`contractVersion`); читатель MUST отклонять любую другую версию формата ошибкой `UnsupportedManifestVersionError` — громко и без попытки прочитать. |
+| M-3 | Манифест MUST быть детерминированным: порядок корневых ключей фиксирован, ключи вложенных объектов и массивы строк отсортированы, пробелы нормализованы. Исключения — массивы, чей порядок несёт смысл: `css` (порядок эмиссии), `theme.catalog[*].modes` (режим по умолчанию первым, затем порядок эмиссии), `warnings` (порядок обнаружения). Полностью — [`manifest.md`](../../docs/manifest.md) §5 (INV-DET-1). |
+| M-4 | Манифест MUST содержать версию формата (`granum`, сейчас `3`) и версию контракта (`contractVersion`); читатель MUST отклонять любую другую версию формата ошибкой `UnsupportedManifestVersionError` — громко и без попытки прочитать. |
 | M-5 | Множества `classes` и `safelist` компонента SHOULD быть дизъюнктны; пересечение записывается в `warnings` манифеста как `safelist-redundant`. |
 | M-6 | Манифест MUST публиковаться через `exports["./granum.manifest.json"]`, чтобы приложение находило его через `import.meta.resolve` без вычисления `packageBaseUrl` (INV-LAY-2). |
 | M-7 | Правила движка провайдера MUST ссылаться на JS-модуль по относительному пути (`engine.module`), а не встраиваться в JSON. Путь задаёт автор опцией `granumProvider({ engineModule })`; сам модуль плагин не эмитит. Провайдер, объявивший `engine`, но не передавший опцию, отгрузил бы правила в никуда — сборка пишет предупреждение `engine-module-missing` (INV-DIAG-3). |
 | M-8 | Манифест MUST записывать движок, которым он порождён, блоком `engine { dialect, vocabulary, name, version?, module }`. Приложение никогда не догадывается о нём по косвенным признакам: список классов отфильтрован конкретной реализацией, и без этой записи ни доверять списку, ни объяснить пропуск нельзя (INV-MAN-9, INV-ENG-10). |
 | M-9 | Писатель MUST записывать `dialect: null, vocabulary: null` тогда и только тогда, когда артефакт ни от какого словаря не зависит по факту сборки: ни одного класса, ни одной записи `safelist`, ни модуля правил. Иначе оба поля MUST быть взяты у движка сборки. |
 | M-10 | Читатель MUST отклонять манифест, где `dialect` и `vocabulary` не равны `null` одновременно (`InvalidManifestError('dialect-vocabulary-mismatch')`), и манифест, где `dialect: null` при непустых `classes`/`safelist` или непустом `module` (`InvalidManifestError('dialect-without-classes')`). |
+| M-11 | Читатель 3.x MUST принимать манифест формата `2` у провайдера без блока тем и без токенов компонентов по темам (`theme` пуст, `tokens.declares` компонентов пуст): спутнику смена контракта тем не нужна. Манифест формата `2` с темами — `UnsupportedManifestVersionError` с подсказкой пересобрать провайдер granum 3. |
 
 ---
 
@@ -159,11 +211,11 @@ interface GranumComponentDescriptor {
 
 | ID | Требование |
 |---|---|
-| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: (GranumProvider \| GranumLoadedManifest)[], components?, themes? }` без обращения к FS и сети; результат — `GranumResolution`. `GranumLoadedManifest` — `{ manifest, baseUrl }`: JSON плюс директория файла как база путей. |
-| R-2 | `Resolution` MUST содержать: упорядоченный список провайдеров, реестр компонентов, селекцию после транзитивного замыкания в post-order DFS (INV-SEL-2), активный набор тем с источником (`namesSource`), слои токенов и эффективные значения по темам, объединённые множества классов и safelist по компонентам, список CSS-ссылок в порядке эмиссии, предупреждения. |
+| R-1 | `resolveGranum(input)` MUST быть чистой функцией над `{ providers: (GranumProvider \| GranumLoadedManifest)[], components?, theme?, previews?, modes? }` без обращения к FS и сети; результат — `GranumResolution`. `GranumLoadedManifest` — `{ manifest, baseUrl }`: JSON плюс директория файла как база путей. |
+| R-2 | `Resolution` MUST содержать: упорядоченный список провайдеров, реестр компонентов, селекцию после транзитивного замыкания в post-order DFS (INV-SEL-2), активную тему с источником (`themeSource`), набор режимов с источником (`modesSource`), превью-темы, слои токенов и эффективные значения по режимам, объединённые множества классов и safelist по компонентам, список CSS-ссылок в порядке эмиссии, предупреждения. |
 | R-3 | Резолюция MUST мемоизироваться по идентичности объекта входа, а все каналы эмиссии одного билда (CSS, виртуальные модули, guard, отчёт) MUST читать один и тот же объект `Resolution` — его держит кэш `prepareApp` в плагине (INV-RES-1). Отдельные вызовы резолвера ради одного реестра (резолвер авто-импорта A-8) допустимы: они не участвуют в эмиссии. |
 | R-4 | Ошибки резолюции MUST быть типизированы и нести структурные поля (§14). |
-| R-5 | Вычисление эффективного значения токена MUST выполняться одной функцией (`tokenLayers`), которую используют эмиссия CSS, отчёт, `granum tokens` и prune (INV-THM-3). |
+| R-5 | Вычисление эффективного значения токена MUST выполняться одной функцией (`tokenLayers`), которую используют эмиссия CSS, отчёт, `granum tokens` и prune (T-7). |
 | R-6 | Резолвер MUST принимать смешанный вход: манифесты и объекты `GranumProvider`; обе формы нормализуются в `ProviderNode`, и всё ядро ниже работает только с узлами. Для объектной формы поля `classes` и `tokens.consumes` в узле пусты, и их заполняет медленный путь в `./node`: если `baseUrl` указывает на существующий каталог раскладки, файлы компонентов под `components/<Name>/` и достижимые общие чанки сканируются экстрактором движка и `scanTokenConsumption`, объявления темы читаются по файлам, и провайдер подаётся в резолвер синтетическим манифестом — предупреждение `provider-scanned` (графа бандлера нет, рёбра не проверяются); части составных компонентов выводятся по B-19 из `exports` ближайшего вверх от раскладки `package.json`, если это пакет провайдера. Если каталога нет, поля остаются пустыми с предупреждением `provider-without-manifest`. Объектные доноры из `dependencies` подключаются наравне с перечисленными в `providers`: каждый инстанс материализуется и сканируется один раз, ссылки на него сводятся к `id`; два разных инстанса с одним `id` — `DuplicateProviderIdError`. Отброшенный `strictTokens` override — предупреждение `override-skipped` в резолюции, а не `console.warn`. |
 
 ---
@@ -193,6 +245,7 @@ interface EngineInput {
   rules?: readonly GranumRule[]             // правила провайдеров, добавляются ПОСЛЕ встроенных
   variants?: readonly GranumVariant[]
   preflights?: readonly GranumPreflight[]
+  darkSelector?: string                     // селектор тёмных режимов для варианта `dark:` (E-20)
 }
 interface EngineOutput {
   css: string                               // только утилиты, без @layer
@@ -238,6 +291,9 @@ interface EngineOutput {
 | E-12 | Экстрактор движка MUST понимать словарь, который движок объявляет, и MUST NOT извлекать классы из комментариев SFC. Границы среза комментариев (хелпер `stripComments` ядра): в JS/TS — блочные комментарии вне строк, шаблонных строк и регэксп-литералов; в CSS — блочные вне строк и `url(…)`; в `.vue`/`.html`/`.svelte`/`.astro` — HTML-комментарии и `{/* … */}` в разметке, а тела `<script>`/`<style>` (и frontmatter `.astro`) по правилам JS и CSS; строчные — только строки, начинающиеся с двух слешей; вызовы `createCommentVNode("…")` в скомпилированных шаблонах Vue. `/*` внутри строки или в тексте разметки (`accept="image/*"`) комментария не открывает (INV-ENG-5, INV-DIAG-2). |
 | E-13 | Движок MUST NOT знать о слоях, манифестах и Vite; всё это — забота сборщика CSS (§10.3). |
 | E-14 | Реализация, вендорящая чужой код, MUST держать golden-тест: для фиксированного набора классов CSS сравнивается с выводом апстрима, зафиксированным в снапшоте (INV-ENG-4), и уведомление об авторстве — в `THIRD_PARTY_NOTICES.md` (ADR-2). |
+| E-20 | `darkSelector` вычисляет приложение из активации и режимов активной темы с `colorScheme: 'dark'`: `[data-theme="slate-dark"], [data-theme="slate-ocean"]`. Движок, у которого есть вариант тёмного режима, MUST строить его по этому селектору, а без поля — по своему умолчанию. |
+| E-21 | Селектор MUST приходить **входом** `generate`, а не опцией фабрики движка: опция меняет отпечаток словаря (E-6), и приложение пересчитывало бы классы всех манифестов. Отпечаток от `darkSelector` MUST NOT зависеть. |
+| E-22 | Вариант тёмного режима — потомковый селектор: светлый остров внутри тёмной страницы его тоже совпадает. Для островов служат токены режима (T-9), а не вариант; это записывается в документации движка. |
 | E-15 | CSS базового уровня — инициализацию кастомных свойств, регистрации `@property`, reset — движок MUST отдавать полем `preflight`, а не смешивать с утилитами в `css`. Это утверждение о роде CSS, не о слое: имён слоёв движок по-прежнему не знает (E-13), место в каскаде выбирает сборщик (§10.3, INV-CSS-8). Движок без preflight поле не заполняет. |
 
 ### 9.4 Сверка на стороне приложения
@@ -268,7 +324,7 @@ interface EngineOutput {
 
 | Условие | Ошибка | Когда |
 |---|---|---|
-| `contractVersion !== 1` | `UnsupportedContractVersionError` | регистрация |
+| `contractVersion` не `2` (или `1` у провайдера с темами) | `UnsupportedContractVersionError` | регистрация |
 | неизвестная версия формата манифеста | `UnsupportedManifestVersionError` | чтение манифеста |
 | манифест не найден через `exports` | `ManifestNotFoundError` | подготовка приложения (первый хук сборки) |
 | манифест не проходит схему / хеш не совпадает | `InvalidManifestError` (`reason`) | чтение манифеста |
@@ -277,7 +333,13 @@ interface EngineOutput {
 | `baseUrl` не URL / без `/` | `InvalidProviderError` (`invalid-base-url`, `base-url-not-a-directory`) | регистрация |
 | запись `dependencies` не инстанс и не непустая строка | `InvalidProviderError` (`invalid-dependency`) | регистрация |
 | `cssFiles` дескриптора вне `components/<Name>/` | `InvalidProviderError` (`css-file-escapes-component`) | регистрация |
-| путь темы или `engineModule` вне пакета | `InvalidProviderError` (`path-escapes-package`) | создание плагина сборки |
+| путь каталога тем, реестра или `engineModule` вне пакета | `InvalidProviderError` (`path-escapes-package`) | создание плагина сборки |
+| id темы или имя режима не slug; режим `root` | `InvalidProviderError` (`invalid-theme-id`, `invalid-mode-name`) | регистрация |
+| нет `defaultMode` в режимах; цикл `extends` режимов | `InvalidProviderError` (`default-mode-missing`, `mode-extends-cycle`) | сборка провайдера |
+| тема каталога неполна по реестру | `InvalidProviderError` (`theme-incomplete`, список токенов) | сборка провайдера |
+| подпапка `themesDir` не slug темы, файл не slug режима | `InvalidProviderError` (`invalid-theme-dir`) | сборка провайдера |
+| `tokenDefinitions` / `tokenDefinitionsRef` в дескрипторе | `InvalidProviderError` (`legacy-token-definitions`) | регистрация |
+| неизвестная тема, неизвестный режим, два владельца каталога, владелец не найден, совпавшие пары активации | `ThemeResolutionError` (`unknown-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `activation-collision`) | резолюция |
 | `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
 | правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |
 | объявленный диалект ≠ диалект движка сборки | `EngineDialectMismatchError` | сборка провайдера |
@@ -295,7 +357,7 @@ interface EngineOutput {
 | `exports` без манифеста или subpath компонента | `PackageExportsError` | сборка провайдера |
 | браузерный чанк импортирует node-entry granum или `node:` | `BoundaryViolationError` | сборка провайдера |
 | CSS-файл манифеста отсутствует | `CssReadError` (провайдер, секция, субъект, `cause`) | сборка приложения |
-| strict-разбор `tokenDefinitionsRef` не удался | `TokenParseError` внутри `TokenRefError` | сборка провайдера |
+| strict-разбор CSS-файла токенов не удался (файл `themesDir`, `tokensRef`) | `TokenParseError` внутри `TokenRefError` | сборка провайдера, сборка приложения |
 | импорт компонента вне селекции при `guard: 'error'` | `ComponentOutsideSelectionError` (импортёр; `part` — часть, через подпуть которой импортирован владелец) | сборка приложения |
 | импорт компонента из корня пакета-провайдера или корня целиком при `guard: 'error'` | `ComponentRootImportError` (провайдер, компоненты, импортёр) | сборка и dev приложения |
 | тот же инстанс `granum()` во второй отдельной сборке (окружения одного builder Vite — одна сборка) | `PluginInstanceReusedError` (оба `outDir`) | разрешение конфига второй сборки |
@@ -310,9 +372,9 @@ interface EngineOutput {
 - **манифест провайдера** (`warnings[]`, пишет сборка): `safelist-redundant`,
   `css-double-delivery`, `peer-missing`, `engine-module-missing`;
 - **резолюция** (`warnings`, читает отчёт и `doctor`): `provider-without-manifest`,
-  `provider-scanned`, `override-skipped`, и предупреждения тем —
-  `default-theme-without-source`, `partial-theme`, `multiple-default-themes`,
-  `theme-extends-unresolved`, `theme-extends-partial`, `theme-extends-cycle`; подготовка
+  `provider-scanned`, `override-skipped`, и предупреждения тем и режимов —
+  `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-partial`,
+  `mode-extends-cycle`; подготовка
   приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
@@ -343,8 +405,8 @@ interface EngineOutput {
 
 | Что | Где зафиксировано |
 |---|---|
-| Контракт провайдера: форма дескрипторов, `GRANUM_CONTRACT_VERSION = 1` | §5, `./contract` |
-| Формат манифеста (версия 2), его имя и ключ `exports["./granum.manifest.json"]` | §7, `manifest.md` |
+| Контракт провайдера: форма дескрипторов, `GRANUM_CONTRACT_VERSION = 2` | §5, `./contract` |
+| Формат манифеста (версия 3), его имя и ключ `exports["./granum.manifest.json"]` | §7, `manifest.md` |
 | Точки входа пакета и их границы browser/node | §4.2 |
 | Форма `GranumConfig` и значения по умолчанию | §10 |
 | Имена и порядок слоёв `granum.{tokens,base,themes,components,utilities}` | §11, INV-CSS-1 |
@@ -374,3 +436,21 @@ interface EngineOutput {
 Манифест, собранный granum 1.x, читается любым granum 1.x — и более старшим, и
 более младшим. Поэтому peer-диапазон провайдера разумно держать широким
 (`>=1.0.0 <2.0.0`), а не прибивать к минору: приложение выбирает версию само.
+
+### 18.4 Что меняется в 3.0
+
+Темы и режимы ([ADR-11](../../docs/decisions.md)) ломают замороженную поверхность — отсюда мажор и запись в
+`MIGRATION.md`.
+
+| Что | Изменение |
+|---|---|
+| Контракт провайдера | версия `1 → 2`: `theme` — каталог и реестр (§5.3), `themesDir` компонента (C-33); `tokenDefinitions*` удалены (C-38) |
+| Манифест | формат `2 → 3`: `theme.catalog`, `theme.registry`, `components.*.tokens.themes`; формат 2 без тем читается (M-11) |
+| `GranumConfig` | `themes` → `theme`, `previews`, `modes` (A-22…A-33) |
+| Граф провайдеров | строковая зависимость подгружает донора (A-31) |
+| Виртуальный модуль | `virtual:granum/themes` — новая форма (T-4), id прежний |
+| Рантайм | `createThemeController` переключает режим (RT-1), `createThemeScript` — новое (RT-3) |
+| Коды диагностики | §14: предупреждения тем → предупреждения режимов, новые ошибки тем |
+| Поля отчёта | `themes { theme, themeSource, modes, modesSource, previews }` (A-19) |
+| Движок | `EngineInput.darkSelector` — аддитивно (E-20) |
+| Имена слоёв | без изменений |

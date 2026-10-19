@@ -1,6 +1,6 @@
 # Формат `granum.manifest.json`
 
-Версия формата: **1**. Нормативно для требований `M-*` из [`spec.md`](./spec.md) §7.
+Версия формата: **3** (granum 3.0). Нормативно для требований `M-*` из [`spec.md`](./spec.md) §7.
 
 Манифест — машинно-порождённое описание провайдера. Его пишет только плагин
 `granumProvider()` (`./build`), читает — плагин приложения (`./vite`), `./node` и CLI.
@@ -21,8 +21,8 @@
 
 ```json
 {
-  "granum": 2,
-  "contractVersion": 1,
+  "granum": 3,
+  "contractVersion": 2,
   "id": "@feugene/heavy-package",
   "version": "0.1.0",
   "generatedBy": "@feugene/granum@0.1.0",
@@ -31,12 +31,25 @@
   "theme": {
     "tokensCss": "theme/tokens.css",
     "baseCss": "theme/base.css",
-    "themes": { "dark": "theme/dark.css", "light": "theme/light.css" },
-    "defaultThemes": ["light"],
-    "tokenDefinitions": {
-      "dark": { "selector": ".dark, [data-theme=\"dark\"]", "tokens": { "xh-bg": "#111" } }
+    "registry": "themes/registry.json",
+    "defaultTheme": "paper",
+    "catalog": {
+      "ink": {
+        "title": "Чернила",
+        "extends": "paper",
+        "data": "themes/ink.json",
+        "modes": ["light", "dark", "dim"],
+        "defaultMode": "light"
+      },
+      "paper": {
+        "title": "Бумага",
+        "docs": "https://example.com/themes/paper",
+        "data": "themes/paper.json",
+        "modes": ["light", "dark"],
+        "defaultMode": "light"
+      }
     },
-    "declares": ["--xh-accent", "--xh-bg", "--xh-space-2"]
+    "declares": ["--xh-accent", "--xh-bg", "--xh-font", "--xh-radius", "--xh-space-2"]
   },
   "engine": {
     "dialect": "unocss/preset-wind3+granum@66",
@@ -58,7 +71,9 @@
       "classes": ["flex", "gap-[var(--xh-space-2)]"],
       "safelist": [],
       "tokens": {
-        "declares": {},
+        "themes": {
+          "paper": { "modes": { "dark": { "xh-panel-bg": "#1b1b1b" }, "light": { "xh-panel-bg": "#ffffff" } } }
+        },
         "consumes": ["--xh-panel-bg", "--xh-space-2"],
         "requires": ["--xh-space-2"],
         "dynamic": ["--xh-z-*"]
@@ -78,14 +93,14 @@
 
 | Поле | Тип | Обяз. | Описание |
 |---|---|---|---|
-| `granum` | `2` | да | версия формата манифеста; читатель отклоняет любую другую, включая `1` (`UnsupportedManifestVersionError`) |
-| `contractVersion` | `1` | да | версия контракта провайдера |
+| `granum` | `3` | да | версия формата манифеста; читатель отклоняет любую другую, кроме `2` у провайдера без тем (M-11, `UnsupportedManifestVersionError`) |
+| `contractVersion` | `2` | да | версия контракта провайдера (`1` — только в манифесте формата 2, M-11) |
 | `id` | `string` | да | id провайдера, совпадает с `name` пакета |
 | `version` | `string` | да | версия пакета из `package.json` |
 | `generatedBy` | `string` | да | `@feugene/granum@<версия>`, для диагностики несовместимостей |
 | `hash` | `string` | да | `sha256` от канонической сериализации манифеста без поля `hash`; читатель пересчитывает и при несовпадении бросает `InvalidManifestError` (`hash-mismatch`) — так ловится ручная правка (INV-MAN-1) |
 | `dependencies` | `string[]` | да | id провайдеров-доноров (обе формы v1 сводятся к id; инстансы доноров приложение подключает сам через свои манифесты) |
-| `theme` | объект | да | см. 3.2; может быть `{}` |
+| `theme` | объект | да | см. 3.2; у провайдера без тем — `{ "declares": [...] }` или `{}` |
 | `engine` | объект | да | движок, которым порождён артефакт (3.4); приложение не догадывается о нём по косвенным признакам (INV-MAN-9) |
 | `components` | объект | да | имя → описание компонента (3.3); ключи отсортированы |
 | `warnings` | массив | да | предупреждения сборки провайдера, которые приложение обязано показать в отчёте (3.5) |
@@ -94,15 +109,17 @@
 
 | Поле | Тип | Описание |
 |---|---|---|
-| `tokensCss` | `string?` | путь к CSS с тема-независимыми токенами |
+| `tokensCss` | `string?` | путь к CSS с тема-независимыми токенами (формулы производных и т. п.) |
 | `baseCss` | `string?` | путь к базовым стилям |
-| `themes` | `Record<string, string>` | имя темы → путь к CSS-файлу темы |
-| `defaultThemes` | `string[]` | темы, активируемые по умолчанию |
-| `tokenDefinitions` | `Record<theme, TokenSet>` | структурные токены провайдера; сюда же материализованы `tokenDefinitionsRef` |
-| `declares` | `string[]` | все токены (с `--`), объявленные `tokensCss`, `baseCss`, файлами тем и `tokenDefinitions`; отсортированы |
+| `registry` | `string?` | путь к JSON реестра токенов: `{ "<токен без -->": "root" \| "mode" }` (C-30) |
+| `defaultTheme` | `string?` | тема, если приложение не выбрало свою (A-22) |
+| `catalog` | `Record<id, CatalogEntry>?` | каталог тем; ключи — id тем (C-24), отсортированы |
+| `declares` | `string[]` | все токены (с `--`), объявленные `tokensCss`, `baseCss`, реестром и темами каталога; отсортированы |
 
-`TokenSet = { selector?: string, tokens: Record<string, string> }`; ключи `tokens` —
-без `--` (C-12).
+`CatalogEntry = { title, description?, docs?, extends?, data, modes, defaultMode }`: `data` — путь к
+JSON `GranumThemeData` с уже разрешённым `extends` (C-27); `modes` и `defaultMode` вычислены сборкой
+из данных (C-29), режим по умолчанию в `modes` первым. Данные тем приложение читает только для
+активной и превью-тем (T-6).
 
 ### 3.3 `components[Name]`
 
@@ -115,7 +132,7 @@
 | `dependencies` | `string[]` | нормализованные ключи: `Name` для того же провайдера, `providerId:Name` для чужого; отсортированы |
 | `classes` | `string[]` | статические классы, извлечённые из `files` и CSS-независимых шаблонов; отсортированы; без пересечения с `safelist` в норме |
 | `safelist` | `string[]` | из дескриптора, отсортированы |
-| `tokens.declares` | `Record<theme, TokenSet>` | токены компонента (`tokenDefinitions` + материализованные ref) |
+| `tokens.themes` | `Record<тема, { root?, modes: Record<режим, tokens> }>?` | токены компонента по темам из `themesDir` (C-33); ключи токенов без `--`; темы могут быть из чужого каталога (C-35). Поля нет — токенов по темам нет |
 | `tokens.consumes` | `string[]` | токены, найденные в CSS компонента и в JS `files` (`var(--x)` и литералы `'--x'`), с `--` |
 | `tokens.requires` | `string[]?` | подмножество `consumes`, значение которого обязан дать кто-то извне: потребление хотя бы раз без fallback, и сам компонент его не присваивает. Именно это множество проверяет `token-undefined` (T-5). Поля может не быть — манифест формата 2 читается как прежде, и диагностика смотрит весь `consumes` |
 | `tokens.dynamic` | `string[]` | из `dynamicTokens` дескриптора; допускается суффикс `*` |
@@ -157,7 +174,7 @@
 `granumProvider({ engineModule })`, и манифест уехал бы с `engine.module: null`,
 M-7).
 
-Предупреждения резолюции приложения (`default-theme-without-source`,
+Предупреждения резолюции приложения (`component-theme-unknown`, `mode-extends-*`,
 `provider-scanned`, `override-skipped`) и диагностики `doctor` (`token-undefined`,
 `apply-not-expanded`, `safelist-dead`) в манифест НЕ попадают: провайдер о селекции
 и темах приложения ничего не знает. Их список — в ТЗ §14.
@@ -168,7 +185,8 @@ M-7).
 первой ошибке:
 
 1. JSON парсится; корень — объект.
-2. `granum === 2`; иначе `UnsupportedManifestVersionError`.
+2. `granum === 3`, либо `granum === 2` у провайдера без тем: `theme` без `catalog` и без
+   `tokens.themes` у компонентов (M-11); иначе `UnsupportedManifestVersionError`.
 3. Схема: обязательные поля присутствуют, типы верны; иначе `InvalidManifestError`
    (`schema`, с путём до поля).
 4. Все пути относительные, без `..`, без `\`; иначе `InvalidManifestError`
@@ -184,7 +202,8 @@ M-7).
    (`entry-layout`).
 8. Часть (`subcomponents`) не совпадает с именем компонента и не числится у двух
    владельцев; иначе `InvalidManifestError` (`schema`). Тип и правило имён — на шаге 3.
-9. Ключи `tokens` в `TokenSet` без `--`; иначе `InvalidManifestError` (`token-key-prefix`).
+9. Ключи токенов в `tokens.themes` компонентов без `--`; иначе `InvalidManifestError` (`token-key-prefix`).
+   Id тем и имена режимов в `catalog` и `tokens.themes` — по C-24; иначе `InvalidManifestError` (`schema`).
 10. Существование файлов **не** проверяется при чтении (это делает `doctor` и чтение CSS
    в момент эмиссии, с `CssReadError`).
 
@@ -194,7 +213,7 @@ M-7).
 - Ключи всех объектов — в порядке `localeCompare('en')`, кроме корня, где порядок
   фиксирован как в примере (для читаемости диффов).
 - Массивы строк отсортированы тем же компаратором. Исключения с семантичным порядком:
-  `css` (порядок эмиссии), `defaultThemes` (порядок активации тем), `warnings`
+  `css` (порядок эмиссии), `theme.catalog[*].modes` (режим по умолчанию первым), `warnings`
   (сборка провайдера упорядочивает их по `code` и компоненту — порядок
   обнаружения зависел бы от обхода бандла и ломал бы побайтное равенство).
 - `hash` считается от сериализации, в которой поле `hash` заменено пустой строкой.
@@ -216,3 +235,7 @@ M-7).
   версия не поддерживается — `0.1.0` публиковался как проверка и потребителей не
   имел, а тихое чтение устаревшего формата стоило бы дороже, чем пересборка
   пакета.
+- Версия `3` (granum 3.0): темы — данные провайдера (ADR-11). `theme.themes`, `defaultThemes` и
+  `tokenDefinitions` заменены каталогом (`catalog`, `registry`, `defaultTheme`), `tokens.declares`
+  компонента — `tokens.themes`. Манифест версии `2` у провайдера без тем читается по-прежнему (M-11):
+  пакету, которому темы не нужны, пересобираться ради чужой смены контракта незачем.
