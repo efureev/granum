@@ -3,7 +3,9 @@
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [semver](https://semver.org/lang/ru/).
 
-## 3.0.0 — не выпущено
+## 3.0.0-next.1 — 2026-10-19
+
+Предрелиз под тегом npm `next`, парный ядру `3.0.0-next.1`.
 
 ### Добавлено
 

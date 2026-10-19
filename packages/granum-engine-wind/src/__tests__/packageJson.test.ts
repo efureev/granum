@@ -43,6 +43,11 @@ describe('package.json пакета движка', () => {
 
   it('диапазон peer покрывает собственную версию: пара выпускается одним тегом', () => {
     const peer = pkg.peerDependencies!['@feugene/granum']!
+    // `^3.0.0` предрелиза `3.0.0-next.1` не принимает: у предрелиза диапазон — от него самого.
+    if (pkg.version.includes('-')) {
+      expect(peer).toBe(`^${pkg.version}`)
+      return
+    }
     const [major, minor] = pkg.version.split('.')
     expect(peer).toBe(`^${major}.${minor}.0`)
   })
