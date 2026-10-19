@@ -100,7 +100,7 @@ function defaultPrefersDark(): boolean {
  * элементом.
  *
  * ```ts
- * import manifest from 'virtual:granum-themes'
+ * import manifest from 'virtual:granum/themes'
  * import { createThemeController } from '@feugene/granum/runtime'
  *
  * const themes = createThemeController(manifest)
