@@ -13,6 +13,7 @@ granum doctor  granum.config.ts [--json] [--strict] [--allow=code,code]
 granum explain granum.config.ts <providerId:Component> [--json]
 granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
+granum themes  granum.config.ts [--json]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
 granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
@@ -36,7 +37,7 @@ the wrong form of a flag is exit code `2`, not a silently disabled check. A
 value flag takes both `--prefix=Gr` and `--prefix Gr`.
 
 `doctor` returns `1` on any `error` regardless of `--strict`; `explain`,
-`tokens` and `why-css` return `1` when the subject is not found; `prune`
+`tokens` and `why-css` return `1` when the subject is not found; `themes` always returns `0`; `prune`
 returns `1` only with `--strict` and removable tokens; `report` returns `1`
 with `--strict` when there are classes without a rule or undefined tokens;
 `codegen` returns `1` with `--check` when registries are stale, and on a
@@ -45,8 +46,8 @@ generation error.
 ## `doctor`
 
 A full report on the configuration: providers and their form, the selection
-in dependency order, themes and the source of the set, token blocks, checked
-files and diagnostics. Levels: `error` — the build must break, `warn` —
+in dependency order, the active theme and its source, the modes with their pairs, previews,
+checked files and diagnostics. Levels: `error` — the build must break, `warn` —
 legal but suspicious.
 
 | Code | Level | Meaning |
@@ -59,9 +60,11 @@ legal but suspicious.
 | `css-double-delivery` | warn | component CSS is both inlined and imported by its chunk |
 | `safelist-dead` | warn | a safelist entry without a rule in the engine |
 | `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself (including a `v-bind()` variable from `<style>`) and `dynamicTokens` are not findings |
-| `token-conflict` | warn | several layers write the token; the chain and the outcome are shown |
-| `theme-warning` | warn | theme resolution warnings (`extends`, partial themes) |
-| `override-skipped` | warn | `strictTokens` dropped an override |
+| `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
+| `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
+| `mode-extends-unresolved` | warn | the base of a `modes.define` is neither a theme mode nor another `define`; the mode inherits the default mode |
+| `mode-extends-cycle` | warn | `modes.define` entries extend each other in a circle; the chain is cut at the default mode |
+| `override-skipped` | warn | `strictTokens` dropped an override of a token present neither in the theme data nor in component tokens |
 | `provider-without-manifest` | warn | the provider is passed as an object and its `baseUrl` is not a directory on disk: classes and consumption are unknown |
 | `provider-scanned` | warn | the provider is passed as an object: classes and tokens were scanned from its `dist` by the application (slow path, no bundle graph) |
 | `provider-dialect-mismatch` | warn | the package was built by an engine of another vocabulary: its classes were re-extracted instead of trusted |
@@ -81,6 +84,11 @@ Providers (1):
 Selected components (5, order = deps → dependents) — classes 41, safelist 14, css 3:
   • @granum-fixtures/heavy:XhAlert — classes: 9, css: 1
   …
+
+Theme: heavy (source: defaultTheme of the catalog owner, catalog of @granum-fixtures/heavy)
+Modes: [light, dark] (source: modes.names)
+  • light → heavy-light (light, 64 token(s))
+  • dark → heavy-dark (dark, 65 token(s))
 
 Diagnostics (errors: 0, warnings: 1):
   ⚠ [safelist-dead] @granum-fixtures/heavy:XhButton — safelist entry 'shadow-legacy' has no rule in the engine
@@ -222,8 +230,29 @@ the two ways out: an engine of the same dialect, or your own factory rule.
 ## `tokens`
 
 What a component declares and consumes; for every token — where the value
-comes from (`own`, `component`, `provider`, `app`, `none`) and the chain of
-layers per theme. `--deep` includes the component's dependencies.
+comes from (`own`, `component`, `theme`, `provider`, `app`, `none`) and the chain of
+layers for every mode of the active theme: the theme and mode the value came from
+(`component @acme/ui:XhButton (paper/dark)` for mode `ink-dim`). `--deep` includes the
+component's dependencies.
+
+## `themes`
+
+The graph's theme catalog from the owner's manifest index, without reading theme data: id,
+title, parent, modes with the default mode, a link to the design system.
+The active theme and the previews are marked.
+
+```
+granum themes
+=============
+
+Catalog: @acme/tokens (2 theme(s), default: slate)
+
+  • clay — Clay (extends slate)
+      modes: light, dark (default: light)
+  • slate — Slate [active]
+      modes: light, dark (default: light)
+      docs: https://example.com/themes/slate
+```
 
 ## `prune`
 
@@ -233,7 +262,7 @@ after" per file.
 
 ## `report`
 
-Reads `granum-report.json`: selection, themes, classes without a rule with
+Reads `granum-report.json`: selection, the theme, modes and previews, classes without a rule with
 sources, safelist covered by statics, the prune plan, layer sizes
 raw/gzip/brotli, warnings.
 

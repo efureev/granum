@@ -13,6 +13,7 @@ granum doctor  granum.config.ts [--json] [--strict] [--allow=code,code]
 granum explain granum.config.ts <providerId:Component> [--json]
 granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
+granum themes  granum.config.ts [--json]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
 granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
@@ -36,7 +37,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 пишется и `--prefix=Gr`, и `--prefix Gr`.
 
 `doctor` возвращает `1` при любом `error` независимо от `--strict`;
-`explain`, `tokens` и `why-css` — `1`, если предмет не найден; `prune` — `1`
+`explain`, `tokens` и `why-css` — `1`, если предмет не найден; `themes` — всегда `0`; `prune` — `1`
 только с `--strict` и при наличии удаляемых токенов; `report` — `1` с
 `--strict`, если есть классы без правила или токены без объявления; `codegen` —
 `1` с `--check`, если реестры устарели, и при ошибке генерации.
@@ -44,8 +45,8 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 ## `doctor`
 
 Полный отчёт о конфигурации: провайдеры и их форма, селекция в порядке
-зависимостей, темы и источник набора, блоки токенов, проверенные файлы и
-диагностика. Уровни: `error` — сборка обязана сломаться, `warn` — законно, но
+зависимостей, активная тема и её источник, режимы с парами, превью, проверенные
+файлы и диагностика. Уровни: `error` — сборка обязана сломаться, `warn` — законно, но
 подозрительно.
 
 | Код | Уровень | Что значит |
@@ -58,9 +59,11 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `css-double-delivery` | warn | CSS компонента и инлайнится, и импортируется его чанком |
 | `safelist-dead` | warn | запись safelist без правила у движка |
 | `token-undefined` | warn | токен нужен компоненту извне, но не объявлен ни одним слоем. Потребление с fallback, токен, который компонент присваивает сам (в том числе переменная `v-bind()` из `<style>`), и `dynamicTokens` находкой не считаются |
-| `token-conflict` | warn | токен пишут несколько слоёв; показана цепочка и итог |
-| `theme-warning` | warn | предупреждения резолюции тем (`extends`, неполные темы) |
-| `override-skipped` | warn | `strictTokens` отбросил override |
+| `token-conflict` | warn | токен пишут два пакетных слоя — компонент поверх данных темы или два компонента; показана цепочка и итог. Значения приложения конфликтом не считаются |
+| `component-theme-unknown` | warn | компонент кладёт токены для темы, которой нет ни в одном каталоге графа: они не применятся |
+| `mode-extends-unresolved` | warn | база `modes.define` — ни режим темы, ни другой `define`; режим наследует режим по умолчанию |
+| `mode-extends-cycle` | warn | `modes.define` наследуют друг друга по кругу; цепочка обрывается на режиме по умолчанию |
+| `override-skipped` | warn | `strictTokens` отбросил override токена, которого нет ни в данных темы, ни в токенах компонентов |
 | `provider-without-manifest` | warn | провайдер передан объектом, а `baseUrl` не каталог на диске: классы и потребление неизвестны |
 | `provider-scanned` | warn | провайдер передан объектом: классы и токены просканированы по его `dist` приложением (медленный путь, без графа бандлера) |
 | `provider-dialect-mismatch` | warn | пакет собран движком другого словаря: его классы пересчитаны движком приложения, а не взяты из манифеста |
@@ -80,6 +83,11 @@ Providers (1):
 Selected components (5, order = deps → dependents) — classes 41, safelist 14, css 3:
   • @granum-fixtures/heavy:XhAlert — classes: 9, css: 1
   …
+
+Theme: heavy (source: defaultTheme of the catalog owner, catalog of @granum-fixtures/heavy)
+Modes: [light, dark] (source: modes.names)
+  • light → heavy-light (light, 64 token(s))
+  • dark → heavy-dark (dark, 65 token(s))
 
 Diagnostics (errors: 0, warnings: 1):
   ⚠ [safelist-dead] @granum-fixtures/heavy:XhButton — safelist entry 'shadow-legacy' has no rule in the engine
@@ -220,8 +228,29 @@ CSS компонента, исходники приложения, а также
 ## `tokens`
 
 Что компонент объявляет и потребляет; для каждого токена — откуда значение
-(`own`, `component`, `provider`, `app`, `none`) и цепочка слоёв по темам.
-`--deep` включает зависимости компонента.
+(`own`, `component`, `theme`, `provider`, `app`, `none`) и цепочка слоёв по каждому
+режиму активной темы: тема и режим, из которых пришло значение (`component
+@acme/ui:XhButton (paper/dark)` у режима `ink-dim`). `--deep` включает зависимости
+компонента.
+
+## `themes`
+
+Каталог тем графа по индексу манифеста владельца, без чтения данных тем: id,
+название, родитель, режимы с режимом по умолчанию, ссылка на дизайн-систему.
+Активная тема и превью помечены.
+
+```
+granum themes
+=============
+
+Catalog: @acme/tokens (2 theme(s), default: slate)
+
+  • clay — Глина (extends slate)
+      modes: light, dark (default: light)
+  • slate — Сланец [active]
+      modes: light, dark (default: light)
+      docs: https://example.com/themes/slate
+```
 
 ## `prune`
 
@@ -230,7 +259,7 @@ CSS компонента, исходники приложения, а также
 
 ## `report`
 
-Читает `granum-report.json`: селекция, темы, классы без правила с
+Читает `granum-report.json`: селекция, тема, режимы и превью, классы без правила с
 источниками, safelist, покрытый статикой, план обрезки, размеры слоёв
 raw/gzip/brotli, предупреждения.
 

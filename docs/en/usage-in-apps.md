@@ -2,7 +2,7 @@
 
 > 🇷🇺 Русская версия: [`../ru/usage-in-apps.md`](../ru/usage-in-apps.md).
 
-The application states **which** components and themes it needs in
+The application states **which** components, theme and modes it needs in
 `granum.config.ts`; the `granum()` plugin builds one resolution from the
 provider manifests and feeds three channels with it: CSS, JS and themes.
 
@@ -16,7 +16,8 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@acme/ui', '@acme/base'],
   components: [{ provider: '@acme/ui', names: ['XhPanel'] }, '@acme/base:XBox'],
-  themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
+  theme: 'slate',
+  modes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
   appSources: { dirs: ['src'] },
   css: { layers: true, layerPrefix: 'granum' },
   js: { guard: 'error' },
@@ -30,10 +31,14 @@ export default defineGranumConfig({
 | `engine` | — (required) | a utility engine instance: `windEngine()` from `@feugene/granum-engine-wind` or your own; the `'builtin'` string and an options object are not accepted |
 | `providers` | — | package names (the manifest is found via `exports["./granum.manifest.json"]`) or contract objects; an object whose `baseUrl` points at an existing `dist` is scanned by the application itself (slow path, `provider-scanned`). The order inside the layers follows the providers' `dependencies` graph: a donor comes before its dependent; independent providers keep the list order |
 | `components` | `'all'` | a list of `id:Name` keys / `{ provider, names }` or `'imports'` — from imports in `appSources` |
-| `themes.names` | by `define` → providers' `defaultThemes` → `['light']` | the active set of themes |
-| `themes.define` | — | application themes: `{ extends, tokens, tokensRef, label, colorScheme }` |
-| `themes.tokenOverrides` | — | values on top of every provider layer |
-| `themes.strictTokens` | `false` | an override of a token no layer declares is dropped |
+| `theme` | the catalog owner's `defaultTheme` | the active theme: a catalog id, `providerId:id` or an application theme object `GranumThemeData` with `extends?` and `sources?` |
+| `previews` | — | themes shown next to the active one as full blocks of their pairs |
+| `modes.names` | every mode of the theme and `define` | the mode set; the default mode always comes first |
+| `modes.define` | — | application modes: `{ extends, tokens, tokensRef, title, colorScheme }` |
+| `modes.activation` | `{ attribute: 'data-theme', value: '{theme}-{mode}' }` | the attribute on the root and the pair template |
+| `modes.tokenOverrides` | — | values on top of every layer: `root` — mode-independent, other keys — modes |
+| `modes.strictTokens` | `false` | an override of a token present neither in the theme data nor in component tokens is dropped |
+| `modes.system` | `'none'` | `'media'` — the dark mode by `prefers-color-scheme` until the attribute is set |
 | `appSources` | — | directories to extract application classes and token consumption from. Without it the classes of the application markup get no CSS and the build warns; `{ dirs: [] }` says explicitly "no classes of its own" |
 | `css.layers` | `true` | `@layer` wrappers; `false` — flat concatenation in the same order |
 | `js.guard` | `'error'` | importing a component outside the selection: error, warning or nothing |
@@ -45,7 +50,8 @@ export default defineGranumConfig({
 The config shape is validated on load: `InvalidConfigError` names the path
 to the field. An unknown key is an error too: for a typo it suggests the nearest
 key (`appSource` → `appSources`), for a v1 preset key it says where it went.
-`defineGranumConfig` catches an extra key already in the editor.
+`defineGranumConfig` catches an extra key already in the editor. The granum 2
+`themes.*` keys name their new place: `themes.names` → `modes.names` and so on.
 
 ## Selection
 
@@ -106,17 +112,17 @@ The module holds the order statement and five layers:
 
 ```css
 @layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;
-@layer granum.tokens { … }      /* providers' theme.tokensCss, structural :root tokens */
-@layer granum.base { … }        /* the engine preflight, then theme.baseCss */
-@layer granum.themes { … }      /* token blocks of active themes, theme files */
+@layer granum.tokens { … }      /* providers' theme.tokensCss, the theme's root literals */
+@layer granum.base { … }        /* the engine preflight, theme.baseCss, the theme's baseCss */
+@layer granum.themes { … }      /* formulas, modes, fallbacks, previews */
 @layer granum.components { … }  /* cssFiles and styles.css of selected components */
 @layer granum.utilities { … }   /* the engine's utilities */
 ```
 
-A structural `:root` block goes to `granum.tokens`, with one exception: a theme
-whose file itself sits under `:root`. Its blocks — `tokenOverrides`, `define`,
-component tokens — continue the file and go to `granum.themes` after it,
-otherwise the file would override them.
+The theme's mode-independent literals go to `granum.tokens` under `:root`; formulas and
+modes go to `granum.themes`: the shared block `:root, [data-theme]`, the default mode under
+`:root` and its own pair, the rest under their pairs. The full layout is in
+[themes and tokens](./themes-and-tokens.md#css-layout).
 
 The engine input is the union of the static classes of selected components
 (from the manifests), their safelist and the classes extracted from
@@ -295,19 +301,20 @@ a resolver limited to `@a/ui` has inserted `@a/ui/components/Card`, and in
 `'imports'` mode the guard fails such a build. Import that component by its
 subpath explicitly (the selection sees imports in the sources) or list it in `components`.
 
-## Themes at runtime
+## Modes at runtime
 
 ```ts
 import { createThemeController } from '@feugene/granum/runtime'
 import manifest from 'virtual:granum/themes'
 
 export const themes = createThemeController(manifest)
-themes.set('dark')
+themes.setMode('dark')
 ```
 
-The theme manifest — names, selectors and activation mode (`data-theme`, a
-class, `:root`) — is derived from the same resolution. Details in
-[Themes and tokens](./themes-and-tokens.md).
+The theme manifest — the active theme, its modes with pairs, the default mode and the
+activation attribute — comes from the same resolution. The pair is set before the first
+frame by the plugin option `granum(config, { themeScript: true })` — the script goes first
+into the `<head>` of the HTML entry. Details in [Themes and tokens](./themes-and-tokens.md#runtime).
 
 ## Dev mode
 
@@ -316,12 +323,13 @@ over HMR: a module whose code did not change (say, `virtual:granum/themes`)
 is not reloaded, and the page stays in place. A change of a provider manifest
 or CSS (monorepo, `vite build --watch` in the provider) invalidates the whole
 resolution — the dev server watches the provider files itself, even when the
-package lies outside the application root. Resolution errors show up in the
-Vite overlay.
+package lies outside the application root. A theme object lives in the config, and the
+config is read once: editing the files of its `sources` restarts the dev server.
+Resolution errors show up in the Vite overlay.
 
 ## Build report
 
-`dist/granum-report.json` — the selection, themes and their source, classes
+`dist/granum-report.json` — the selection, the theme, modes, previews and their sources, classes
 without a rule with their sources, safelist entries covered by static
 classes, the prune plan, undefined tokens, layer sizes raw/gzip/brotli from
 the built asset after minification (`sizesSource: 'bundle'`) and from the

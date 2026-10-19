@@ -5,16 +5,17 @@
 granum is the successor of the v1 preset with the same provider contract in
 spirit but a different orchestrator: instead of `uno.config.ts` and a
 glob over `node_modules` — a provider manifest and its own Vite plugin. The
-v1 preset keeps working and is not changed; migrate one package at a time.
+v1 preset keeps working and is not changed; migrate one package at a time. Moving from
+granum 2 to 3 is at the [end of the page](#moving-from-granum-2-to-3).
 
 ## What stays
 
 - contract semantics: `id`, two dependency forms, `id:Name` selection keys,
-  post-order DFS, the active set of themes, token layer priority,
+  post-order DFS, token layer priority,
   `strictTokens`, `group`;
 - the `components/<Name>/index.js` and `groups/<g>/shared/` layout;
 - diagnostic commands and their meaning;
-- the theme runtime (`createThemeController`).
+- the switching runtime (`createThemeController`; in granum 3 it switches modes).
 
 ## What changes in the contract
 
@@ -25,7 +26,8 @@ v1 preset keeps working and is not changed; migrate one package at a time.
 | `styleAssetFileName` | removed | was deprecated |
 | `unocss: { rules, variants, preflights }` | `engine: { dialect, rules, variants, preflights }` | a rule is not portable: the vocabulary it is written against must be named |
 | the engine is part of the preset, configured in `uno.config.ts` | an instance in the application config's `engine` | picking the implementation belongs to whoever owns the result |
-| `tokenDefinitionsRef` read by the application | materialised into the manifest at provider build | compute once, where the data is born |
+| `tokenDefinitionsRef` read by the application | component tokens per theme in `themesDir` are materialised into the manifest at provider build | compute once, where the data is born |
+| themes are CSS files under selectors | a theme is catalog data, modes are switched by a pair in an attribute | the application assigns selectors from the activation |
 | safelist ∩ statics not checked | `safelist-redundant` warning | no silent breakage |
 | `undeclared-dependency` by text, `warn` | by the bundler module graph, `error` | precision |
 | `layer: 'granular'` with order −50 | `granum.*` cascade layers | the order is explained by names |
@@ -71,7 +73,7 @@ entry without a runtime dependency on granum.
    `virtual:uno.css` and `virtual:uno:granular.css` imports; install an engine:
    `yarn add -D @feugene/granum-engine-wind`.
 2. Create `granum.config.ts` with the mandatory `engine: windEngine()`, plus
-   `providers`, `components`, `themes`, `appSources`; add `granum(config)` to
+   `providers`, `components`, `theme`, `modes`, `appSources`; add `granum(config)` to
    `vite.config.ts`. Rules the application wrote for itself in `uno.config.ts`
    move into the engine factory: `windEngine({ rules: […] })`.
 3. Replace the two CSS imports with one `import 'virtual:granum.css'`.
@@ -89,13 +91,13 @@ entry without a runtime dependency on granum.
   })
 ```
 
-The v1 preset options move almost one to one: `providers`, `components`,
-`themes.names/define/tokenOverrides/strictTokens`, `pruneTokens` keep their
-names; `pruneTokens.appSources` became a top-level `appSources` because it
-now also feeds the extraction of application classes. There is no swap of
-provider files (`themes.themeFiles`, `baseFile`, `tokensFile`): theme values are
-changed by `tokenOverrides`, a whole theme by `define` with `tokensRef` to your
-CSS, also over a theme the provider ships as a file ([Themes and tokens](./themes-and-tokens.md)).
+The v1 preset options move like this: `providers`, `components`, `pruneTokens` keep their
+names; `themes.names/define/tokenOverrides/strictTokens` become `modes.names/define/
+tokenOverrides/strictTokens`, and `theme` picks the theme; `pruneTokens.appSources` became a
+top-level `appSources` because it now also feeds the extraction of application
+classes. There is no swap of provider files (`themes.themeFiles`, `baseFile`, `tokensFile`):
+mode values are changed by `modes.tokenOverrides`, a whole theme by an application
+theme object in `theme` ([Themes and tokens](./themes-and-tokens.md)).
 A v1 key left in the config is a load error that says where it went, not a silently
 ignored option.
 
@@ -126,6 +128,24 @@ More on this in [“Using granum in an application”](./usage-in-apps.md).
 
 `yarn compare:css` in this repository compares the CSS of the `bench-one`
 stand on granum with a snapshot of the same stand on the v1 preset: the rule
-sets are equal. The same approach works for your own application — capture
+sets are equal up to the listed differences — mode pairs instead of `.dark` among them. The same approach works for your own application — capture
 the CSS before migration, build after, and compare with
 `scripts/compare-css.mjs`.
+
+## Moving from granum 2 to 3
+
+granum 3 changes the theme model: a theme is provider data, the application picks one
+theme at build time, and its modes are switched by the pair `data-theme="<theme>-<mode>"`.
+The provider contract is version 2, the manifest is format 3. The step-by-step list with
+mapping tables is in the package's [`MIGRATION.md`](../../packages/granum/MIGRATION.md);
+in short:
+
+- provider: `theme.themes`, `defaultThemes`, `tokenDefinitions` →
+  `theme.catalog` with theme data in JSON, `registry`, `defaultTheme`; component
+  tokens — `themesDir` instead of `tokenDefinitions*`; `contractVersion: 2`;
+- application: `themes` → `theme`, `previews`, `modes`; `themes.define` →
+  `modes.define` with a mandatory `extends`; `label` → `title`;
+- runtime: the controller's `set`/`get`/`list` → `setMode`/`mode`/`modes()`; the root carries
+  a pair, there are no `.light`/`.dark` classes; before the first frame — `createThemeScript`;
+- a format 2 manifest of a companion without themes is still read; with themes it is
+  `UnsupportedManifestVersionError`, and the package is rebuilt with granum 3.

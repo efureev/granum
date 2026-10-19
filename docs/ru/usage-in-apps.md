@@ -2,7 +2,7 @@
 
 > 🇬🇧 English version: [`../en/usage-in-apps.md`](../en/usage-in-apps.md).
 
-Приложение описывает, **какие** компоненты и темы ему нужны, в
+Приложение описывает, **какие** компоненты, тему и режимы ему нужны, в
 `granum.config.ts`; плагин `granum()` строит из манифестов провайдеров одну
 резолюцию и кормит ею три канала: CSS, JS и темы.
 
@@ -16,7 +16,8 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@acme/ui', '@acme/base'],
   components: [{ provider: '@acme/ui', names: ['XhPanel'] }, '@acme/base:XBox'],
-  themes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
+  theme: 'slate',
+  modes: { names: ['light', 'dark'], tokenOverrides: { light: { 'xh-accent': '#0a7' } }, strictTokens: true },
   appSources: { dirs: ['src'] },
   css: { layers: true, layerPrefix: 'granum' },
   js: { guard: 'error' },
@@ -30,10 +31,14 @@ export default defineGranumConfig({
 | `engine` | — (обязательно) | инстанс движка утилит: `windEngine()` из `@feugene/granum-engine-wind` или свой; строка `'builtin'` и объект опций не принимаются |
 | `providers` | — | имена пакетов (манифест ищется через `exports["./granum.manifest.json"]`) или объекты контракта; объект с `baseUrl` на существующий `dist` сканируется приложением само (медленный путь, `provider-scanned`). Порядок в слоях задаёт граф `dependencies` провайдеров: донор раньше зависящего; независимые провайдеры идут в порядке списка |
 | `components` | `'all'` | список ключей `id:Name` / `{ provider, names }` либо `'imports'` — по импортам в `appSources` |
-| `themes.names` | по `define` → `defaultThemes` провайдеров → `['light']` | активный набор тем |
-| `themes.define` | — | темы приложения: `{ extends, tokens, tokensRef, label, colorScheme }` |
-| `themes.tokenOverrides` | — | значения поверх всех слоёв провайдеров |
-| `themes.strictTokens` | `false` | override токена, который не объявлен ни одним слоем, отбрасывается |
+| `theme` | `defaultTheme` владельца каталога | активная тема: id каталога, `providerId:id` или тема-объект приложения `GranumThemeData` с `extends?` и `sources?` |
+| `previews` | — | темы, которые показываются рядом с активной полными блоками своих пар |
+| `modes.names` | все режимы темы и `define` | набор режимов; режим по умолчанию всегда первый |
+| `modes.define` | — | режимы приложения: `{ extends, tokens, tokensRef, title, colorScheme }` |
+| `modes.activation` | `{ attribute: 'data-theme', value: '{theme}-{mode}' }` | атрибут на корне и шаблон пары |
+| `modes.tokenOverrides` | — | значения поверх всех слоёв: `root` — режимонезависимые, остальные ключи — режимы |
+| `modes.strictTokens` | `false` | override токена, которого нет ни в данных темы, ни в токенах компонентов, отбрасывается |
+| `modes.system` | `'none'` | `'media'` — тёмный режим по `prefers-color-scheme`, пока атрибут не выставлен |
 | `appSources` | — | директории, из которых извлекаются классы и потребление токенов приложения. Без него классы разметки приложения CSS не получают, и сборка предупреждает; `{ dirs: [] }` — явно «своих классов нет» |
 | `css.layers` | `true` | обёртки `@layer`; `false` — плоская конкатенация в том же порядке |
 | `js.guard` | `'error'` | импорт компонента вне селекции: ошибка, предупреждение или ничего |
@@ -45,7 +50,8 @@ export default defineGranumConfig({
 Форма конфига проверяется при загрузке: `InvalidConfigError` называет путь до
 поля. Неизвестный ключ — тоже ошибка: для опечатки она предложит ближайший ключ
 (`appSource` → `appSources`), для ключа пресета v1 — скажет, куда он делся.
-`defineGranumConfig` ловит лишний ключ ещё в редакторе. Один и тот же объект
+`defineGranumConfig` ловит лишний ключ ещё в редакторе. Ключи `themes.*` granum 2
+называют своё новое место: `themes.names` → `modes.names` и так далее. Один и тот же объект
 конфига читают CLI и плагин, поэтому `doctor` видит ровно ту селекцию, что уйдёт
 в сборку.
 
@@ -106,17 +112,17 @@ import 'virtual:granum.css'
 
 ```css
 @layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;
-@layer granum.tokens { … }      /* theme.tokensCss провайдеров, структурные токены :root */
-@layer granum.base { … }        /* preflight движка, затем theme.baseCss */
-@layer granum.themes { … }      /* блоки токенов активных тем, файлы тем */
+@layer granum.tokens { … }      /* theme.tokensCss провайдеров, литералы root темы */
+@layer granum.base { … }        /* preflight движка, theme.baseCss, baseCss темы */
+@layer granum.themes { … }      /* формулы, режимы, фолбэки, превью */
 @layer granum.components { … }  /* cssFiles и styles.css компонентов селекции */
 @layer granum.utilities { … }   /* утилиты движка */
 ```
 
-Структурный блок `:root` уходит в `granum.tokens`, кроме одного случая: тема, чей
-файл сам стоит под `:root`. Её блоки — `tokenOverrides`, `define`, токены
-компонентов — продолжают файл и идут в `granum.themes` после него, иначе файл
-перебил бы их.
+Режимонезависимые литералы темы уходят в `granum.tokens` под `:root`; формулы и
+режимы — в `granum.themes`: общий блок `:root, [data-theme]`, режим по умолчанию под
+`:root` и своей парой, остальные под парой. Раскладка целиком — в
+[темах и токенах](./themes-and-tokens.md#раскладка-css).
 
 Вход движка — объединение статических классов компонентов селекции (из
 манифестов), их safelist и классов, извлечённых из `appSources`. Один слой
@@ -289,19 +295,20 @@ export default defineConfig({
 guard уронит такую сборку. Такой компонент импортируйте подпутём явно (импорт
 в исходниках селекция видит) или перечислите в `components`.
 
-## Темы в рантайме
+## Режимы в рантайме
 
 ```ts
 import { createThemeController } from '@feugene/granum/runtime'
 import manifest from 'virtual:granum/themes'
 
 export const themes = createThemeController(manifest)
-themes.set('dark')
+themes.setMode('dark')
 ```
 
-Манифест тем — имена, селекторы и режим активации (`data-theme`, класс,
-`:root`), выведенные из той же резолюции. Подробно —
-[Темы и токены](./themes-and-tokens.md).
+Манифест тем — активная тема, её режимы с парами, режим по умолчанию и атрибут
+активации из той же резолюции. Пару до первого кадра ставит опция плагина
+`granum(config, { themeScript: true })` — скрипт уходит первым в `<head>`
+HTML-точки входа. Подробно — [Темы и токены](./themes-and-tokens.md#рантайм).
 
 ## Dev-режим
 
@@ -310,11 +317,13 @@ HMR: модуль, чей код не изменился (например, `vir
 перезагружается, и страница остаётся на месте. Изменение манифеста или CSS
 провайдера (монорепо, `vite build --watch` у провайдера) инвалидирует
 резолюцию целиком — за файлами провайдера dev-сервер следит сам, даже если
-пакет лежит вне корня приложения. Ошибки резолюции показываются оверлеем Vite.
+пакет лежит вне корня приложения. Тема-объект живёт в конфиге, а конфиг читается
+один раз: правка файлов из её `sources` перезапускает dev-сервер. Ошибки
+резолюции показываются оверлеем Vite.
 
 ## Отчёт сборки
 
-`dist/granum-report.json` — селекция, темы и их источник, классы без правила
+`dist/granum-report.json` — селекция, тема, режимы, превью и их источники, классы без правила
 с источниками, safelist-записи, покрытые статикой, план обрезки, токены без
 объявления, размеры слоёв raw/gzip/brotli по собранному ассету после
 минификации (`sizesSource: 'bundle'`) и по эмиссии (`emissionSizes`).

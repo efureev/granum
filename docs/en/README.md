@@ -13,8 +13,8 @@ User guides for `@feugene/granum`. The normative sources are the
 | [Authoring providers](./authoring-providers.md) | layout, descriptors, `granumProvider()`, codegen, release checklist |
 | [Usage in apps](./usage-in-apps.md) | `granum.config.ts`, selection, three channels, dev mode, report |
 | [Engines and dialects](./engines-and-dialects.md) | picking an engine, `windEngine`, dialect and vocabulary fingerprint, decision table |
-| [Themes and tokens](./themes-and-tokens.md) | active set, value layers, application themes, pruning, runtime |
-| [Server-side rendering](./ssr.md) | no per-module CSS collection, theme on the server, hydration without a flash |
+| [Themes and tokens](./themes-and-tokens.md) | theme and modes, catalog, pairs, value layers, previews, pruning, runtime |
+| [Server-side rendering](./ssr.md) | no per-module CSS collection, mode on the server, hydration without a flash |
 | [Architecture](./architecture.md) | pipeline, entry points, resolution, engine, cascade layers |
 | [CLI](./cli.md) | `doctor`, `explain`, `why-css`, `tokens`, `prune`, `report`, exit codes |
 | [Troubleshooting](./troubleshooting.md) | symptom → cause → action |

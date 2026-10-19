@@ -46,11 +46,15 @@ import { xhCardConfig } from '../components/XhCard/config.ts'
 
 export default defineGranumProvider({
   id: '@acme/ui',
-  contractVersion: 1,
+  contractVersion: 2,
   components: [xhCardConfig],
-  theme: { tokensCss: 'theme/tokens.css', themes: { light: 'theme/light.css' }, defaultThemes: ['light'] },
+  theme: { tokensCss: 'theme/tokens.css' },
 })
 ```
+
+Тема с режимами — данные каталога, обычно в отдельном пакете токенов: пакет
+компонентов ссылается на него строкой в `dependencies` и кладёт токены своих
+компонентов в `themesDir` ([темы и токены](./themes-and-tokens.md)).
 
 3. Плагин сборки строит entry, раскладку и манифест:
 
@@ -126,6 +130,6 @@ import 'virtual:granum.css'
 npx granum doctor granum.config.ts
 ```
 
-Отчёт перечисляет провайдеров, селекцию, темы и диагностику. После сборки
+Отчёт перечисляет провайдеров, селекцию, тему с режимами и диагностику. После сборки
 рядом с бандлом появляется `dist/granum-report.json` — про него в
 [CLI](./cli.md) и [замере веса](./measuring-weight.md).

@@ -90,26 +90,49 @@ symlink) and that the provider build ran before the application build.
 The manifest was edited by hand or is corrupted. Rebuild the provider: the
 manifest is produced only by the build.
 
-## The theme is not applied
+## The mode is not applied
 
-- `granum doctor` → the `Themes` section: is the name in the active set? The
-  set is determined by `themes.names` → `themes.define` → `defaultThemes` →
-  `['light']`.
-- A theme selector more complex than one class, attribute or `:root` (a combinator,
-  `:not(…)`): the runtime cannot derive the activation — set
-  `granum(config, { themeManifest: { activations: { dark: { type: 'class', value: 'dark' } } } })`.
-- `theme-extends-unresolved`: there is nothing to inherit — no theme with that name,
-  or its file has no readable flat block of tokens.
-- `theme-extends-partial`: the base theme file has blocks with another selector,
-  nested or under `@media`; their values did not pass to the application theme —
-  set them in the theme's `tokens` or build the theme from your CSS via `tokensRef`.
+- `granum doctor` → the `Theme` and `Modes` sections: is the right theme active and is the
+  mode in the set? The theme is the config's `theme`, without it the catalog owner's
+  `defaultTheme`; the modes are `modes.names`, without it every mode of the theme and `modes.define`.
+- The root carries the pair `data-theme="<theme>-<mode>"`, not the mode name: `dark` without
+  the theme matches no block. `virtual:granum/themes` lists the pairs;
+  the controller and `createThemeScript` write them themselves.
+- granum emits no `.light`/`.dark` classes: CSS relying on them moves
+  to the attribute, and `dark:` utilities are built from the pairs of dark modes.
+- `mode-extends-unresolved`: the base of a `modes.define` is neither a theme mode nor another
+  `define`; the mode inherits the default mode. `mode-extends-cycle` — `define`
+  entries refer to each other in a circle.
+
+## Theme and mode errors
+
+| Error | Cause and what to do |
+|---|---|
+| `ThemeResolutionError (unknown-theme)` | `theme` or `previews` name a theme absent from the catalog; the error lists the available ones. Without `theme` and without a `defaultTheme` in a catalog of several themes — the same error |
+| `ThemeResolutionError (unknown-mode)` | a name in `modes.names` or a `modes.tokenOverrides` key is neither a theme mode nor a `define` |
+| `ThemeResolutionError (multiple-theme-owners)` | two providers of the graph declare a theme catalog; hand the extra themes to the application as an object in `theme` |
+| `ThemeResolutionError (theme-owner-missing)` | a package has component tokens per theme, and its theme-owner dependency does not resolve from the package directory; install it or add it to `providers` |
+| `ThemeResolutionError (activation-collision)` | two pairs coincide: a `define` named like a theme mode, a `modes.activation.value` template without `{mode}`, or preview pairs equal to active ones |
+| `ThemeDataError` | the data JSON of the active theme or a preview cannot be read or fails the schema; the field path is in the message. Rebuild the provider |
+| `InvalidProviderError (theme-incomplete)` | at provider build: a theme does not set registry tokens; the list looks like `dark:xh-bg`, `root:xh-radius` |
+| `InvalidProviderError (invalid-theme-dir)` | a `themesDir` folder is not named by a theme id, a file is not named by a mode, an extra file, or both `.json` and `.css` for one mode |
+| `InvalidProviderError (legacy-token-definitions)` | contract 1 theme keys are left in the provider: `theme.themes`, `defaultThemes`, `tokenDefinitions`, `tokenDefinitionsRef` |
+| `UnsupportedManifestVersionError` | a format 2 manifest with themes: granum 3 does not read theme files — rebuild the provider with granum 3 |
+
+`token-conflict` in `doctor` means two package layers on one token: a component over
+the theme data or two components. The application's values (`define`, overrides,
+the theme object) override the package on purpose and are not conflicts.
+`component-theme-unknown` means a component ships tokens for a theme that no
+catalog of the graph declares: for a companion supporting several design systems this is
+normal, for a typo in a folder name it is a reason to fix it.
 
 ## A token override does not work
 
 `granum tokens granum.config.ts @acme/ui:XhCard --deep` shows the chain of
-layers. Common causes: `strictTokens: true` and the token is declared by no
-package layer (`override-skipped`); a name with `--` in the config
-(registration error); the override targets a theme outside the active set.
+layers for every mode. Common causes: `strictTokens: true` and the token is present neither
+in the theme data nor in component tokens (`override-skipped`); a name with `--` in the config
+(a shape error); a mode-independent token overridden in a mode instead of
+`modes.tokenOverrides.root`, or the other way round.
 
 ## After pruning a variable resolves to nothing
 

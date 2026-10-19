@@ -46,11 +46,15 @@ import { xhCardConfig } from '../components/XhCard/config.ts'
 
 export default defineGranumProvider({
   id: '@acme/ui',
-  contractVersion: 1,
+  contractVersion: 2,
   components: [xhCardConfig],
-  theme: { tokensCss: 'theme/tokens.css', themes: { light: 'theme/light.css' }, defaultThemes: ['light'] },
+  theme: { tokensCss: 'theme/tokens.css' },
 })
 ```
+
+A theme with modes is catalog data, usually in a separate token package: the component
+package refers to it with a string in `dependencies` and puts its components' tokens
+into `themesDir` ([themes and tokens](./themes-and-tokens.md)).
 
 3. The build plugin creates the entries, the layout and the manifest:
 
@@ -126,6 +130,6 @@ the application does not need `unocss`.
 npx granum doctor granum.config.ts
 ```
 
-The report lists providers, the selection, themes and diagnostics. After a
+The report lists providers, the selection, the theme with its modes and diagnostics. After a
 build, `dist/granum-report.json` appears next to the bundle — see
 [CLI](./cli.md) and [measuring weight](./measuring-weight.md).

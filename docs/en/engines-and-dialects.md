@@ -189,7 +189,11 @@ What an implementation owes:
   and on matcher collision the last match wins;
 - **an honest fingerprint**: `vocabulary` changes whenever the set of names
   changes — compute it with `vocabularyFingerprint` or guarantee that rule
-  yourself.
+  yourself;
+- **the dark mode variant from the input**: `input.darkSelector` is the pairs of the
+  active theme's modes with `colorScheme: 'dark'` (`[data-theme="slate-dark"]`); an engine
+  with a `dark:` variant builds it from this selector, and without the field — by its own
+  default. The fingerprint does not depend on the selector: it comes as input, not as an option.
 
 The core helpers `extractClasses`, `parseDialect` and `vocabularyFingerprint`
 exist precisely for engine authors; the core carries no implementation at all. A

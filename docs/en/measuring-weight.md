@@ -30,20 +30,20 @@ yarn compare:js       # bench-one JS is byte-equal to a build without the plugin
 
 ```
 РОЛИ (gzip)              bench-zero    bench-one        Δ
-  css                             0        2 532   +2 532
-  entry                         617          756     +139
-  pkg                             0        2 093   +2 093
+  css                             0        2 591   +2 591
+  entry                         617          754     +137
+  pkg                             0        1 123   +1 123
   vue                        23 180       23 618     +438
-  всего                      23 797       28 999   +5 202
-  без vue                       617        5 381   +4 764
+  всего                      23 797       28 086   +4 289
+  без vue                       617        4 468   +3 851
 
 СЛОИ GRANUM (из бандла после минификации, granum-report.json)      raw     gzip
   tokens                                                      1 258      566
   base                                                        1 627      617
-  themes                                                      3 743      956
+  themes                                                      3 529    1 013
   components                                                    773      347
   utilities                                                   1 561      424
-  total                                                       8 962    2 529
+  total                                                       8 748    2 588
 
 ТОКЕНЫ В ДИСТРИБУТИВЕ: объявлено 117, достижимо 49, мёртвый груз 68
 ```
@@ -80,7 +80,7 @@ Bytes live in `hints` and are printed next to the facts as a reference.
 `bench-*` answer "how much does it weigh", `apps/dist-audit` answers "what is
 left of the package". It is an application of one `div` and one component on
 top of the miniature design system `fixtures/mini-ds-package`: two components,
-two themes, ten tokens with deliberate dead weight.
+a theme with two modes, ten tokens with deliberate dead weight.
 
 ```bash
 yarn workspace @granum-apps/dist-audit audit:dist

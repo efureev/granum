@@ -12,7 +12,7 @@ the [registry](../invariants.md).
 ```
 PROVIDER BUILD (once, at publish time)
   sources ──► ./build + engine ──► dist/components/<Name>/{index.js, chunks/, styles.css}
-                                   dist/theme/*.css
+                                   dist/theme/*.css, dist/themes/*.json   ← theme data (catalog owner)
                                    dist/granum.manifest.json          ← hand-over point
                                    (in the manifest — dialect and fingerprint of the build engine)
 
@@ -38,7 +38,7 @@ Three principles from which everything else follows:
 | `.` | browser + node | contract and resolver: `resolveGranum`, `GranumResolution` types, errors |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | the `GranumEngine` interface, rule types, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `resolveThemeActivation` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation` |
 | `./build` | node, peer `vite` | the `granumProvider()` plugin |
 | `./vite` | node, peer `vite` | the `granum()` plugin, `defineGranumConfig` |
 | `./node` | node | manifest reading, `prepareApp`, `emitCss`, `buildReport`, diagnostics as functions |
@@ -52,11 +52,12 @@ provider browser code — the provider build catches a violation
 
 ## Resolution
 
-`resolveGranum({ providers, components, themes })` is a pure function: no FS,
-network or global state. The input is manifests (`{ manifest, baseUrl }`) or
-contract objects; both forms are normalised into provider nodes. The result
+`resolveGranum({ providers, components, theme, previews, modes, themeData })` is a pure
+function: no FS, network or global state. The input is manifests (`{ manifest, baseUrl }`)
+or contract objects; both forms are normalised into provider nodes. Theme data is
+brought by the application preparation — only for the active theme and the previews. The result
 is the ordered provider graph, the component registry, the selection after
-transitive closure, active themes with their source, token layers with
+transitive closure, the active theme and modes with their sources, token values per mode with
 effective values, classes and safelist of the selection, the CSS list in
 emission order, warnings. Exactly one resolution exists per build: memoised
 by config identity.

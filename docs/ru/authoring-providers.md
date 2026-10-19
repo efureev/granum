@@ -14,7 +14,10 @@ src/
   components/<Name>/index.ts       entry компонента
   components/<Name>/<Name>.vue     код и <style>
   components/<Name>/styles.css     необязательный CSS (cssFiles)
-  theme/{tokens,base,light,dark}.css
+  components/<Name>/themes/        токены компонента по темам (themesDir)
+  theme/{tokens,base}.css          тема-независимый фундамент
+  themes/registry.json             реестр токенов владельца тем
+  themes/<id>.json                 данные тем каталога
   granum-provider/index.ts         defineGranumProvider
   index.ts                         barrel
 dist/
@@ -25,11 +28,12 @@ dist/
   chunks/*.js                      общие чанки вне групп
   granum/contract.js               встроенный контракт granum, если код его импортирует
   theme/*.css                      фундамент (копия src/theme)
+  themes/*.json                    реестр и полные данные тем
   granum.manifest.json
 ```
 
-Файлы темы объявляются путями относительно `dist` (`theme/base.css`), а
-исходники лежат зеркально в `src/theme/`: плагин копирует их сам.
+Файлы темы объявляются путями относительно `dist` (`theme/base.css`,
+`themes/slate.json`), а исходники лежат зеркально в `src/`: плагин копирует их сам.
 
 ## Дескриптор компонента
 
@@ -42,7 +46,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
   safelist: ['p-2', 'p-3', 'bg-[var(--xh-btn-bg)]'],
   dynamicTokens: ['xh-z-*'],
   cssFiles: ['./styles.css'],
-  tokenDefinitions: { light: { tokens: { 'xh-btn-bg': '#fff' } } },
+  themesDir: './themes',
   group: 'controls',
 })
 ```
@@ -61,7 +65,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 | `safelist` | только классы, которые собираются в JS в рантайме; литералы шаблона сюда не пишутся — их извлечёт сборка |
 | `dynamicTokens` | токены, чьё имя собирается в рантайме; обрезка их не удалит, пока компонент в сборке |
 | `cssFiles` | CSS, читаемый как есть; путь относительно `config.ts`, внутри директории компонента. `styles.css` рядом с `<style>` SFC склеивается с ним в один файл: сначала объявленный |
-| `tokenDefinitions` | структурные токены компонента по темам; ключи без `--` |
+| `themesDir` | папка токенов компонента по темам: `<тема>/root.{json,css}`, `<тема>/modes/<режим>.{json,css}`; ключи без `--` |
 | `group` | общие чанки нескольких компонентов кладутся в `groups/<g>/shared/` |
 
 Первый аргумент — `import.meta.url` модуля `config.ts`: по нему сборка
@@ -74,14 +78,17 @@ import { defineGranumProvider } from '@feugene/granum/contract'
 
 export default defineGranumProvider({
   id: '@acme/ui',
-  contractVersion: 1,
+  contractVersion: 2,
   components: [xhCardConfig, xhButtonConfig],
   theme: {
     tokensCss: 'theme/tokens.css',
     baseCss: 'theme/base.css',
-    themes: { light: 'theme/light.css', dark: 'theme/dark.css' },
-    defaultThemes: ['light'],
-    tokenDefinitions: { light: { tokens: { 'xh-accent': '#0a7' } } },
+    registry: 'themes/registry.json',
+    defaultTheme: 'slate',
+    catalog: {
+      slate: { title: 'Сланец', docs: 'https://example.com/themes/slate', data: 'themes/slate.json' },
+      clay: { title: 'Глина', extends: 'slate', data: 'themes/clay.json' },
+    },
   },
   engine: { dialect: 'unocss/preset-wind3+granum@66', rules: [['btn-reset', { appearance: 'none' }]] },
   dependencies: ['@acme/base'],
@@ -91,11 +98,76 @@ export default defineGranumProvider({
 `dependencies` провайдера — id пакетов, которые обязаны быть в графе
 приложения. Их токены, base, темы и правила движка идут раньше этого
 провайдера, как бы приложение ни перечислило пакеты в `providers`; цикл —
-`CircularProviderDependencyError`.
+`CircularProviderDependencyError`. Строковую зависимость, которой нет в
+`providers`, приложение подгружает само — пакет ищется от каталога зависящего
+провайдера, поэтому достаточно перечислить его в `dependencies` своего
+`package.json`. Компоненты такого донора селекция `'all'` не выбирает.
 
 `defineGranumProvider` проверяет форму при вызове: `contractVersion`, id,
-имена компонентов, ключи токенов, пути `cssFiles`. Ошибки — типизированные
-классы с полями `providerId`, `component`, `reason`.
+имена компонентов, пути `cssFiles`, id тем каталога, их `extends` и
+`defaultTheme`. Ошибки — типизированные классы с полями `providerId`,
+`component`, `reason`. Ключи тем контракта 1 (`theme.themes`, `defaultThemes`,
+`tokenDefinitions`, `tokenDefinitionsRef`) — `legacy-token-definitions` с
+подсказкой; `contractVersion: 1` допустим только у пакета без тем.
+
+## Темы: каталог, реестр, данные
+
+Тема — данные, а не CSS-файл: JSON `GranumThemeData` без селекторов. Селекторы
+назначает приложение из активации режима, поэтому правила каскада одни для
+темы провайдера и темы приложения.
+
+```json
+{
+  "id": "slate",
+  "title": "Сланец",
+  "root": { "xh-radius": "6px", "xh-ring": "0 0 0 2px var(--xh-accent)" },
+  "defaultMode": "light",
+  "modes": {
+    "light": { "colorScheme": "light", "tokens": { "xh-bg": "#ffffff", "xh-accent": "#2563eb",
+               "xh-soft": "color-mix(in oklab, var(--xh-accent) 15%, var(--xh-bg))" },
+               "fallbacks": [{ "supports": "not (color: color-mix(in oklab, red, red))", "tokens": { "xh-soft": "#dbeafe" } }] },
+    "dark": { "colorScheme": "dark", "tokens": { "xh-bg": "#0f172a", "xh-accent": "#60a5fa" } }
+  },
+  "extensions": { "acme": { "componentDefaults": { "XhButton": { "size": "m" } } } }
+}
+```
+
+- Id темы — slug `^[a-z][a-z0-9-]*$`, имя режима — slug без дефиса, `root`
+  запрещено: иначе пара `<тема>-<режим>` не разбиралась бы по последнему дефису.
+- `defaultMode` обязан быть ключом `modes`; без него обязателен режим `light`
+  (`default-mode-missing`). `extends` режима — режим той же темы, цикл —
+  `mode-extends-cycle`.
+- Тема с `extends` в каталоге хранит в исходнике только отличия. Сборка
+  сливает их с родителем: токены — по ключу, `fallbacks` режима и `baseCss`
+  заменяются целиком, `extensions` сливаются на верхнем уровне; id, `title`,
+  `docs` берутся из записи каталога. В `dist` уходят полные данные.
+- Реестр (`registry`) — `{ "<токен>": "root" | "mode" }`. Сборка проверяет по нему
+  каждую тему: токен `root` есть в `root`, токен `mode` — в итоговых токенах каждого
+  режима. Нехватка — `theme-incomplete` с перечнем вида `dark:xh-bg`.
+- В манифест уходит индекс каталога: `title`, `extends`, `docs`, путь к данным,
+  режимы (режим по умолчанию первым) и `defaultMode` — CLI перечисляет темы, не
+  читая данных. `theme.declares` включает реестр и все темы каталога.
+
+Владелец каталога в графе приложения один, и ему не нужны компоненты: пакет
+токенов дизайн-системы — провайдер только с `theme`. Пакеты компонентов зависят от
+него строкой в `dependencies` и кладут токены компонентов в `themesDir`:
+
+```
+components/XhButton/themes/
+  slate/modes/light.json      { "xh-button-bg": "var(--xh-accent)" }
+  slate/modes/dark.json       только отличия от light — остальное возьмёт приложение
+  clay/modes/light.json       чего нет — по цепочке clay → slate
+  slate/root.json             режимонезависимые токены компонента
+```
+
+Имя папки — id темы, имя файла — режим; файл — JSON или CSS с одним плоским блоком
+(селектор не важен). Иное содержимое — `invalid-theme-dir`; `README.md` и скрытые
+файлы пропускаются. Темы чужого каталога законны: спутник кладёт токены для тем
+дизайн-системы, и приложение применяет их, когда тема активна. Объектная форма
+провайдера (тесты, локальная разработка) данных не сливает: её `data` обязаны быть
+полными. Примеры — фикстуры [`themes-package`](../../fixtures/themes-package/README.md),
+[`themed-ds-package`](../../fixtures/themed-ds-package/README.md) и
+[`themed-companion-package`](../../fixtures/themed-companion-package/README.md).
 
 Правила `engine` пишутся в типах granum (`GranumRule`, `GranumVariant`,
 `GranumPreflight`) — форма та же, что у правил UnoCSS, но без импорта чужих
@@ -143,17 +215,20 @@ granumProvider({
 2. извлекает статические классы из чанков каждого компонента экстрактором
    движка и оставляет только те, для которых есть правило;
 3. собирает потребляемые токены: `var(--x)` в CSS, `var(--x)` и литералы
-   `'--x'` в JS, `dynamicTokens`;
-4. раскрывает `@apply` в CSS компонентов: класс подставляется декларациями
+   `'--x'` в JS, `dynamicTokens`; материализует папку `themesDir` каждого
+   компонента в манифест;
+4. читает реестр и данные тем каталога, дополняет тему с `extends` данными
+   родителя, проверяет полноту по реестру и пишет полные данные в `dist`;
+5. раскрывает `@apply` в CSS компонентов: класс подставляется декларациями
    своего единственного плоского правила. Вариант (`hover:`, `md:`,
    `print:`), класс из нескольких правил (`container`) и директива вне
    плоского правила — `ApplyExpansionError`; в `dist` директив не остаётся;
-5. строит фактический граф «компонент → компонент» по импортам бандла и
+6. строит фактический граф «компонент → компонент» по импортам бандла и
    сверяет с `dependencies`: неучтённое ребро — `UndeclaredDependencyError`;
-6. проверяет, что браузерный код не импортирует `node:*` и node-entry granum
+7. проверяет, что браузерный код не импортирует `node:*` и node-entry granum
    (`BoundaryViolationError`), а `package.json#exports` содержит манифест и
    subpath каждого компонента (`PackageExportsError`);
-7. пишет `dist/granum.manifest.json`.
+8. пишет `dist/granum.manifest.json`.
 
 Импорт константы или типа из директории другого компонента зависимостью не
 является и объявлять его не нужно: рёбра считаются по коду, попавшему в
@@ -184,7 +259,7 @@ export default { rules: brandRules }
 granumProvider({
   provider: defineGranumProvider({
     id: '@acme/brand-rules',
-    contractVersion: 1,
+    contractVersion: 2,
     components: [],
     engine: { dialect: WIND_DIALECT_EXTRA, rules: brandRules },
   }),
@@ -251,6 +326,8 @@ await runRegistryCodegen({
 - пакет с правилами объявляет `engine.dialect` и собран движком того же
   диалекта, а `engineModule` указывает на собранный модуль правил;
 - `dependencies` компонентов покрывают импорты — сборка иначе не пройдёт;
+- темы каталога полны по реестру, а папки `themesDir` названы id тем и режимов —
+  иначе сборка не пройдёт;
 - кросс-провайдерный донор перечислен в `peerDependencies`; granum — тоже, если
   `dist` импортирует его точку входа кроме встроенного `./contract`;
 - `doctor --strict` приложения-потребителя выходит с кодом `0`.

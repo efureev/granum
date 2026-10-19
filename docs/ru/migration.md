@@ -5,16 +5,17 @@
 granum — преемник пресета v1 с тем же контрактом провайдера по смыслу, но
 другим оркестратором: вместо `uno.config.ts` и обхода `node_modules` глобом —
 манифест провайдера и собственный Vite-плагин. Пресет v1 продолжает работать
-и не изменяется; мигрируют по одному пакету.
+и не изменяется; мигрируют по одному пакету. Переход с granum 2 на 3 — в
+[конце страницы](#переход-с-granum-2-на-3).
 
 ## Что сохраняется
 
 - семантика контракта: `id`, две формы зависимостей, ключи селекции
-  `id:Name`, post-order DFS, активный набор тем, приоритет слоёв токенов,
+  `id:Name`, post-order DFS, приоритет слоёв токенов,
   `strictTokens`, `group`;
 - раскладка `components/<Name>/index.js` и `groups/<g>/shared/`;
 - диагностические команды и их смысл;
-- рантайм тем (`createThemeController`).
+- рантайм переключения (`createThemeController`; в granum 3 он переключает режимы).
 
 ## Что меняется в контракте
 
@@ -25,7 +26,8 @@ granum — преемник пресета v1 с тем же контракто�
 | `styleAssetFileName` | удалено | было deprecated |
 | `unocss: { rules, variants, preflights }` | `engine: { dialect, rules, variants, preflights }` | правило непортируемо: словарь, против которого оно написано, обязан быть назван |
 | движок — часть пресета, настраивается `uno.config.ts` | инстанс в `engine` конфига приложения | выбор реализации принадлежит тому, кто отвечает за результат |
-| `tokenDefinitionsRef` читает приложение | материализуется в манифест на сборке провайдера | считать один раз там, где данные родились |
+| `tokenDefinitionsRef` читает приложение | токены компонента по темам в `themesDir` материализуются в манифест на сборке провайдера | считать один раз там, где данные родились |
+| темы — CSS-файлы под селекторами | тема — данные каталога, режимы включаются парой в атрибуте | селекторы назначает приложение из активации |
 | safelist ∩ статика не проверяется | предупреждение `safelist-redundant` | молчаливых поломок нет |
 | `undeclared-dependency` по тексту, `warn` | по графу модулей бандлера, `error` | точность |
 | `layer: 'granular'` с порядком −50 | каскадные слои `granum.*` | порядок объяснён именами |
@@ -71,7 +73,7 @@ granum провайдеру нужен на сборке, в `devDependencies`: 
    `virtual:uno.css` и `virtual:uno:granular.css`; поставить движок:
    `yarn add -D @feugene/granum-engine-wind`.
 2. Создать `granum.config.ts` с обязательным `engine: windEngine()`,
-   `providers`, `components`, `themes`, `appSources`; добавить `granum(config)`
+   `providers`, `components`, `theme`, `modes`, `appSources`; добавить `granum(config)`
    в `vite.config.ts`. Правила, которые приложение писало себе в `uno.config.ts`,
    переезжают в фабрику движка: `windEngine({ rules: […] })`.
 3. Заменить два импорта CSS одним `import 'virtual:granum.css'`.
@@ -89,13 +91,13 @@ granum провайдеру нужен на сборке, в `devDependencies`: 
   })
 ```
 
-Опции пресета v1 переезжают почти один в один: `providers`, `components`,
-`themes.names/define/tokenOverrides/strictTokens`, `pruneTokens` — те же
-имена; `pruneTokens.appSources` стал `appSources` верхнего уровня, потому что
-теперь он питает и извлечение классов приложения. Подмены файлов провайдера
-(`themes.themeFiles`, `baseFile`, `tokensFile`) нет: значения темы меняют
-`tokenOverrides`, тему целиком — `define` с `tokensRef` на свой CSS, в том числе
-поверх темы, которую провайдер поставил файлом ([Темы и токены](./themes-and-tokens.md)).
+Опции пресета v1 переезжают так: `providers`, `components`, `pruneTokens` — те же
+имена; `themes.names/define/tokenOverrides/strictTokens` — `modes.names/define/
+tokenOverrides/strictTokens`, а тему выбирает `theme`; `pruneTokens.appSources` стал
+`appSources` верхнего уровня, потому что теперь он питает и извлечение классов
+приложения. Подмены файлов провайдера (`themes.themeFiles`, `baseFile`, `tokensFile`)
+нет: значения режима меняют `modes.tokenOverrides`, тему целиком — тема-объект
+приложения в `theme` ([Темы и токены](./themes-and-tokens.md)).
 Ключ v1, оставшийся в конфиге, — ошибка загрузки с подсказкой, куда он делся, а не
 молча проигнорированная опция.
 
@@ -125,6 +127,25 @@ granum провайдеру нужен на сборке, в `devDependencies`: 
 ## Проверка эквивалентности
 
 `yarn compare:css` в этом репозитории сверяет CSS стенда `bench-one` на
-granum со снапшотом того же стенда на пресете v1: множества правил совпадают.
+granum со снапшотом того же стенда на пресете v1: множества правил совпадают с
+точностью до перечисленных расхождений — среди них пары режимов вместо `.dark`.
 Тот же приём годится для своего приложения — снять CSS до миграции, собрать
 после и сравнить `scripts/compare-css.mjs`.
+
+## Переход с granum 2 на 3
+
+granum 3 меняет модель тем: тема — данные провайдера, приложение выбирает одну
+тему на сборке, а её режимы переключаются парой `data-theme="<тема>-<режим>"`.
+Контракт провайдера — версия 2, манифест — формат 3. Пошаговый список с
+таблицами соответствий — в [`MIGRATION.md`](../../packages/granum/MIGRATION.md) пакета;
+коротко:
+
+- провайдер: `theme.themes`, `defaultThemes`, `tokenDefinitions` →
+  `theme.catalog` с данными тем в JSON, `registry`, `defaultTheme`; токены
+  компонентов — `themesDir` вместо `tokenDefinitions*`; `contractVersion: 2`;
+- приложение: `themes` → `theme`, `previews`, `modes`; `themes.define` →
+  `modes.define` с обязательным `extends`; `label` → `title`;
+- рантайм: `set`/`get`/`list` контроллера → `setMode`/`mode`/`modes()`; на корне —
+  пара, классов `.light`/`.dark` нет; до первого кадра — `createThemeScript`;
+- манифест формата 2 у спутника без тем читается по-прежнему; с темами —
+  `UnsupportedManifestVersionError`, пакет пересобирают granum 3.

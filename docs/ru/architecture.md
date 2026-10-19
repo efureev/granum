@@ -12,7 +12,7 @@
 ```
 СБОРКА ПРОВАЙДЕРА (один раз, при публикации)
   исходники ──► ./build + движок ──► dist/components/<Name>/{index.js, chunks/, styles.css}
-                                     dist/theme/*.css
+                                     dist/theme/*.css, dist/themes/*.json   ← данные тем (у владельца каталога)
                                      dist/granum.manifest.json          ← точка передачи
                                      (в манифесте — диалект и отпечаток движка сборки)
 
@@ -38,7 +38,7 @@
 | `.` | browser + node | контракт и резолвер: `resolveGranum`, типы `GranumResolution`, ошибки |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | интерфейс `GranumEngine`, типы правил, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `resolveThemeActivation` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation` |
 | `./build` | node, peer `vite` | плагин `granumProvider()` |
 | `./vite` | node, peer `vite` | плагин `granum()`, `defineGranumConfig` |
 | `./node` | node | чтение манифестов, `prepareApp`, `emitCss`, `buildReport`, диагностика как функции |
@@ -52,11 +52,12 @@
 
 ## Резолюция
 
-`resolveGranum({ providers, components, themes })` — чистая функция: без FS,
-сети и глобального состояния. Вход — манифесты (`{ manifest, baseUrl }`) или
-объекты контракта; обе формы нормализуются в узлы провайдеров. Результат —
+`resolveGranum({ providers, components, theme, previews, modes, themeData })` — чистая
+функция: без FS, сети и глобального состояния. Вход — манифесты (`{ manifest, baseUrl }`)
+или объекты контракта; обе формы нормализуются в узлы провайдеров. Данные тем
+приносит подготовка приложения — только активной темы и превью. Результат —
 упорядоченный граф провайдеров, реестр компонентов, селекция после
-транзитивного замыкания, активные темы с источником, слои токенов с
+транзитивного замыкания, активная тема и режимы с источниками, значения токенов по режимам с
 эффективными значениями, классы и safelist селекции, список CSS в порядке
 эмиссии, предупреждения. За один билд существует ровно одна резолюция:
 мемоизация по идентичности конфига.
