@@ -25,7 +25,7 @@ import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
 import { buildReportFromBundles } from '../node/report'
 import { getThemeManifest, resolveThemeManifest } from '../node/themeManifest'
-import { createThemeScript } from '../runtime/script'
+import { createThemeScriptCode } from '../runtime/script'
 import { validateGranumConfig } from './validateConfig'
 
 export const VIRTUAL_CSS = 'virtual:granum.css'
@@ -58,7 +58,7 @@ const RESOLVED_SPLIT_PREFIX = `\0${VIRTUAL_SPLIT_PREFIX}`
 export interface GranumPluginOptions {
   /**
    * Вставить в `<head>` HTML-точки входа скрипт, который ставит пару режима до
-   * первого кадра (`createThemeScript`). `true` — с ключом хранилища по
+   * первого кадра (`createThemeScriptCode`). `true` — с ключом хранилища по
    * умолчанию. SSR-приложение вставляет скрипт само.
    */
   readonly themeScript?: boolean | Omit<GranumThemeScriptOptions, 'manifest'>
@@ -433,10 +433,8 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     const manifest = getThemeManifest((await prepare()).resolution)
     if (manifest.modes.length === 0)
       return []
-    const script = createThemeScript({ manifest, ...(options.themeScript === true ? {} : options.themeScript) })
-    const match = /^<script([^>]*)>([\s\S]*)<\/script>$/.exec(script)!
-    const nonce = /nonce="([^"]*)"/.exec(match[1]!)?.[1]
-    return [{ tag: 'script', ...(nonce !== undefined ? { attrs: { nonce } } : {}), children: match[2]!, injectTo: 'head-prepend' }]
+    const { nonce, ...code } = options.themeScript === true ? {} : options.themeScript
+    return [{ tag: 'script', ...(nonce !== undefined ? { attrs: { nonce } } : {}), children: createThemeScriptCode({ manifest, ...code }), injectTo: 'head-prepend' }]
   }
 
   const invalidate = (): void => {

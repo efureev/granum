@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { getThemeManifest } from '../node/themeManifest'
-import { createCookieStorage, createThemeController, createThemeScript, modeFromCookie, resolveThemeActivation, themeModeValue, themeRootAttributes } from '../runtime'
+import { createCookieStorage, createThemeController, createThemeScript, createThemeScriptCode, modeFromCookie, resolveThemeActivation, themeModeValue, themeRootAttributes } from '../runtime'
 import { INK, makeManifest, PAPER } from './helpers'
 
 function createTarget(initial?: Record<string, string>): GranumThemeTarget & { attributes: Map<string, string>, writes: number } {
@@ -174,37 +174,122 @@ describe('createThemeController (RT-1)', () => {
 })
 
 describe('createThemeScript (RT-3)', () => {
-  function runScript(html: string, env: { attribute?: string, stored?: string, cookie?: string, dark?: boolean } = {}): string | undefined {
+  interface ScriptEnv { attribute?: string | undefined, stored?: string | null, cookie?: string, dark?: boolean, noMatchMedia?: boolean, storageThrows?: boolean }
+
+  function runCode(code: string, env: ScriptEnv = {}): { attribute: string | undefined, listeners: Map<string, () => void> } {
     const attributes = new Map<string, string>(env.attribute ? [['data-theme', env.attribute]] : [])
-    const body = /<script[^>]*>([\s\S]*)<\/script>/.exec(html)![1]!
-    runInNewContext(body, {
+    const listeners = new Map<string, () => void>()
+    const matchMedia = env.noMatchMedia ? undefined : () => ({ matches: env.dark === true })
+    runInNewContext(code, {
       document: {
         documentElement: { getAttribute: (n: string) => attributes.get(n) ?? null, setAttribute: (n: string, v: string) => void attributes.set(n, v) },
         cookie: env.cookie ?? '',
+        addEventListener: (type: string, fn: () => void) => void listeners.set(type, fn),
       },
-      localStorage: { getItem: () => env.stored ?? null },
-      window: { matchMedia: true },
-      matchMedia: () => ({ matches: env.dark === true }),
+      localStorage: {
+        getItem: () => {
+          if (env.storageThrows)
+            throw new Error('SecurityError')
+          return env.stored ?? null
+        },
+      },
+      window: { matchMedia },
+      matchMedia,
     })
-    return attributes.get('data-theme')
+    return { attribute: attributes.get('data-theme'), listeners }
   }
 
-  it('сохранённый режим, иначе системная схема, иначе режим по умолчанию', () => {
-    const script = createThemeScript({ manifest: MANIFEST })
-    expect(runScript(script, { stored: 'dim' })).toBe('ink-dim')
-    expect(runScript(script, { stored: 'nope', dark: true })).toBe('ink-dark')
-    expect(runScript(script)).toBe('ink-light')
+  function runScript(html: string, env: ScriptEnv = {}): string | undefined {
+    return runCode(/<script[^>]*>([\s\S]*)<\/script>/.exec(html)![1]!, env).attribute
+  }
+
+  /** Что выберет контроллер с `initial: 'auto'` на тех же входах. */
+  function controllerPair(manifest: GranumThemeManifest, env: ScriptEnv): string | undefined {
+    const target = createTarget(env.attribute ? { 'data-theme': env.attribute } : {})
+    createThemeController(manifest, { target, storage: memoryStorage(env.stored ? { 'granum-theme': env.stored } : {}), prefersDark: () => env.dark === true })
+    return target.attributes.get('data-theme')
+  }
+
+  it('выбирает ту же пару, что контроллер, во всех сочетаниях входов', () => {
+    const darkDefault: GranumThemeManifest = { ...MANIFEST, modes: [MANIFEST.modes[2]!, MANIFEST.modes[0]!], defaultMode: 'dim' }
+    const single: GranumThemeManifest = { ...MANIFEST, modes: [MANIFEST.modes[1]!], defaultMode: 'dark' }
+    for (const manifest of [MANIFEST, darkDefault, single]) {
+      const code = createThemeScriptCode({ manifest })
+      for (const attribute of [undefined, 'ink-dim', 'ink-light', 'paper-dark']) {
+        for (const stored of [null, 'light', 'dark', 'dim', 'nope', '', 'constructor', 'toString']) {
+          for (const dark of [true, false]) {
+            const env = { attribute, stored, dark }
+            expect(runCode(code, env).attribute, `${manifest.defaultMode} ${JSON.stringify(env)}`).toBe(controllerPair(manifest, env))
+          }
+        }
+      }
+    }
   })
 
   it('пара от сервера не трогается; cookie раньше localStorage', () => {
     expect(runScript(createThemeScript({ manifest: MANIFEST }), { attribute: 'ink-dim', stored: 'light' })).toBe('ink-dim')
-    expect(runScript(createThemeScript({ manifest: MANIFEST, cookie: 'mode' }), { cookie: 'a=1; mode=dark', stored: 'light' })).toBe('ink-dark')
+    const withCookie = createThemeScript({ manifest: MANIFEST, cookie: 'gr.mode' })
+    expect(runScript(withCookie, { cookie: 'a=1; gr.mode=dark', stored: 'light' })).toBe('ink-dark')
+    expect(runScript(withCookie, { cookie: 'grXmode=dark', stored: 'dim' })).toBe('ink-dim')
+    expect(runScript(withCookie, { cookie: 'gr.mode=nope', stored: 'dim' })).toBe('ink-dim')
+    // Без `cookie` чужая cookie с именем ключа выбор не перебивает.
+    expect(runScript(createThemeScript({ manifest: MANIFEST }), { cookie: 'granum-theme=dark', stored: 'light' })).toBe('ink-light')
   })
 
-  it('nonce в теге; закрывающий тег в данных не ломает скрипт', () => {
-    const script = createThemeScript({ manifest: { ...MANIFEST, theme: { id: 'ink', title: '</script>' } }, nonce: 'abc"' })
+  it('ничего не бросает наружу: без DOM, без matchMedia, с бросающим хранилищем', () => {
+    const code = createThemeScriptCode({ manifest: MANIFEST, cookie: 'mode', reapplyOn: ['astro:after-swap'] })
+    expect(() => runInNewContext(code, {})).not.toThrow()
+    expect(runCode(code, { noMatchMedia: true }).attribute).toBe('ink-light')
+    expect(runCode(code, { storageThrows: true, dark: true }).attribute).toBe('ink-dark')
+  })
+
+  it('reapplyOn: пара ставится заново после подмены документа', () => {
+    const attributes = new Map<string, string>()
+    const listeners: Array<[string, () => void]> = []
+    const document = {
+      documentElement: { getAttribute: (n: string) => attributes.get(n) ?? null, setAttribute: (n: string, v: string) => void attributes.set(n, v) },
+      cookie: '',
+      addEventListener: (type: string, fn: () => void) => {
+        // Как у браузера: та же функция на то же событие второй раз не подписывается.
+        if (!listeners.some(([t, f]) => t === type && f === fn))
+          listeners.push([type, fn])
+      },
+    }
+    runInNewContext(createThemeScriptCode({ manifest: MANIFEST, reapplyOn: ['astro:after-swap'] }), { document, localStorage: { getItem: () => 'dim' }, window: {} })
+    expect(attributes.get('data-theme')).toBe('ink-dim')
+    attributes.clear()
+    listeners.forEach(([, fn]) => fn())
+    listeners.forEach(([, fn]) => fn())
+    expect(attributes.get('data-theme')).toBe('ink-dim')
+    expect(listeners.map(([type]) => type)).toEqual(['astro:after-swap'])
+  })
+
+  it('код собран под манифест: без cookie и с одной схемой лишних веток нет', () => {
+    const code = createThemeScriptCode({ manifest: MANIFEST })
+    expect(code).not.toContain('cookie')
+    expect(code).not.toContain('addEventListener')
+    expect(code).toContain('m={light:"ink-light",dark:"ink-dark",dim:"ink-dim"}')
+    expect(createThemeScriptCode({ manifest: { ...MANIFEST, modes: [MANIFEST.modes[0]!] } })).not.toContain('matchMedia')
+  })
+
+  it('укладывается в 512 Б на теме из двух режимов — даже с cookie и повтором по событию', () => {
+    const slate: GranumThemeManifest = {
+      theme: { id: 'slate', title: 'Slate' },
+      modes: [{ name: 'light', colorScheme: 'light', value: 'slate-light' }, { name: 'dark', colorScheme: 'dark', value: 'slate-dark' }],
+      defaultMode: 'light',
+      activation: { attribute: 'data-theme' },
+    }
+    const code = createThemeScriptCode({ manifest: slate, storageKey: 'gr-theme', cookie: 'gr-theme', reapplyOn: ['astro:after-swap'] })
+    expect(new TextEncoder().encode(code).length).toBeLessThanOrEqual(512)
+  })
+
+  it('nonce в теге; закрывающий тег в данных не ломает скрипт; плохое имя cookie и пустой манифест — ошибка', () => {
+    const script = createThemeScript({ manifest: { ...MANIFEST, activation: { attribute: 'data-theme' }, modes: [{ ...MANIFEST.modes[0]!, value: '</script>' }] }, nonce: 'abc"' })
     expect(script.startsWith('<script nonce="abc&quot;">')).toBe(true)
     expect(script.match(/<\/script>/g)).toHaveLength(1)
+    expect(() => createThemeScript({ manifest: MANIFEST, cookie: 'a;b' })).toThrow(/cookie token/)
+    expect(() => createThemeScript({ manifest: MANIFEST, cookie: '</script>' })).toThrow(/cookie token/)
+    expect(() => createThemeScript({ manifest: { ...MANIFEST, modes: [] } })).toThrow(/no modes/)
   })
 })
 

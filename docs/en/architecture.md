@@ -38,7 +38,7 @@ Three principles from which everything else follows:
 | `.` | browser + node | contract and resolver: `resolveGranum`, `GranumResolution` types, errors |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | the `GranumEngine` interface, rule types, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
 | `./build` | node, peer `vite` | the `granumProvider()` plugin |
 | `./vite` | node, peer `vite` | the `granum()` plugin, `defineGranumConfig` |
 | `./node` | node | manifest reading, `prepareApp`, `emitCss`, `buildReport`, diagnostics as functions |

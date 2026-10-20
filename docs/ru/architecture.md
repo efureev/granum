@@ -38,7 +38,7 @@
 | `.` | browser + node | контракт и резолвер: `resolveGranum`, типы `GranumResolution`, ошибки |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | интерфейс `GranumEngine`, типы правил, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
 | `./build` | node, peer `vite` | плагин `granumProvider()` |
 | `./vite` | node, peer `vite` | плагин `granum()`, `defineGranumConfig` |
 | `./node` | node | чтение манифестов, `prepareApp`, `emitCss`, `buildReport`, диагностика как функции |

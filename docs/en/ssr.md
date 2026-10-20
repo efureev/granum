@@ -82,8 +82,17 @@ scheme and, finally, the default mode.
 import { createThemeScript } from '@feugene/granum/runtime'
 
 const script = createThemeScript({ manifest, nonce, cookie: 'granum-theme' })
-// '<script nonce="…">(function(){…})()</script>' — into the template's <head>
+// '<script nonce="…">(function f(){…})()</script>' — into the template's <head>
 ```
+
+The code is built for the manifest: the pairs and the choice by scheme are constants, the
+cookie branch exists only with `cookie`. Two modes with every option fit in about 500 bytes,
+without the cookie — about 400. The script throws nothing: an error in `<head>` would leave
+the page without a pair and with nobody to see it.
+
+A host that swaps the document without a reload copies the root attributes from the new
+document, where there is no pair. `reapplyOn` sets it again after the given `document` events:
+`createThemeScript({ manifest, reapplyOn: ['astro:after-swap'] })`.
 
 The plugin inserts it itself with `granum(config, { themeScript: true })` — first in the
 `<head>` of the HTML entry. An SSR application inserts the string itself or does with
@@ -97,8 +106,10 @@ disagree:
 ```ts
 const plugin = config.vite.plugins.find(p => p?.name === 'granum:app')
 const manifest = await plugin.api.themeManifest(projectRoot)
-const script = createThemeScript({ manifest, storageKey: 'gr-theme' })
+injectScript('head-inline', createThemeScriptCode({ manifest, storageKey: 'gr-theme', reapplyOn: ['astro:after-swap'] }))
 ```
+
+`createThemeScriptCode` is the same code without the `<script>` tag.
 
 Without the plugin — `resolveThemeManifest({ providers, theme, modes, root })` from
 `@feugene/granum/node`: the same result, the app sources are not scanned.

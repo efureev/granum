@@ -15,7 +15,9 @@ export { type GranumModeEntry, type GranumPreviewEntry, type GranumThemeManifest
 export {
   createCookieStorage,
   createThemeScript,
+  createThemeScriptCode,
   type GranumCookieStorageOptions,
+  type GranumThemeScriptCodeOptions,
   type GranumThemeScriptOptions,
   modeFromCookie,
   themeRootAttributes,

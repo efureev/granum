@@ -6,44 +6,102 @@ import type { GranumThemeStorage } from './controller'
 import type { GranumModeEntry, GranumThemeManifest } from './manifest'
 import { DEFAULT_THEME_STORAGE_KEY } from './controller'
 
-export interface GranumThemeScriptOptions {
+export interface GranumThemeScriptCodeOptions {
   readonly manifest: GranumThemeManifest
   /** Ключ `localStorage`. По умолчанию `granum-theme` — тот же, что у контроллера. */
   readonly storageKey?: string
-  /** `nonce` для Content-Security-Policy. */
-  readonly nonce?: string
   /** Имя cookie, если режим хранится в ней (`createCookieStorage`): cookie читается раньше `localStorage`. */
   readonly cookie?: string
+  /**
+   * События `document`, после которых пара ставится заново. Хост, который
+   * подменяет документ без перезагрузки, копирует атрибуты корня из нового
+   * документа, а там пары нет: `astro:after-swap` у `ClientRouter` Astro,
+   * `turbo:load` у Turbo.
+   */
+  readonly reapplyOn?: readonly string[]
 }
+
+export interface GranumThemeScriptOptions extends GranumThemeScriptCodeOptions {
+  /** `nonce` для Content-Security-Policy. */
+  readonly nonce?: string
+}
+
+/** Имя cookie — токен RFC 6265: в нём нет ни `;`, ни `=`, ни символов, ломающих `<script>`. */
+const COOKIE_NAME_RE = /^[!#$%&'*+\-.^\w`|~]+$/
+/** Имя режима — идентификатор (C-25): ключ объекта без кавычек. */
+const IDENTIFIER_RE = /^[a-z][a-z0-9]*$/
 
 function escapeAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 }
 
+/** Строковый литерал JS, который не закроет `<script>`. */
+function literal(value: string): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
+/** Пара режима, который выбрала бы системная схема: первый режим этой схемы, иначе режим по умолчанию. */
+function systemPair(manifest: GranumThemeManifest, scheme: 'light' | 'dark'): string {
+  const mode = manifest.modes.find(m => m.colorScheme === scheme)
+    ?? manifest.modes.find(m => m.name === manifest.defaultMode)
+    ?? manifest.modes[0]!
+  return mode.value
+}
+
 /**
- * Строка `<script>` для `<head>`: ставит пару на корень до первого кадра —
- * сохранённый режим, иначе по системной схеме, иначе режим по умолчанию. Пара,
- * уже выставленная сервером, не трогается.
+ * Код скрипта, ставящего пару на корень до первого кадра, без тега `<script>` —
+ * для хоста, который вставляет его сам (`injectScript` Astro).
+ *
+ * Правило — то же, что у контроллера с `initial: 'auto'` (RT-1, RT-5): пара,
+ * уже стоящая на корне, остаётся; иначе режим из cookie, из `localStorage`,
+ * первый режим системной схемы, режим по умолчанию. Код собирается под
+ * манифест: пары и выбор по схеме — константами, ветка cookie — только при
+ * `cookie`. Исключение из скрипта не выходит: в `<head>` оно оставило бы
+ * страницу без пары и без ошибки, которую кто-то увидит.
+ */
+export function createThemeScriptCode(options: GranumThemeScriptCodeOptions): string {
+  const { manifest } = options
+  if (manifest.modes.length === 0)
+    throw new Error('createThemeScript: the manifest has no modes — the build contains no theme.')
+  if (options.cookie !== undefined && !COOKIE_NAME_RE.test(options.cookie))
+    throw new Error(`createThemeScript: cookie name '${options.cookie}' is not a valid cookie token.`)
+
+  const pairs = manifest.modes.map(m => `${IDENTIFIER_RE.test(m.name) ? m.name : literal(m.name)}:${literal(m.value)}`).join(',')
+  const dark = systemPair(manifest, 'dark')
+  const light = systemPair(manifest, 'light')
+  const system = dark === light
+    ? literal(dark)
+    : `window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?${literal(dark)}:${literal(light)}`
+  // Имя режима — идентификатор, а такой `encodeURIComponent` не меняет:
+  // cookie сравнивается с именами как есть, без разбора кодирования.
+  // `document.cookie` браузер отдаёт через `; ` — другого разделителя там нет.
+  const cookie = options.cookie !== undefined
+    ? `try{c=(d.cookie.match(/(?:^|; )${options.cookie.replace(/[$*+.^|]/g, '\\$&')}=([^;]*)/)||0)[1]}catch(e){}`
+    : ''
+  const listen = (options.reapplyOn ?? []).map(event => `d.addEventListener(${literal(event)},f);`).join('')
+  const vars = options.cookie !== undefined ? 's,c,p,q,k' : 's,p,k'
+  const pick = options.cookie !== undefined ? 'if(k===c)q=m[k];if(k===s)p=m[k]' : 'if(k===s)p=m[k]'
+  const chosen = options.cookie !== undefined ? 'q||p' : 'p'
+
+  // Именованная функция: `addEventListener` с той же функцией не дублирует
+  // подписку, поэтому повторный вызов по событию её не умножает.
+  // `document` в переменной окупается только со второго обращения.
+  const root = cookie || listen ? 'd=document,r=d.documentElement' : 'r=document.documentElement'
+
+  return `(function f(){try{var ${root},a=${literal(manifest.activation.attribute)},`
+    + `m={${pairs}},v=r.getAttribute(a),${vars};${listen}${cookie}`
+    + `try{s=localStorage.getItem(${literal(options.storageKey ?? DEFAULT_THEME_STORAGE_KEY)})}catch(e){}`
+    + `for(k in m){if(m[k]===v)return;${pick}}`
+    + `r.setAttribute(a,${chosen}||(${system}))}catch(e){}})()`
+}
+
+/**
+ * Строка `<script>` для `<head>`: ставит пару на корень до первого кадра
+ * (`createThemeScriptCode`).
  */
 export function createThemeScript(options: GranumThemeScriptOptions): string {
-  const { manifest } = options
-  const data = {
-    a: manifest.activation.attribute,
-    k: options.storageKey ?? DEFAULT_THEME_STORAGE_KEY,
-    c: options.cookie ?? null,
-    d: manifest.defaultMode,
-    m: Object.fromEntries(manifest.modes.map(mode => [mode.name, [mode.value, mode.colorScheme]])),
-  }
-  // `<` экранируется: значение внутри `<script>` не должно закрыть тег.
-  const json = JSON.stringify(data).replace(/</g, '\\u003c')
-  const body = `(function(){var o=${json},r=document.documentElement,v=r.getAttribute(o.a),s=null,n,i;`
-    + `for(n in o.m)if(o.m[n][0]===v)return;`
-    + `if(o.c){var p=document.cookie.split(';');for(i=0;i<p.length;i++){var e=p[i].indexOf('=');if(p[i].slice(0,e).trim()===o.c){try{s=decodeURIComponent(p[i].slice(e+1).trim())}catch(x){}}}}`
-    + `if(!s||!o.m[s]){try{s=localStorage.getItem(o.k)}catch(x){}}`
-    + `if(!s||!o.m[s]){var d=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';s=o.d;for(n in o.m)if(o.m[n][1]===d){s=n;break}}`
-    + `r.setAttribute(o.a,o.m[s][0])})()`
   const nonce = options.nonce !== undefined ? ` nonce="${escapeAttribute(options.nonce)}"` : ''
-  return `<script${nonce}>${body}</script>`
+  return `<script${nonce}>${createThemeScriptCode(options)}</script>`
 }
 
 export interface GranumCookieStorageOptions {

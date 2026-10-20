@@ -81,8 +81,17 @@ cookie — нет и выбора.
 import { createThemeScript } from '@feugene/granum/runtime'
 
 const script = createThemeScript({ manifest, nonce, cookie: 'granum-theme' })
-// '<script nonce="…">(function(){…})()</script>' — в <head> шаблона
+// '<script nonce="…">(function f(){…})()</script>' — в <head> шаблона
 ```
+
+Код собирается под манифест: пары и выбор по схеме — константами, ветка cookie есть
+только при `cookie`. Два режима со всеми опциями укладываются примерно в 500 байт, без
+cookie — примерно в 400. Скрипт ничего не бросает: ошибка в `<head>` оставила бы страницу
+без пары, и увидеть её было бы некому.
+
+Хост, который подменяет документ без перезагрузки, копирует атрибуты корня из нового
+документа, а пары там нет. `reapplyOn` ставит её заново после указанных событий
+`document`: `createThemeScript({ manifest, reapplyOn: ['astro:after-swap'] })`.
 
 Плагин вставляет его сам при `granum(config, { themeScript: true })` — первым в
 `<head>` HTML-точки входа. SSR-приложение вставляет строку само или обходится
@@ -95,8 +104,10 @@ const script = createThemeScript({ manifest, nonce, cookie: 'granum-theme' })
 ```ts
 const plugin = config.vite.plugins.find(p => p?.name === 'granum:app')
 const manifest = await plugin.api.themeManifest(projectRoot)
-const script = createThemeScript({ manifest, storageKey: 'gr-theme' })
+injectScript('head-inline', createThemeScriptCode({ manifest, storageKey: 'gr-theme', reapplyOn: ['astro:after-swap'] }))
 ```
+
+`createThemeScriptCode` — тот же код без тега `<script>`.
 
 Без плагина — `resolveThemeManifest({ providers, theme, modes, root })` из
 `@feugene/granum/node`: результат тот же, исходники приложения не сканируются.
