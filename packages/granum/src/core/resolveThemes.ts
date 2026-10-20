@@ -53,7 +53,7 @@ export interface GranumModeActivation {
 }
 
 export interface GranumModesInput {
-  /** `undefined` — все режимы темы плюс `define`; `[]` — режимов нет. */
+  /** `undefined` — режим по умолчанию темы плюс `define`; `[]` — режимов нет. */
   readonly names?: readonly string[]
   readonly define?: Readonly<Record<string, GranumModeDefinition>>
   readonly activation?: GranumModeActivation

@@ -167,6 +167,7 @@ describe('granum doctor', () => {
     // Без `modes.names` — только режим по умолчанию темы (A-25).
     expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light'])
     expect(formatDoctorReport(report)).toContain('Theme: kit (source: defaultTheme of the catalog owner, catalog of @x/kit)')
+    expect(formatDoctorReport(report)).toContain('Modes: [light] (source: default mode of the theme and modes.define)')
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
     // `--nowhere` никем не объявлен; `shadow-legacy` — без правила движка.

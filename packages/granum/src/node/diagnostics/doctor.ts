@@ -470,7 +470,7 @@ const THEME_SOURCE_TEXT: Record<ThemeSource, string> = {
 
 const MODES_SOURCE_TEXT: Record<ModesSource, string> = {
   explicit: 'modes.names',
-  theme: 'all modes of the theme and modes.define',
+  theme: 'default mode of the theme and modes.define',
 }
 
 /** Опции текстового вывода доктора. JSON они не касаются. */
