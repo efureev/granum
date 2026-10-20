@@ -8,7 +8,7 @@
  *     `var(` и режимные, одинаковые во всех режимах; затем режим по умолчанию
  *     под `:root, [attr="пара"]`, остальные под `[attr="пара"]`, фолбэки
  *     `@supports` (у режима по умолчанию — под `:root:not([attr])` и парой),
- *     блок `prefers-color-scheme` и превью-темы.
+ *     блок `prefers-color-scheme` с фолбэками тёмного режима и превью-темы.
  *
  * Формула под `[attr]` пересчитывается на каждом острове: под одним `:root` она
  * вычислилась бы по ролям корня и унаследовалась бы островом готовой.
@@ -104,12 +104,12 @@ function splitSet(set: ThemeTokenSet): SetBlocks {
   }
 }
 
-function fallbackBlocks(set: ThemeTokenSet, mode: ResolvedMode, selector: string, keep: Keep): string[] {
+function fallbackBlocks(set: ThemeTokenSet, mode: ResolvedMode, selector: string, keep: Keep, indent = ''): string[] {
   const out: string[] = []
   for (const block of set.fallbacks.get(mode.name) ?? []) {
-    const inner = serializeBlock(selector, block.tokens.values(), keep, undefined, '  ')
+    const inner = serializeBlock(selector, block.tokens.values(), keep, undefined, `${indent}  `)
     if (inner !== undefined)
-      out.push(`@supports ${block.supports} {\n${inner}\n}`)
+      out.push(`${indent}@supports ${block.supports} {\n${inner}\n${indent}}`)
   }
   return out
 }
@@ -165,11 +165,15 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     }
     for (const mode of themes.modes)
       push(partOf(mode.name), ...fallbackBlocks(active, mode, fallbackSelectorOf(mode), keep))
-    if (themes.system === 'media') {
-      const dark = themes.modes.find(mode => mode.colorScheme === 'dark')
-      const inner = dark ? serializeBlock(bareRoot, split.modeChains(dark.name), keep, 'dark', '  ') : undefined
-      if (dark && inner)
-        push(partOf(dark.name), `@media (prefers-color-scheme: dark) {\n${inner}\n}`)
+    const dark = themes.system === 'media' ? themes.modes.find(mode => mode.colorScheme === 'dark') : undefined
+    if (dark) {
+      // Фолбэки тёмного режима — внутри того же медиазапроса: под парой они
+      // корень без атрибута не достают, а блок схемы перебивает фолбэк корня.
+      const inner = [
+        serializeBlock(bareRoot, split.modeChains(dark.name), keep, 'dark', '  ')!,
+        ...fallbackBlocks(active, dark, bareRoot, keep, '  '),
+      ]
+      push(partOf(dark.name), `@media (prefers-color-scheme: dark) {\n${inner.join('\n')}\n}`)
     }
   }
 

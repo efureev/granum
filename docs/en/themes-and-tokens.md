@@ -162,7 +162,8 @@ instead of being inherited ready-made from the root. The default mode comes firs
 position decides. Then come the `@supports` fallbacks in the same order: the default
 mode's one goes under `:root:not([data-theme])` and its pair rather than under `:root`,
 otherwise it would override another mode's pair on the root by position. With
-`system: 'media'` the `prefers-color-scheme` block closes the list. A mode's `colorScheme` is a
+`system: 'media'` the `prefers-color-scheme` block closes the list and carries the dark
+mode's fallbacks inside the same media query. A mode's `colorScheme` is a
 `color-scheme` declaration in its block. The theme data's `baseCss` goes to the `base` layer.
 
 ## Previews

@@ -77,7 +77,7 @@
 | INV-MODE-2 | Режим по умолчанию первым под `:root, [<attr>="<пара>"]`, остальные — под парой в порядке набора, затем фолбэки `@supports`; фолбэк режима по умолчанию — под `:root:not([<attr>])` и парой, а не под `:root` | T-9 | сборщик CSS | `themeCss.test.ts`; `emitCss.test.ts` — порядок при любом `modes.names` |
 | INV-MODE-3 | Токен, объявленный хоть в одном режиме, получает значение в каждом; формула, одинаковая во всех режимах, выводится один раз под общей границей | T-10 | резолвер, сборщик CSS | `tokenLayers.test.ts`; `themeCss.test.ts` |
 | INV-MODE-4 | Классы `.light`/`.dark` не выводятся: активация — только атрибут | T-11 | сборщик CSS | `themeCss.test.ts` |
-| INV-MODE-5 | `colorScheme` режима — объявление `color-scheme` в его блоке; `system: 'media'` — блок `prefers-color-scheme` для корня без атрибута | T-12, T-13 | сборщик CSS | `themeCss.test.ts` |
+| INV-MODE-5 | `colorScheme` режима — объявление `color-scheme` в его блоке; `system: 'media'` — блок `prefers-color-scheme` для корня без атрибута вместе с фолбэками тёмного режима | T-12, T-13 | сборщик CSS | `themeCss.test.ts` |
 | INV-MODE-6 | Пара, записанная в разметку, читается обратно в тот же режим | RT-5 | `./runtime` | `runtime.test.ts`; `verify-ssr.mjs`: сервер пишет пару, клиентское чтение возвращает тот же режим |
 | INV-MODE-7 | Контроллер, поднятый поверх уже выставленной пары, не меняет корень: серверный кадр и первый клиентский совпадают | RT-5 | `./runtime` | `runtime.test.ts`; `verify-ssr.mjs`: старт контроллера не трогает корень, переключение трогает |
 | INV-MODE-8 | `./runtime` работает в Node без DOM: контроллер конструируется, отвечает на запросы и молча не применяет режим | RT-1 | `./runtime` | `runtime.test.ts`; `verify-ssr.mjs` под `document === undefined` |
