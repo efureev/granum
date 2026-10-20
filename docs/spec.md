@@ -1,7 +1,7 @@
 # Техническое задание: `@feugene/granum`
 
-Версия документа: 2.7 · 2026-10-20 · статус: действует — granum 3.7, темы и режимы
-([ADR-11](./decisions.md)). Версия 1.0 описывала granum 1.x–2.x.
+Версия документа: 2.8 · 2026-10-21 · статус: действует — granum 3.8, темы и режимы
+([ADR-11](./decisions.md)), темы сборки ([ADR-12](./decisions.md)). Версия 1.0 описывала granum 1.x–2.x.
 
 Смежные документы: [`invariants.md`](./invariants.md), [`manifest.md`](./manifest.md),
 [`decisions.md`](./decisions.md), [`plan.md`](./plan.md).
