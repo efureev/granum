@@ -191,6 +191,11 @@ describe('dev: лист дополнительной темы', () => {
     expect(code).not.toContain('granum-theme-kit')
     const html = await app.server.transformIndexHtml('/index.html', '<!doctype html><html><head></head><body></body></html>')
     expect(html).toContain('ink:"/@granum-theme/granum-theme-ink.css"')
+    // В dev стили приходят из JS уже после ссылки скрипта: порядок слоёв
+    // приложение объявляет в `<head>` само, и скрипт MUST стоять после него.
+    const declared = await app.server.transformIndexHtml('/index.html', '<!doctype html><html><head><style>@layer reset, granum;</style></head><body></body></html>')
+    expect(declared.indexOf('@layer reset, granum;')).toBeGreaterThan(-1)
+    expect(declared.indexOf('@layer reset, granum;')).toBeLessThan(declared.indexOf('ink:"/@granum-theme/'))
     const sheet = await get(app.server, '/@granum-theme/granum-theme-ink.css')
     expect(sheet.type).toMatch(/text\/css/)
     expect(sheet.body).toMatch(/@layer granum\.themes \{[\s\S]*\[data-theme="ink-dark"\]/)

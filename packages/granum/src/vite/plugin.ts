@@ -532,11 +532,13 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
   }
 
   /**
-   * Ранний скрипт — первым в `<head>`, до стилей: пара должна стоять раньше
-   * первого кадра. Адреса листов дополнительных тем — из бандла на сборке и
-   * dev-сервера в dev: тема без адреса в выбор скрипта не попадает.
+   * Ранний скрипт — последним в `<head>`, после стилей страницы: пару он и так
+   * ставит до первого кадра, а лист дополнительной темы, который он вставляет,
+   * объявляет слои granum. Встав раньше стилей, лист объявил бы `granum` до
+   * слоёв приложения, и те перебили бы его. Адреса листов — из бандла на
+   * сборке и dev-сервера в dev: тема без адреса в выбор скрипта не попадает.
    */
-  const themeScriptTags = async (bundle: Record<string, unknown> | undefined, page: string): Promise<{ tag: string, attrs?: Record<string, string>, children: string, injectTo: 'head-prepend' }[]> => {
+  const themeScriptTags = async (bundle: Record<string, unknown> | undefined, page: string): Promise<{ tag: string, attrs?: Record<string, string>, children: string, injectTo: 'head' }[]> => {
     if (!options.themeScript)
       return []
     const themes = await sheetThemes()
@@ -556,7 +558,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     if (!main || main.modes.length === 0)
       return []
     const { nonce, ...code } = options.themeScript === true ? {} : options.themeScript
-    return [{ tag: 'script', ...(nonce !== undefined ? { attrs: { nonce } } : {}), children: createThemeScriptCode({ manifest, ...code }), injectTo: 'head-prepend' }]
+    return [{ tag: 'script', ...(nonce !== undefined ? { attrs: { nonce } } : {}), children: createThemeScriptCode({ manifest, ...code }), injectTo: 'head' }]
   }
 
   const invalidate = (): void => {
@@ -819,11 +821,12 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         // База обязательна: приложение может жить не в корне домена, и Vite
         // проставляет её своим ссылкам — наши не имеют права отличаться.
         const prefix = base.endsWith('/') ? base : `${base}/`
-        return [...scriptTags, ...links.map(href => ({
+        // Скрипт — после срезов: лист темы, который он вставит, идёт за ними.
+        return [...links.map(href => ({
           tag: 'link',
           attrs: { rel: 'stylesheet', href: `${prefix}${href}` },
           injectTo: 'head' as const,
-        }))]
+        })), ...scriptTags]
       },
     },
 

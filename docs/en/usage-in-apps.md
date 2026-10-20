@@ -155,6 +155,17 @@ A layer's place in the cascade is set by its first appearance, so a reset
 imported earlier loses to every granum layer — which is exactly what a reset
 should do.
 
+An additional theme's sheet may be the first to declare the granum layers: the
+`themeScript` script inserts its link before the first frame. In a build the
+script stands after the page's styles, and the order does not change. In dev the
+application's styles arrive from JS after the link — declare the layer order in
+`<head>` yourself, before the script:
+
+```html
+<!-- index.html -->
+<style>@layer reset, granum;</style>
+```
+
 With the v1 preset the question did not arise: there UnoCSS “layers” are output
 order rather than cascade layers, and the conflict was settled by specificity,
 where a class beats a tag.
@@ -321,8 +332,8 @@ await themes.setTheme('clay') // the clay sheet first, then the pair
 The theme manifest — the build themes with their modes and pairs, the default theme, the
 sheet addresses of the additional themes and the activation attribute — comes from the
 same resolution. The pair is set before the first
-frame by the plugin option `granum(config, { themeScript: true })` — the script goes first
-into the `<head>` of the HTML entry. Details in [Themes and tokens](./themes-and-tokens.md#runtime).
+frame by the plugin option `granum(config, { themeScript: true })` — the script goes last
+into the `<head>` of the HTML entry, after the page's styles. Details in [Themes and tokens](./themes-and-tokens.md#runtime).
 
 ## Dev mode
 

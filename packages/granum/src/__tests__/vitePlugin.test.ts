@@ -337,7 +337,7 @@ describe('granum() с настоящим Vite', async () => {
     })
 
     /** Сборка со скриптом до первого кадра: страницы — пути HTML-входов. */
-    async function buildWithScript(base: string, pages: readonly string[]): Promise<string> {
+    async function buildWithScript(base: string, pages: readonly string[], config: Partial<GranumConfig> = {}): Promise<string> {
       const root = mkdtempSync(join(tmpdir(), 'granum-script-'))
       mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
       symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
@@ -351,7 +351,7 @@ describe('granum() с настоящим Vite', async () => {
         base,
         configFile: false,
         logLevel: 'silent',
-        plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'], themes: THEMES }, { log: () => {}, themeScript: true })],
+        plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'], themes: THEMES, ...config }, { log: () => {}, themeScript: true })],
         build: { minify: false, rolldownOptions: { input: Object.fromEntries(pages.map(page => [page.replace(/\W/g, '_'), join(root, page)])) } },
       })
       return root
@@ -367,6 +367,35 @@ describe('granum() с настоящим Vite', async () => {
       expect(existsSync(join(root, 'dist', href!.slice('/app/'.length)))).toBe(true)
       const js = readdirSync(join(root, 'dist/assets')).filter(f => f.endsWith('.js')).map(f => readFileSync(join(root, 'dist/assets', f), 'utf8')).join('\n')
       expect(js).toContain(href!.slice('/app/'.length))
+    })
+
+    /**
+     * Лист дополнительной темы начинается объявлением слоёв granum. Вставленный
+     * раньше стилей страницы, он объявил бы `granum` до слоёв приложения — и
+     * сброс в своём слое снова перебил бы утилиты и CSS компонентов.
+     */
+    const headOrder = (html: string): { script: number, lastStylesheet: number, tail: string } => {
+      const head = html.slice(0, html.indexOf('</head>'))
+      const script = head.indexOf('<script>')
+      return { script, lastStylesheet: head.lastIndexOf('<link rel="stylesheet"'), tail: head.slice(head.indexOf('</script>', script) + '</script>'.length).trim() }
+    }
+
+    it('скрипт до первого кадра — последним в <head>, после стилей страницы', async () => {
+      const root = await buildWithScript('/app/', ['index.html'])
+      const order = headOrder(readFileSync(join(root, 'dist/index.html'), 'utf8'))
+      expect(order.script).toBeGreaterThan(-1)
+      expect(order.lastStylesheet).toBeGreaterThan(-1)
+      expect(order.lastStylesheet).toBeLessThan(order.script)
+      expect(order.tail).toBe('')
+    })
+
+    it('css.split: скрипт до первого кадра — после ссылок на срезы слоёв', async () => {
+      const root = await buildWithScript('/app/', ['index.html'], { css: { split: true } })
+      const html = readFileSync(join(root, 'dist/index.html'), 'utf8')
+      expect(html).toMatch(/granum\.utilities-[\w-]+\.css/)
+      const order = headOrder(html)
+      expect(order.lastStylesheet).toBeLessThan(order.script)
+      expect(order.tail).toBe('')
     })
 
     it('относительный base: адрес в скрипте — от страницы, и для страницы в подкаталоге', async () => {

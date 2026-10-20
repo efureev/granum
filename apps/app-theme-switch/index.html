@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
     <title>granum app-theme-switch — переключение тем и режимов</title>
+    <!--
+      Порядок слоёв — до скрипта темы. Лист дополнительной темы объявляет слои
+      granum, а в dev стили приложения приходят из JS уже после его ссылки: без
+      этой строки granum объявился бы раньше сброса и проиграл бы ему.
+    -->
+    <style>@layer reset, demo, granum;</style>
   </head>
   <body>
     <header class="demo-head">

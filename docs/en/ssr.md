@@ -64,8 +64,9 @@ The user's choice reaches the server in a cookie: on the client it is written by
 `createCookieStorage()`, the server reads it with `themeFromCookie`. A key that names
 no mode of a selectable build theme is never returned by `themeFromCookie`: there are no
 CSS blocks for it. For an additional theme the server also puts its sheet's `<link>`
-into `<head>` — its order against the shared sheet does not matter, the cascade does
-not depend on it. An application framed by another site needs `sameSite: 'none'` — the storage writes
+into `<head>` — after the page's styles: the sheet declares the granum layers, and
+ahead of the styles it would declare them before the application's layers, so a
+reset in its own layer would beat the utilities. An application framed by another site needs `sameSite: 'none'` — the storage writes
 such a cookie with `Secure`, without which the browser rejects it; `secure: true` adds the
 attribute with other values too.
 
@@ -103,9 +104,11 @@ A host that swaps the document without a reload copies the root attributes from 
 document, where there is no pair. `reapplyOn` sets it again after the given `document` events:
 `createThemeScript({ manifest, reapplyOn: ['astro:after-swap'] })`.
 
-The plugin inserts it itself with `granum(config, { themeScript: true })` — first in the
-`<head>` of the HTML entry. An SSR application inserts the string itself or does with
-the pair the server writes.
+The plugin inserts it itself with `granum(config, { themeScript: true })` — last in the
+`<head>` of the HTML entry, after the styles: the sheet link the script inserts has to
+follow them. An SSR application inserts the string itself — also after the styles — or
+does with the pair the server writes. A host that puts the inline script before the
+styles has to declare the layer order ahead of it: `<style>@layer reset, granum;</style>`.
 
 A host that renders pages without an HTML entry (Astro, its own SSR server) needs the
 manifest before Vite starts the build — `virtual:granum/themes` does not exist yet. The plugin

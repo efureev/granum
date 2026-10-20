@@ -542,6 +542,14 @@ for (const stand of ['app-theme-ink', 'app-5']) {
     check(await attribute() === 'sand-dark', `пример: после перезагрузки без JS приложения выбор на корне: ${await attribute()}`)
     check(await page.evaluate(() => document.querySelector('link[data-granum-theme="sand"]')?.getAttribute('blocking') === 'render'), 'пример: лист sand поставлен скриптом до первого кадра')
     check(await token('html', '--th-radius') === '12px', `пример: значения sand на корне без JS приложения: ${await token('html', '--th-radius')}`)
+
+    // Лист, вставленный скриптом, стоит после стилей страницы: слой granum
+    // объявлен после сброса приложения, и утилиты кнопок сбросу не проигрывают.
+    blockScripts = false
+    await page.reload()
+    await page.waitForSelector('[data-theme-option="sand"]')
+    const background = await page.evaluate(() => getComputedStyle(document.querySelector('[data-theme-option="sand"]')).backgroundColor)
+    check(background === 'rgb(245, 158, 11)', `пример: после перезагрузки утилиты кнопок не перебиты сбросом приложения: фон ${background}`)
   }
   catch (error) {
     failures.push(`пример переключения тем: прогон упал: ${error?.message ?? error}`)
@@ -553,7 +561,46 @@ for (const stand of ['app-theme-ink', 'app-5']) {
   }
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5, пример переключения тем)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Тот же пример на dev-сервере: стили приходят из JS уже после ссылки на лист,
+ * которую поставил скрипт, и порядок слоёв держит объявление в `<head>` примера.
+ */
+{
+  const stand = fileURLToPath(new URL('../apps/app-theme-switch/', import.meta.url))
+  try {
+    server = await createServer({
+      root: stand,
+      configFile: join(stand, 'vite.config.ts'),
+      logLevel: 'warn',
+      server: { port: 5197, strictPort: true },
+    })
+    await server.listen()
+    const url = server.resolvedUrls?.local?.[0] ?? 'http://localhost:5197/app-theme-switch/'
+    browser = await chromium.launch()
+    const page = await browser.newPage()
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto(url)
+    await page.waitForSelector('[data-theme-option="sand"]')
+    await page.click('[data-theme-option="sand"]')
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'sand-light', undefined, { timeout: 5000 })
+    await page.reload()
+    await page.waitForSelector('[data-theme-option="sand"]')
+    await page.waitForFunction(() => document.querySelector('link[data-granum-theme="sand"]')?.getAttribute('data-granum-state') === 'load', undefined, { timeout: 5000 })
+    const background = await page.evaluate(() => getComputedStyle(document.querySelector('[data-theme-option="sand"]')).backgroundColor)
+    check(background === 'rgb(180, 83, 9)', `пример в dev: после перезагрузки утилиты кнопок не перебиты сбросом приложения: фон ${background}`)
+  }
+  catch (error) {
+    failures.push(`пример переключения тем в dev: прогон упал: ${error?.message ?? error}`)
+  }
+  finally {
+    await browser?.close()
+    browser = undefined
+    await server?.close()
+    server = undefined
+  }
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5, пример переключения тем на сборке и в dev)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
   ? '✓ слои, HMR, режимы, дополнительные темы, фолбэки и собранные листы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
