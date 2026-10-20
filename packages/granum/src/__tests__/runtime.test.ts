@@ -51,7 +51,7 @@ describe('getThemeManifest — из той же резолюции, что и CS
     resolveGranum({ providers: [owner], themeData: { '@p/ds': { paper: PAPER, ink: { ...INK, extensions: { granularity: { componentDefaults: { Button: { size: 'm' } } } } } } }, ...input })
 
   it('тема, режимы с парами, атрибут, extensions как есть', () => {
-    const manifest = getThemeManifest(resolve({ theme: 'ink', modes: { define: { sepia: { extends: 'light', title: 'Сепия' } } } }))
+    const manifest = getThemeManifest(resolve({ theme: 'ink', modes: { names: ['light', 'dark', 'dim', 'sepia'], define: { sepia: { extends: 'light', title: 'Сепия' } } } }))
     expect(manifest.theme).toEqual({ id: 'ink', title: 'Чернила' })
     expect(manifest.modes.map(m => `${m.name}:${m.value}:${m.colorScheme}`)).toEqual(['light:ink-light:light', 'dark:ink-dark:dark', 'dim:ink-dim:dark', 'sepia:ink-sepia:light'])
     expect(manifest.modes[3]!.title).toBe('Сепия')
@@ -62,7 +62,7 @@ describe('getThemeManifest — из той же резолюции, что и CS
   })
 
   it('превью — темы с парами по шаблону сборки', () => {
-    const manifest = getThemeManifest(resolve({ theme: 'ink', previews: ['paper'], modes: { activation: { attribute: 'data-look', value: '{mode}@{theme}' } } }))
+    const manifest = getThemeManifest(resolve({ theme: 'ink', previews: ['paper'], modes: { names: ['light', 'dim'], activation: { attribute: 'data-look', value: '{mode}@{theme}' } } }))
     expect(manifest.activation).toEqual({ attribute: 'data-look', value: '{mode}@{theme}' })
     expect(manifest.previews).toEqual([{ theme: { id: 'paper', title: 'Бумага' }, modes: [
       { name: 'light', colorScheme: 'light', value: 'light@paper' },

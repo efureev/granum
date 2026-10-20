@@ -34,7 +34,7 @@ function uiProvider(): ReturnType<typeof defineGranumProvider> {
 describe('emitThemeStylesheet', () => {
   it('слои tokens и themes темы с токенами компонентов; ни утилит, ни CSS компонентов', async () => {
     const { root, provider } = catalogProvider({ tokensCss: ':root { --p-space: 4px; }\n' })
-    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'paper', root })
+    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'paper', modes: { names: ['light', 'dark'] }, root })
     expect(sheet.layers.tokens).toContain('--p-space: 4px;')
     expect(sheet.layers.tokens).toContain('--p-radius: 6px;')
     expect(sheet.layers.themes).toContain(':root, [data-theme="paper-light"] {')
@@ -43,6 +43,13 @@ describe('emitThemeStylesheet', () => {
     expect(sheet.css).toContain('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;')
     expect(sheet.css).not.toContain('granum.utilities {')
     expect(sheet.css).not.toContain('comment')
+  })
+
+  it('без modes — только режим по умолчанию темы, как у сборки приложения', async () => {
+    const { root, provider } = catalogProvider()
+    const sheet = await emitThemeStylesheet({ providers: [provider], theme: 'paper', root })
+    expect(sheet.layers.themes).toContain(':root, [data-theme="paper-light"] {')
+    expect(sheet.layers.themes).not.toContain('paper-dark')
   })
 
   it('режимы и превью — как у приложения; плоский вывод без @layer', async () => {

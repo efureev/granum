@@ -43,7 +43,8 @@ function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } 
 
 async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<ReturnType<typeof emitCss>>, app: Awaited<ReturnType<typeof prepareTestApp>> }> {
   const { root, manifest } = fixture()
-  const app = await prepareTestApp({ providers: [manifest], ...config }, root)
+  // Оба режима фикстуры явно: без `modes.names` сборка берёт только режим по умолчанию.
+  const app = await prepareTestApp({ providers: [manifest], modes: { names: ['light', 'dark'] }, ...config }, root)
   return { css: await emitCss(app), app }
 }
 
@@ -210,12 +211,12 @@ describe('buildReport', () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/App.vue'), '<template><div class="bg-[var(--ghost)]"></div></template>')
-    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' } }, root)
+    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' }, modes: { names: ['light', 'dark'] } }, root)
     const css = await emitCss(app)
     const report = buildReport(app, css)
     expect(report.selection.map(s => s.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.selection[1]!.dependencies).toEqual(['@x/kit:Card'])
-    expect(report.themes).toEqual({ theme: 'kit', themeSource: 'default', modes: ['light', 'dark'], modesSource: 'theme', previews: [] })
+    expect(report.themes).toEqual({ theme: 'kit', themeSource: 'default', modes: ['light', 'dark'], modesSource: 'explicit', previews: [] })
     expect(report.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@x/kit:Panel'] }])
     expect(report.classes.safelistRedundant).toEqual(['p-4'])
     // `--ghost` потребляет разметка приложения, а не компонент: вердикт — тот же,

@@ -94,7 +94,8 @@ manifest is produced only by the build.
 
 - `granum doctor` → the `Theme` and `Modes` sections: is the right theme active and is the
   mode in the set? The theme is the config's `theme`, without it the catalog owner's
-  `defaultTheme`; the modes are `modes.names`, without it every mode of the theme and `modes.define`.
+  `defaultTheme`; the modes are `modes.names`, without it the theme's default mode and `modes.define`:
+  a dark mode does not reach the build without `modes.names: ['light', 'dark']`.
 - The root carries the pair `data-theme="<theme>-<mode>"`, not the mode name: `dark` without
   the theme matches no block. `virtual:granum/themes` lists the pairs;
   the controller and `createThemeScript` write them themselves.

@@ -109,7 +109,7 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), modes: { names: ['light', 'dark'] }, ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
     build: { minify: false, ...vite.build },
     ...(vite.css ? { css: vite.css } : {}),
   })

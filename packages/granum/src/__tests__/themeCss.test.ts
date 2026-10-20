@@ -33,7 +33,7 @@ describe('корень и режимы (T-8, T-9, T-12)', () => {
 
   it('режим по умолчанию первым под :root и парой, остальные под парой; color-scheme в блоке', async () => {
     const { root, provider } = catalogProvider()
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'ink' }, root))
+    const { themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'ink', modes: { names: ['light', 'dark', 'dim'] } }, root))
     const light = themes.indexOf(':root, [data-theme="ink-light"] {')
     const dark = themes.indexOf('[data-theme="ink-dark"] {')
     const dim = themes.indexOf('[data-theme="ink-dim"] {')
@@ -60,7 +60,7 @@ describe('формулы режимов (T-10)', () => {
       dark: { 'p-bg': '#000', 'p-soft': 'color-mix(in oklab, var(--p-bg) 90%, black)', 'p-edge': 'var(--p-soft)' },
     })
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider] }, root))
+    const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'] } }, root))
     expect(blockOf(themes, ':root, [data-theme]')).toContain('--p-soft:')
     expect(blockOf(themes, ':root, [data-theme="t-light"]')).not.toContain('--p-soft')
     expect(blockOf(themes, ':root, [data-theme="t-light"]')).toContain('--p-edge: var(--p-bg);')
@@ -76,7 +76,7 @@ describe('фолбэки, системная схема', () => {
 
   it('@supports после всех режимов, под селектором режима', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider] }, root))
+    const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'] } }, root))
     const supports = themes.indexOf('@supports not (color: oklch(0 0 0)) {')
     expect(supports).toBeGreaterThan(themes.indexOf('[data-theme="t-dark"] {'))
     expect(themes.slice(supports)).toContain(':root, [data-theme="t-light"] {\n    --p-bg: white;')
@@ -84,7 +84,7 @@ describe('фолбэки, системная схема', () => {
 
   it('system: media — тёмный режим по prefers-color-scheme, пока атрибут не выставлен (T-13)', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { system: 'media' } }, root))
+    const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], system: 'media' } }, root))
     expect(themes).toContain('@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {\n    color-scheme: dark;\n    --p-bg: #000;')
   })
 })
@@ -151,7 +151,7 @@ describe('селектор тёмных режимов для движка (E-20
       return TEST_ENGINE.generate(input)
     } }
     const { root, provider } = catalogProvider()
-    await emitCss(await prepareTestApp({ providers: [provider], theme: 'ink', engine }, root))
+    await emitCss(await prepareTestApp({ providers: [provider], theme: 'ink', engine, modes: { names: ['light', 'dark', 'dim'] } }, root))
     expect(seen.at(-1)).toBe('[data-theme="ink-dark"], [data-theme="ink-dim"]')
     await emitCss(await prepareTestApp({ providers: [provider], theme: 'ink', engine, modes: { names: ['light'] } }, root))
     expect(seen.at(-1)).toBeUndefined()

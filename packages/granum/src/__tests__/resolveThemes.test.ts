@@ -94,12 +94,17 @@ describe('активная тема (A-22, A-23)', () => {
 })
 
 describe('режимы (A-25, A-26, A-28)', () => {
-  it('все режимы темы, режим по умолчанию первым, пары по шаблону', () => {
+  it('без modes.names — только режим по умолчанию темы, пара по шаблону', () => {
     const r = resolve({ theme: 'ink' })
-    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light', 'dark=ink-dark', 'dim=ink-dim'])
+    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light'])
     expect(r.modesSource).toBe('theme')
     expect(r.defaultMode).toBe('light')
     expect(r.activation).toEqual({ attribute: 'data-theme', value: '{theme}-{mode}' })
+  })
+
+  it('все режимы темы — перечислением; режим по умолчанию первым', () => {
+    const r = resolve({ theme: 'ink', modes: { names: ['dim', 'dark', 'light'] } })
+    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light', 'dim=ink-dim', 'dark=ink-dark'])
   })
 
   it('modes.names задаёт набор; режим по умолчанию всё равно первым', () => {
@@ -113,9 +118,11 @@ describe('режимы (A-25, A-26, A-28)', () => {
     expect(reasonOf(() => resolve({ modes: { tokenOverrides: { sepia: { 'p-bg': 'red' } } } }))).toBe('unknown-mode')
   })
 
-  it('define поверх режима темы и другого define; база раньше наследника', () => {
+  it('define поверх режима темы и другого define; база раньше наследника и в набор не обязана входить', () => {
     const r = resolve({ modes: { define: { deep: { extends: 'ocean' }, ocean: { extends: 'dark', title: 'Океан' } } } })
-    expect(r.modes.map(m => m.name)).toEqual(['light', 'dark', 'ocean', 'deep'])
+    // Без `modes.names` в набор входят режим по умолчанию и режимы приложения;
+    // `dark` — только база `ocean`: его значения взяты, блока у него нет.
+    expect(r.modes.map(m => m.name)).toEqual(['light', 'ocean', 'deep'])
     expect(r.definitions.map(m => `${m.name}←${m.extends}`)).toEqual(['ocean←dark', 'deep←ocean'])
     const ocean = r.modes.find(m => m.name === 'ocean')!
     expect(ocean).toMatchObject({ origin: 'define', colorScheme: 'dark', title: 'Океан', value: 'paper-ocean' })
@@ -138,7 +145,7 @@ describe('режимы (A-25, A-26, A-28)', () => {
   })
 
   it('свой атрибут и шаблон', () => {
-    const r = resolve({ modes: { activation: { attribute: 'data-mode', value: '{mode}@{theme}' } } })
+    const r = resolve({ modes: { names: ['light', 'dark'], activation: { attribute: 'data-mode', value: '{mode}@{theme}' } } })
     expect(r.modes.map(m => m.value)).toEqual(['light@paper', 'dark@paper'])
     expect(r.activation.attribute).toBe('data-mode')
   })

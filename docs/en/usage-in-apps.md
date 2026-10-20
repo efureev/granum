@@ -33,7 +33,7 @@ export default defineGranumConfig({
 | `components` | `'all'` | a list of `id:Name` keys / `{ provider, names }` or `'imports'` — from imports in `appSources` |
 | `theme` | the catalog owner's `defaultTheme` | the active theme: a catalog id, `providerId:id` or an application theme object `GranumThemeData` with `extends?` and `sources?` |
 | `previews` | — | themes shown next to the active one as full blocks of their pairs |
-| `modes.names` | every mode of the theme and `define` | the mode set; the default mode always comes first |
+| `modes.names` | the theme's default mode and `define` | the mode set; the default mode always comes first |
 | `modes.define` | — | application modes: `{ extends, tokens, tokensRef, title, colorScheme }` |
 | `modes.activation` | `{ attribute: 'data-theme', value: '{theme}-{mode}' }` | the attribute on the root and the pair template |
 | `modes.tokenOverrides` | — | values on top of every layer: `root` — mode-independent, other keys — modes |

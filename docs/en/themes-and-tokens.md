@@ -55,9 +55,13 @@ catalog do not reach the build and are not opened. An unknown id is a `ThemeReso
 
 ## Mode set and application modes
 
-Without `modes.names` CSS gets every mode of the theme plus the keys of `modes.define`. The
-default mode always comes first; if `modes.names` does not name it, the first mode of the set
-becomes the build's default mode. A name outside the theme and `define` is `unknown-mode`.
+Without `modes.names` CSS gets the theme's default mode (`light`) and the keys of
+`modes.define`: the theme is built for the application, and a second mode is the
+application's decision, not a default. Need dark — name it: `modes: { names: ['light', 'dark'] }`.
+The default mode always comes first; if `modes.names` does not name it, the first mode of the set
+becomes the build's default mode. A mode that a mode of the set extends (`extends`) does not have
+to be in the set itself: its values are taken along the chain, and it gets no block. A name outside
+the theme and `define` is `unknown-mode`.
 
 ```ts
 modes: {

@@ -227,7 +227,7 @@ try {
     providers: ['@granum-fixtures/themed-ds'],
     theme: 'ink',
     previews: ['paper'],
-    modes: { define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } },
+    modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } },
   }, appsRoot)
   const { css } = await emitCss(app)
 
@@ -235,7 +235,7 @@ try {
   const pairsOf = manifest => manifest.modes.map(mode => mode.value).join(',')
   const manifest = getThemeManifest(app.resolution)
   check(pairsOf(manifest) === 'ink-light,ink-dark,ink-dim,ink-ocean', `пары манифеста: ${pairsOf(manifest)}`)
-  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], theme: 'ink', modes: { define: { ocean: { extends: 'dark' } } } }, appsRoot)
+  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], theme: 'ink', modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark' } } } }, appsRoot)
   check(pairsOf(getThemeManifest(bare.resolution)) === pairsOf(manifest), `пары манифеста при селекции []: ${pairsOf(getThemeManifest(bare.resolution))}`)
 
   // Страница с CSS сборки и собранным `@feugene/granum/runtime`: файлы `dist` отдаёт route.

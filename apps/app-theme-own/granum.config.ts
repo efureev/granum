@@ -14,6 +14,7 @@ export default defineGranumConfig({
   providers: ['@granum-fixtures/themed-ds', '@granum-fixtures/themed-companion'],
   theme: loadTheme(new URL('./src/theme/', import.meta.url)),
   modes: {
+    names: ['light', 'dark', 'sepia'],
     define: { sepia: { extends: 'light', title: 'Сепия', tokens: { 'th-bg': '#f4ecd8' } } },
     tokenOverrides: { root: { 'th-font': 'Inter, sans-serif' } },
   },

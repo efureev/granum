@@ -10,5 +10,6 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/themed-ds', '@granum-fixtures/themed-companion'],
   theme: 'paper',
+  modes: { names: ['light', 'dark'] },
   appSources: { dirs: ['src'] },
 })

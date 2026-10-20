@@ -50,6 +50,9 @@ function fixture(patch: { cardCss?: string, cardJs?: string, warnings?: any[] } 
   return { root, dist, manifest: { manifest: loaded.manifest, baseUrl: `${pathToFileURL(dist).href}/` } }
 }
 
+/** Оба режима фикстуры: без `modes.names` сборка берёт только режим по умолчанию. */
+const BOTH = { names: ['light', 'dark'] }
+
 async function app(f: Fixture, config: Partial<GranumConfig> = {}) {
   return prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, ...config }, f.root)
 }
@@ -145,7 +148,8 @@ describe('granum doctor', () => {
     expect(report.engine).toEqual({ name: TEST_ENGINE.name, dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary })
     expect(report.components.map(c => c.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.themes).toMatchObject({ theme: 'kit', themeSource: 'default', owner: '@x/kit', modesSource: 'theme', previews: [] })
-    expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light', 'dark=kit-dark'])
+    // Без `modes.names` — только режим по умолчанию темы (A-25).
+    expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light'])
     expect(formatDoctorReport(report)).toContain('Theme: kit (source: defaultTheme of the catalog owner, catalog of @x/kit)')
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
@@ -236,7 +240,7 @@ describe('granum doctor', () => {
     // Override приложения — намеренное значение, а не конфликт; компонент поверх данных темы — конфликт.
     const card = f.manifest.manifest.components.Card!
     const clash = { ...f.manifest, manifest: { ...f.manifest.manifest, components: { ...f.manifest.manifest.components, Card: { ...card, tokens: { ...card.tokens, themes: { kit: { modes: { light: { bg: '#fefefe' } } } } } } } } }
-    const report = await granumDoctor(await app({ ...f, manifest: clash }, { modes: { tokenOverrides: { root: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
+    const report = await granumDoctor(await app({ ...f, manifest: clash }, { modes: { ...BOTH, tokenOverrides: { root: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
     // Токен компонента из режима по умолчанию доходит и до тёмного — там он тоже поверх данных темы.
     expect(report.tokenConflicts).toEqual([
       expect.objectContaining({ mode: 'light', token: 'bg', sources: ['theme kit/light', 'component @x/kit:Card (kit/light)'], finalValue: '#fefefe' }),
@@ -276,7 +280,7 @@ describe('doctor: части составных компонентов, кото
 
 describe('granum explain', () => {
   it('корень селекции, зависимость и невыбранный компонент', async () => {
-    const a = await app(fixture())
+    const a = await app(fixture(), { modes: BOTH })
     const panel = granumExplain(a, 'Panel')
     expect(panel).toMatchObject({ key: '@x/kit:Panel', reason: 'selected', included: true, chain: ['@x/kit:Panel'], dependencies: ['@x/kit:Card'], requiredBy: [] })
     const card = granumExplain(a, '@x/kit:Card')
@@ -345,7 +349,7 @@ describe('granum why-css', () => {
 
 describe('granum tokens', () => {
   it('own и deep: объявления, цепочки значений, потребители за пределами scope', async () => {
-    const a = await app(fixture(), { modes: { tokenOverrides: { light: { 'card-pad': '4px' } } } })
+    const a = await app(fixture(), { modes: { ...BOTH, tokenOverrides: { light: { 'card-pad': '4px' } } } })
     const own = granumTokens(a, 'Panel')
     expect(own.components).toEqual(['@x/kit:Panel'])
     expect(own.uses).toEqual([])
@@ -395,7 +399,7 @@ describe('token-undefined: доктор и отчёт сборки', () => {
 describe('granum prune', () => {
   it('токен из вывода движка сохраняется по той же причине, что в сборке', async () => {
     const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
-    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine })
+    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine, modes: BOTH })
     const report = await granumTokenPrune(a)
     // Данные темы и токены компонентов — пакетный слой: никем не потребляемые режутся (T-14).
     expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused'])
@@ -404,7 +408,7 @@ describe('granum prune', () => {
   })
 
   it('план совпадает с planTokenPrune, base не режется, размеры считаются', async () => {
-    const a = await app(fixture(), { pruneTokens: { mode: 'on' } })
+    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, modes: BOTH })
     const report = await granumTokenPrune(a)
     expect(report.mode).toBe('on')
     expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused', 'unused'])

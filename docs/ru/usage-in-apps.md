@@ -33,7 +33,7 @@ export default defineGranumConfig({
 | `components` | `'all'` | список ключей `id:Name` / `{ provider, names }` либо `'imports'` — по импортам в `appSources` |
 | `theme` | `defaultTheme` владельца каталога | активная тема: id каталога, `providerId:id` или тема-объект приложения `GranumThemeData` с `extends?` и `sources?` |
 | `previews` | — | темы, которые показываются рядом с активной полными блоками своих пар |
-| `modes.names` | все режимы темы и `define` | набор режимов; режим по умолчанию всегда первый |
+| `modes.names` | режим по умолчанию темы и `define` | набор режимов; режим по умолчанию всегда первый |
 | `modes.define` | — | режимы приложения: `{ extends, tokens, tokensRef, title, colorScheme }` |
 | `modes.activation` | `{ attribute: 'data-theme', value: '{theme}-{mode}' }` | атрибут на корне и шаблон пары |
 | `modes.tokenOverrides` | — | значения поверх всех слоёв: `root` — режимонезависимые, остальные ключи — режимы |

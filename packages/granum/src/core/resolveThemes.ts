@@ -405,7 +405,9 @@ export function resolveThemes(
     names = [...new Set(modesInput.names)]
   }
   else {
-    names = [...all.keys()]
+    // Без `modes.names` — режим по умолчанию темы и режимы приложения: тема
+    // собирается под приложение, и второй режим темы — решение, а не умолчание.
+    names = [defaultMode, ...definitions.order]
   }
   // Режим по умолчанию — первым, если он в наборе: под `:root` его блок решает позиция (T-9).
   if (names.includes(defaultMode))

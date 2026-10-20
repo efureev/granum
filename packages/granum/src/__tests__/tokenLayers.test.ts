@@ -3,7 +3,7 @@ import type { GranumModesInput, GranumThemeChoice } from '../core/resolveThemes'
 import { describe, expect, it } from 'vitest'
 import { resolveGranum, resolveTokenValue } from '../core/resolve'
 import { describeLayer } from '../core/tokenLayers'
-import { INK, makeManifest, PAPER, themeData } from './helpers'
+import { allModes, INK, makeManifest, PAPER, themeData } from './helpers'
 
 const OWNER = makeManifest('@p/ds', {}, {
   theme: {
@@ -28,10 +28,11 @@ const BUTTON = ui({
 })
 
 function resolve(theme: GranumThemeChoice | undefined, modes?: GranumModesInput, extra: GranumLoadedManifest[] = [BUTTON]) {
+  const data = typeof theme === 'object' ? theme : theme === 'ink' ? INK : PAPER
   return resolveGranum({
     providers: [OWNER, ...extra],
     ...(theme !== undefined ? { theme } : {}),
-    ...(modes ? { modes } : {}),
+    modes: allModes(data, modes),
     themeData: { '@p/ds': { paper: PAPER, ink: INK } },
   })
 }
