@@ -25,6 +25,11 @@
  * пересчитывают значения и формулы на своём элементе, превью другой темы не
  * задевает корень, а значение в браузере совпадает с `granum tokens`.
  *
+ * Четвёртый — ветка фолбэков `@supports`, которую браузер разработчика не
+ * видит никогда: условие фолбэков здесь истинное в Chromium, и страница видит
+ * каскад браузера без фичи. Рядом — формулы превью: префикс значения пары не
+ * должен доставать корень активной темы.
+ *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
  *
@@ -307,8 +312,61 @@ finally {
   await browser?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Ветка фолбэков: `(display: block)` истинно в Chromium и изображает браузер,
+ * которому фолбэк нужен. Темы — объекты приложения: каждая проверка видит один
+ * случай каскада, а не совокупность данных фикстуры.
+ */
+const NEEDS_FALLBACK = '(display: block)'
+try {
+  const theme = (id, ring, modes) => ({ id, title: id, root: { 'fb-ring': `0 0 0 ${ring} var(--fb-accent)` }, modes })
+  const light = { colorScheme: 'light', tokens: { 'fb-bg': 'oklch(98% 0 0)', 'fb-fg': '#111111', 'fb-accent': '#2563eb' }, fallbacks: [{ supports: NEEDS_FALLBACK, tokens: { 'fb-bg': '#fafafa' } }] }
+  const darkOwn = { colorScheme: 'dark', tokens: { 'fb-bg': '#000000', 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' } }
+  const darkInherits = { colorScheme: 'dark', tokens: { 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' } }
+  const darkWithFallback = { colorScheme: 'dark', tokens: { 'fb-bg': 'oklch(20% 0 0)', 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' }, fallbacks: [{ supports: NEEDS_FALLBACK, tokens: { 'fb-bg': '#111111' } }] }
+  const cssOf = async config => (await emitCss(await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], ...config }, appsRoot))).css
+
+  browser = await chromium.launch()
+  const page = await browser.newPage()
+  /** Значение токена на корне или на острове при заданной системной схеме. */
+  const valueAt = async (css, { root, island, scheme = 'light' }, token) => {
+    await page.emulateMedia({ colorScheme: scheme })
+    await page.setContent(`<!doctype html><html${root ? ` data-theme="${root}"` : ''}><head><style>${css}</style></head><body>${island ? `<div id="island" data-theme="${island}"></div>` : ''}</body></html>`)
+    return page.evaluate(([sel, name]) => getComputedStyle(document.querySelector(sel)).getPropertyValue(name).trim(), [island ? '#island' : 'html', token])
+  }
+  const expectValue = async (css, at, token, want, what) => {
+    const got = await valueAt(css, at, token)
+    check(want instanceof RegExp ? want.test(got) : got === want, `${what}: ${token}: ${got}`)
+  }
+
+  const own = await cssOf({ theme: theme('t', '2px', { light, dark: darkOwn }), modes: { names: ['light', 'dark'] } })
+  await expectValue(own, { root: 't-dark' }, '--fb-bg', '#000000', 'фолбэк режима по умолчанию не перебивает тёмную пару на корне')
+  await expectValue(own, {}, '--fb-bg', '#fafafa', 'корень без атрибута берёт фолбэк режима по умолчанию')
+
+  const inherited = await cssOf({ theme: theme('t', '2px', { light, dark: darkInherits }), modes: { names: ['light', 'dark'], system: 'media' } })
+  await expectValue(inherited, { root: 't-dark' }, '--fb-bg', '#fafafa', 'токен, взятый из режима по умолчанию, — с его фолбэком на корне')
+  await expectValue(inherited, { root: 't-light', island: 't-dark' }, '--fb-bg', '#fafafa', 'и на острове режима')
+  await expectValue(inherited, { scheme: 'dark' }, '--fb-bg', '#fafafa', 'и по системной тёмной схеме')
+
+  const media = await cssOf({ theme: theme('t', '2px', { light, dark: darkWithFallback }), modes: { names: ['light', 'dark'], system: 'media' } })
+  await expectValue(media, { scheme: 'dark' }, '--fb-bg', '#111111', 'system: media — корень без атрибута берёт фолбэк тёмного режима')
+
+  const modes = { light, dark: darkOwn }
+  const slate = await cssOf({ theme: theme('slate-hc', '3px', modes), previews: [theme('slate', '1px', modes)] })
+  await expectValue(slate, { root: 'slate-hc-light' }, '--fb-ring', /\b3px\b/, 'формулы превью slate не достают корень slate-hc')
+  await expectValue(slate, { root: 'slate-hc-light', island: 'slate-dark' }, '--fb-ring', /\b1px\b/, 'остров превью slate — свои формулы')
+  const prefixed = await cssOf({ theme: theme('paper', '3px', modes), previews: [theme('ink', '1px', modes)], modes: { activation: { attribute: 'data-theme', value: 'x-{mode}-{theme}' } } })
+  await expectValue(prefixed, { root: 'x-light-paper' }, '--fb-ring', /\b3px\b/, 'шаблон со статикой перед режимом: формулы превью не достают корень')
+}
+catch (error) {
+  failures.push(`ветка фолбэков: прогон упал: ${error?.message ?? error}`)
+}
+finally {
+  await browser?.close()
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper, ветка фолбэков)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ слои, HMR, режимы и превью подтверждены в браузере\n'
+  ? '✓ слои, HMR, режимы, превью и фолбэки подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1
