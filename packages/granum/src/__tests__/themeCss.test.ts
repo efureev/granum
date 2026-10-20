@@ -7,6 +7,7 @@ import type { PreparedApp } from '../node/prepare'
 import { describe, expect, it } from 'vitest'
 import { resolveTokenValue } from '../core/resolve'
 import { emitCss } from '../node/emit'
+import { emitThemeCss } from '../node/themeCss'
 import { cascade } from './cascade'
 import { catalogProvider, INK, PAPER, prepareTestApp, TEST_ENGINE, themeData } from './helpers'
 
@@ -196,6 +197,16 @@ describe('превью (A-32)', () => {
     const pairs = '[data-theme="paper-light"], [data-theme="paper-dark"]'
     expect(blockOf(themes, pairs)).toContain('--p-ring:')
     expect(themes.indexOf(pairs)).toBeGreaterThan(themes.indexOf('[data-theme="ink-dim"]'))
+  })
+
+  it('блоки без превью — отдельным списком по владельцу, в порядке слоя', async () => {
+    const { root, provider } = catalogProvider()
+    const app = await prepareTestApp({ providers: [provider], theme: 'ink', previews: ['paper'], modes: { names: ['light', 'dark'] } }, root)
+    const theme = emitThemeCss(app.resolution)
+    const previews = theme.parts.previews.flatMap(part => part.blocks)
+    expect(previews.length).toBeGreaterThan(0)
+    expect(theme.active).toEqual(theme.themes.filter(block => !previews.includes(block)))
+    expect([...theme.active, ...previews]).toEqual(theme.themes)
   })
 
   it('baseCss активной темы и превью — в слой base, без повторов', async () => {

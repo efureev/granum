@@ -192,10 +192,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const baseSections = [...sections.filter(s => s.source.kind === 'base').map(s => s.css), ...themeCss.base]
 
   // Блоки превью уходят из общего листа целиком — по владельцу, а не по селектору.
-  const previewBlocks = new Set(themeCss.parts.previews.flatMap(part => part.blocks))
-  const themes = config.css?.previews === 'separate'
-    ? themeCss.themes.filter(block => !previewBlocks.has(block))
-    : themeCss.themes
+  const themes = config.css?.previews === 'separate' ? themeCss.active : themeCss.themes
 
   const layers: Record<LayerName, string> = {
     tokens: [...tokensSections, ...(themeCss.tokens !== undefined ? [themeCss.tokens] : [])].join('\n'),

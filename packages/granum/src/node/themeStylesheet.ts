@@ -10,7 +10,6 @@ import type { GranumProviderInput } from '../contract'
 import type { GranumResolution } from '../core/resolve'
 import type { GranumModesInput, GranumThemeChoice } from '../core/resolveThemes'
 import type { LayerName } from './emit'
-import { isLoadedManifest } from '../contract/manifest'
 import { CssReadError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
@@ -81,7 +80,7 @@ export function resolveThemeOnly(options: ThemeResolutionOptions): GranumResolut
     ...choice,
     ...(modes !== undefined ? { modes } : {}),
     themeData: readPlannedThemeData([plan.active, ...plan.previews], nodes),
-    componentThemes: readComponentThemes(inputs.filter(input => !isLoadedManifest(input))),
+    componentThemes: readComponentThemes(inputs),
   })
 }
 

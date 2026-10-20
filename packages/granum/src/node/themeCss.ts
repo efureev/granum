@@ -24,6 +24,8 @@ export interface ThemeCss {
   readonly base: readonly string[]
   /** Блоки слоя `themes` по порядку. */
   readonly themes: readonly string[]
+  /** Те же блоки без тем превью — общий лист при `css.previews: 'separate'`. */
+  readonly active: readonly string[]
   /**
    * Те же блоки слоя `themes`, разложенные по владельцу: общий блок активной
    * темы, режим (его блок, фолбэки, медиазапрос системной схемы) и тема превью.
@@ -177,7 +179,10 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     }
   }
 
-  // Превью — полные блоки пар и никогда под `:root` (A-32).
+  // Превью идут последними: всё, что выведено до них, — активная тема.
+  const activeBlocks = [...blocks]
+
+  // Превью — полные блоки пар и никогда под `:root`.
   for (const [i, preview] of themes.previews.entries()) {
     const set = tokens.previews[i]!
     addBase(preview.theme.data.baseCss)
@@ -201,5 +206,5 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
       push(part, ...fallbackBlocks(set, mode, attributeSelector(attribute, mode.value), keep))
   }
 
-  return { tokens: tokensBlock, base, themes: blocks, parts: { shared, modes: modeParts, previews: previewParts } }
+  return { tokens: tokensBlock, base, themes: blocks, active: activeBlocks, parts: { shared, modes: modeParts, previews: previewParts } }
 }
