@@ -3,7 +3,7 @@
  * конфиг часто пишут в JS. Ошибка называет путь до поля.
  */
 import type { GranumAppSources, GranumConfig, GranumCssOptions, GranumJsOptions, GranumPruneTokensOptions, GranumReportOptions } from '../config'
-import type { GranumTokenRef } from '../contract'
+import type { GranumModeData, GranumModeFallback, GranumTokenRef } from '../contract'
 import type { GranumAppTheme, GranumModeActivation, GranumModeDefinition, GranumModesInput } from '../core/resolveThemes'
 import { GranumError } from '../core/errors'
 import { checkThemeData, isModeName } from '../core/themeData'
@@ -37,6 +37,8 @@ const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'theme', 'p
 const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'extends', 'sources'])
 const MODES_KEYS = keysOf<GranumModesInput>()(['names', 'define', 'activation', 'tokenOverrides', 'strictTokens', 'system'])
 const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme', 'fallbacks'])
+const MODE_DATA_KEYS = keysOf<GranumModeData>()(['title', 'colorScheme', 'extends', 'tokens', 'fallbacks'])
+const FALLBACK_KEYS = keysOf<GranumModeFallback>()(['supports', 'tokens'])
 const ACTIVATION_KEYS = keysOf<GranumModeActivation>()(['attribute', 'value'])
 const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
 const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split', 'previews'])
@@ -163,6 +165,21 @@ function validateAppTheme(value: unknown, path: string): void {
   if (!isRecord(value))
     throw new InvalidConfigError(path, `expected a theme id or a theme object, got ${typeof value}`)
   rejectUnknownKeys(value, APP_THEME_KEYS, path)
+  // Ключи режима и его фолбэков: опечатка молча выбросила бы значения из CSS.
+  // Форму значений проверяет `checkThemeData`, здесь — только имена ключей.
+  if (isRecord(value.modes)) {
+    for (const [name, mode] of Object.entries(value.modes)) {
+      if (!isRecord(mode))
+        continue
+      rejectUnknownKeys(mode, MODE_DATA_KEYS, `${path}.modes.${name}`)
+      if (!Array.isArray(mode.fallbacks))
+        continue
+      for (const [i, fallback] of mode.fallbacks.entries()) {
+        if (isRecord(fallback))
+          rejectUnknownKeys(fallback, FALLBACK_KEYS, `${path}.modes.${name}.fallbacks.${i}`)
+      }
+    }
+  }
   const { extends: base, sources, ...data } = value
   if (base !== undefined && (typeof base !== 'string' || base.length === 0))
     throw new InvalidConfigError(`${path}.extends`, 'expected the id of a catalog theme whose component tokens this theme builds on')
@@ -212,7 +229,7 @@ function validateModes(modes: unknown): void {
         const where = `${at}.fallbacks.${i}`
         if (!isRecord(fallback) || typeof fallback.supports !== 'string' || !isRecord(fallback.tokens))
           throw new InvalidConfigError(where, 'expected { supports: string, tokens: { … } }')
-        rejectUnknownKeys(fallback, ['supports', 'tokens'], where)
+        rejectUnknownKeys(fallback, FALLBACK_KEYS, where)
         rejectPrefixedTokens(fallback.tokens, `${where}.tokens`)
       }
     }

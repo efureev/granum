@@ -133,6 +133,9 @@ describe('неизвестный ключ конфига — ошибка с п�
     [{ js: { gaurd: 'warn' } }, 'js.gaurd', /did you mean 'guard'/],
     [{ modes: { strictToken: true } }, 'modes.strictToken', /did you mean 'strictTokens'/],
     [{ theme: { id: 'b', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {} } }, source: [] } }, 'theme.source', /did you mean 'sources'/],
+    // Вложенные ключи темы-объекта: опечатка молча теряла бы фолбэки.
+    [{ theme: { id: 'b', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {}, fallback: [] } } } }, 'theme.modes.light.fallback', /did you mean 'fallbacks'/],
+    [{ previews: [{ id: 'b', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {}, fallbacks: [{ supports: 'x', tokens: {}, token: {} }] } } }] }, 'previews.0.modes.light.fallbacks.0.token', /did you mean 'tokens'/],
     // Ключи пресета v1: подсказка, куда они делись.
     [{ scan: { dirs: ['src'] } }, 'scan', /provider manifests.*appSources/],
     [{ content: { filesystem: ['src/**'] } }, 'content', /provider manifests.*appSources/],
