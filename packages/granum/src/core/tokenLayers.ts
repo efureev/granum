@@ -241,6 +241,14 @@ export function collectTokenLayers(
 
   const set = collectThemeTokens(themes.theme, components)
 
+  // Известное для `strictTokens` — данные темы и токены компонентов, до режимов
+  // `define`: токен, который задаёт только режим приложения, известным не считается.
+  const known = new Set(set.root.keys())
+  for (const tokens of set.modes.values()) {
+    for (const token of tokens.keys())
+      known.add(token)
+  }
+
   for (const mode of themes.definitions) {
     const base = set.modes.get(mode.extends!) ?? new Map()
     const target = copyChains(base, mode.name)
@@ -259,11 +267,6 @@ export function collectTokenLayers(
       set.fallbacks.set(mode.name, blocks)
   }
 
-  const known = new Set(set.root.keys())
-  for (const tokens of set.modes.values()) {
-    for (const token of tokens.keys())
-      known.add(token)
-  }
   for (const [scope, tokens] of Object.entries(options.tokenOverrides ?? {})) {
     const target = scope === 'root' ? set.root : set.modes.get(scope)
     if (!target)

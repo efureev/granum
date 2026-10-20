@@ -115,6 +115,12 @@ describe('режимы приложения и override (T-7 слои 4–5)', (
     expect(describeLayer(r.tokens.active!.modes.get('dark')!.get('p-bg')!.layers.at(-1)!)).toBe('app override')
   })
 
+  it('strictTokens: токен, который задаёт только режим define, известным не считается', () => {
+    const r = resolve('paper', { strictTokens: true, define: { sepia: { extends: 'light', tokens: { 'app-x': '1' } } }, tokenOverrides: { root: { 'app-x': '2' } } })
+    expect(r.tokens.active!.root.get('app-x')!.layers[0]!.skipped).toBe('strict-tokens')
+    expect(r.warnings).toContainEqual({ kind: 'override-skipped', mode: 'root', token: 'app-x' })
+  })
+
   it('strictTokens отбрасывает override неизвестного токена — с предупреждением и слоем skipped', () => {
     const r = resolve('paper', { strictTokens: true, tokenOverrides: { light: { 'p-bg': '#eee', 'nobody': '1' } } })
     expect(resolveTokenValue(r, 'light', 'nobody')).toBeUndefined()
