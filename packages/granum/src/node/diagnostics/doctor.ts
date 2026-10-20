@@ -62,6 +62,7 @@ export type DoctorDiagnosticCode
     | 'boundary'
     | 'component-theme-unknown'
     | 'component-mode-missing'
+    | 'theme-mode-missing'
     | 'mode-extends-unresolved'
     | 'mode-extends-cycle'
     | 'token-conflict'
@@ -264,6 +265,23 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     }
     for (const { mode, component, tokens } of fellBack.values()) {
       warn('component-mode-missing', component, `no values for mode '${mode}' of theme '${activeTheme.id}' in its themesDir — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root.json`, tokens.sort())
+    }
+
+    // То же для данных самой темы: ни у режима, ни у его предков по `extends`
+    // значения нет, и в CSS уходит литерал режима по умолчанию. Судится итог
+    // токена: значение, которое режиму дал другой слой, находкой не считается.
+    for (const mode of resolution.themes.modes) {
+      if (definedModes.has(mode.name))
+        continue
+      const names = modeChain(activeTheme.data, mode.name).names
+      const tokens: string[] = []
+      for (const chain of resolution.tokens.active?.modes.get(mode.name)?.values() ?? []) {
+        const layer = chain.layers.findLast(l => l.skipped === undefined)
+        if (layer && (layer.source === 'theme' || layer.source === 'app-theme') && layer.mode !== undefined && !names.includes(layer.mode) && !layer.value.includes('var('))
+          tokens.push(`--${chain.token}`)
+      }
+      if (tokens.length > 0)
+        warn('theme-mode-missing', `${activeTheme.id}/${mode.name}`, `mode '${mode.name}' of theme '${activeTheme.id}' has no value for these tokens along its extends chain — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root`, tokens.sort())
     }
   }
 
@@ -487,6 +505,7 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'unused-provider',
   'component-theme-unknown',
   'component-mode-missing',
+  'theme-mode-missing',
   'mode-extends-unresolved',
   'mode-extends-cycle',
 ]

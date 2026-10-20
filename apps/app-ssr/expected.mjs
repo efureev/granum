@@ -79,7 +79,9 @@ export default {
     // `--brd` компоненту даёт приложение: фикстура объявляет только форму
     // границы, цвет — дело потребителя. Здесь его нет, и доктор честно говорит.
     // `XTokenized` кладёт токены и для темы `paper` другого каталога — здесь её нет (C-36).
-    warnings: { 'token-undefined': 1, 'component-theme-unknown': 1 },
+    // `--xh-fg-boost` у темы heavy объявлен только в светлом режиме, и тёмный
+    // берёт его литерал из режима по умолчанию — намеренный случай фикстуры.
+    warnings: { 'token-undefined': 1, 'component-theme-unknown': 1, 'theme-mode-missing': 1 },
   },
 
   report: (report, check) => {

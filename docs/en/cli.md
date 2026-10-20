@@ -63,6 +63,7 @@ legal but suspicious.
 | `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
 | `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
 | `component-mode-missing` | warn | a component has no file for a mode of the build or its ancestors: the literals come from the default mode — a forgotten `dark.json`, say; a value that is the same in every mode belongs in `root.json` |
+| `theme-mode-missing` | warn | the same for the active theme's data: a mode of the build and its `extends` ancestors have no value for the token, and the literal comes from the default mode. A value that is the same in every mode belongs in the theme's `root` |
 | `mode-extends-unresolved` | warn | the base of a `modes.define` is neither a theme mode nor another `define`; the mode inherits the default mode |
 | `mode-extends-cycle` | warn | `modes.define` entries extend each other in a circle; the chain is cut at the default mode |
 | `override-skipped` | warn | `strictTokens` dropped an override of a token present neither in the theme data nor in component tokens |

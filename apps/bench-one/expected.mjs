@@ -9,8 +9,9 @@ export default {
   purpose: 'подопытный стенд замера: один компонент поверх полного фундамента',
   doctor: {
     // Намеренные дефекты фикстуры heavy: `shadow-legacy` без правила движка и
-    // строки тонов `XhButton`, видимые и статически.
-    warnings: { 'safelist-dead': 1 },
+    // строки тонов `XhButton`, видимые и статически; `--xh-fg-boost` объявлен
+    // только в светлом режиме, и тёмный берёт его литерал из режима по умолчанию.
+    warnings: { 'safelist-dead': 1, 'theme-mode-missing': 1 },
   },
   css: {
     present: [

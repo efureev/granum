@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatThemeWarning, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
-import { catalogProvider, makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
+import { catalogProvider, makeManifest, prepareTestApp, TEST_ENGINE, themeData } from './helpers'
 import { testEngine } from './testEngine'
 
 interface Fixture {
@@ -535,5 +535,44 @@ describe('doctor: режим без файла у компонента (A-24)', 
     const lightOnly = catalogProvider({ components: card({ light: { 'c-shade': '#fff' } }) })
     const single = await granumDoctor(await prepareTestApp({ providers: [lightOnly.provider] }, lightOnly.root))
     expect(single.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
+  })
+})
+
+describe('doctor: режим без значения в данных темы', () => {
+  const findings = async (theme: ReturnType<typeof themeData>, names: string[], define?: Record<string, { extends: string }>): Promise<[string, readonly string[] | undefined][]> => {
+    const { root, provider } = catalogProvider({ themes: { t: theme } })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names, ...(define ? { define } : {}) } }, root))
+    return report.diagnostics.filter(d => d.code === 'theme-mode-missing').map(d => [d.subject, d.items])
+  }
+
+  it('литералы данных темы для dark взяты из light — предупреждение с именами токенов', async () => {
+    const theme = themeData('t', { light: { 'p-bg': '#fff', 'p-edge': '#eee', 'p-fg': '#111' }, dark: { 'p-fg': '#eee' } })
+    // `ocean` — копия `dark` и повторно не считается.
+    expect(await findings(theme, ['light', 'dark', 'ocean'], { ocean: { extends: 'dark' } })).toEqual([['t/dark', ['--p-bg', '--p-edge']]])
+  })
+
+  it('режим без значения по всей цепочке extends — находка и у наследника', async () => {
+    const theme = themeData('t', {
+      light: { 'p-bg': '#fff', 'p-fg': '#111' },
+      dark: { 'p-fg': '#eee' },
+      dim: { colorScheme: 'dark', extends: 'dark', tokens: { 'p-fg': '#ccc' } },
+    })
+    expect(await findings(theme, ['light', 'dark', 'dim'])).toEqual([['t/dark', ['--p-bg']], ['t/dim', ['--p-bg']]])
+  })
+
+  it('значение в каждом режиме, формула, наследник режима по умолчанию или режим один — молчит', async () => {
+    expect(await findings(themeData('t', { light: { 'p-bg': '#fff' }, dark: { 'p-bg': '#000' } }), ['light', 'dark'])).toEqual([])
+    // Формула через роль сама следует ролям режима.
+    expect(await findings(themeData('t', { light: { 'p-bg': '#fff', 'p-soft': 'var(--p-bg)' }, dark: { 'p-bg': '#000' } }), ['light', 'dark'])).toEqual([])
+    // Режим, наследующий режим по умолчанию, берёт его значения по своей цепочке.
+    expect(await findings(themeData('t', { light: { 'p-bg': '#fff', 'p-fg': '#111' }, sepia: { colorScheme: 'light', extends: 'light', tokens: { 'p-bg': '#f4ecd8' } } }), ['light', 'sepia'])).toEqual([])
+    expect(await findings(themeData('t', { light: { 'p-bg': '#fff' }, dark: { 'p-fg': '#eee' } }), ['light'])).toEqual([])
+  })
+
+  it('значение, которое режиму дал токен компонента, находкой не считается', async () => {
+    const theme = themeData('t', { light: { 'p-bg': '#fff', 'p-edge': '#eee' }, dark: {} })
+    const { root, provider } = catalogProvider({ themes: { t: theme }, components: { Card: { themes: { t: { modes: { dark: { 'p-bg': '#000' } } } } } } })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'] } }, root))
+    expect(report.diagnostics.filter(d => d.code === 'theme-mode-missing').map(d => d.items)).toEqual([['--p-edge']])
   })
 })
