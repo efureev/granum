@@ -13,6 +13,11 @@ export default {
       { what: 'токен компонента для dark — уже в CSS', css: '--x-tokenized:yellow' },
       { what: 'пара тёмного режима, обещанная манифестом', css: '[data-theme=paper-dark]' },
       { what: 'класс компонента, использующий токен темы', css: 'var(--x-tokenized)' },
+      // `system: 'media'`: корень без атрибута при тёмной схеме — тёмный режим.
+      { what: 'тёмный режим по системной схеме для корня без атрибута', css: '@media (prefers-color-scheme:dark){:root:not([data-theme]){' },
+      // Только здесь фолбэк стоит под одним корнем без атрибута: он вложен в
+      // медиазапрос. `th-shade` тёмный берёт из светлого вместе с фолбэком.
+      { what: 'фолбэк тёмного режима внутри медиазапроса', css: '{:root:not([data-theme]){--th-shade:#eee}}}' },
     ],
     absent: [
       { what: 'CSS невыбранного XTest1', css: '.x-sp-test' },

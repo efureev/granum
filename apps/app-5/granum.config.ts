@@ -10,6 +10,8 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/themes', '@granum-fixtures/simple'],
   components: ['@granum-fixtures/simple:XTokenized'],
-  modes: { names: ['light', 'dark'] },
+  // Тёмный режим по системной схеме, пока атрибут не выставлен: страница без
+  // скрипта или до него. Фолбэки тёмного режима — внутри того же медиазапроса.
+  modes: { names: ['light', 'dark'], system: 'media' },
   appSources: { dirs: ['src'] },
 })
