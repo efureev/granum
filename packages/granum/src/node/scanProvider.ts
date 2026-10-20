@@ -23,7 +23,7 @@ import { collectImportSpecifiers } from './imports'
 import { computeManifestHash } from './manifest'
 import { packageSubcomponents } from './subcomponents'
 import { componentThemesDirPath, readComponentThemesDir, readObjectCatalog } from './themeFiles'
-import { extractRequiredTokenUses, scanTokenConsumption } from './tokenScan'
+import { extractRequiredTokenUses, fallbackOnlyTokens, scanTokenConsumption } from './tokenScan'
 
 export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
 
@@ -131,15 +131,21 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     const consumes = new Set<string>()
     const required = new Set<string>()
     const assigns = new Set<string>()
+    const uses = new Set<string>()
+    const literals = new Set<string>()
     for (const file of files) {
       const code = readRel(distDir, file)
       for (const token of engine.extract(code, file))
         candidates.add(token)
       const scan = scanTokenConsumption(code, file)
-      for (const n of scan.uses.keys())
+      for (const n of scan.uses.keys()) {
         consumes.add(`--${n}`)
-      for (const n of scan.literals)
+        uses.add(`--${n}`)
+      }
+      for (const n of scan.literals) {
         consumes.add(`--${n}`)
+        literals.add(`--${n}`)
+      }
       for (const n of scan.required)
         required.add(`--${n}`)
       for (const n of scan.assigns)
@@ -150,8 +156,10 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
     const css = sortedUnique([...declaredCss, ...ownCss])
     for (const path of css) {
       const scan = scanTokenConsumption(readRel(distDir, path), path)
-      for (const n of scan.uses.keys())
+      for (const n of scan.uses.keys()) {
         consumes.add(`--${n}`)
+        uses.add(`--${n}`)
+      }
       for (const n of scan.required)
         required.add(`--${n}`)
       for (const n of scan.assigns)
@@ -190,6 +198,8 @@ export async function scanObjectProvider(provider: GranumProvider, engine: Granu
         ...themesOf(provider.id, descriptor, distDir),
         consumes: sortedUnique(consumes),
         requires: sortedUnique([...required].filter(t => !assigns.has(t))),
+        optional: fallbackOnlyTokens(uses, required, assigns, literals),
+        hooks: sortedUnique((descriptor.hookTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
         dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
       },
       hash: `sha256-${digest.digest('hex')}`,

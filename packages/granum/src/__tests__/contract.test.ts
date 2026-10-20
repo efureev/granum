@@ -154,6 +154,8 @@ describe('defineGranumComponent', () => {
     expect(d.dependencies).toEqual([])
     expect(d.safelist).toEqual([])
     expect(d.dynamicTokens).toEqual([])
+    expect(d.hookTokens).toEqual([])
+    expect(defineGranumComponent(url, { name: 'X', hookTokens: ['x-bg', 'x-edge-*'] }).hookTokens).toEqual(['x-bg', 'x-edge-*'])
   })
 
   it('cssFiles с выходом за директорию компонента — ошибка', () => {

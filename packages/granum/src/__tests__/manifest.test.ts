@@ -180,6 +180,8 @@ describe('parseManifest — порядок проверок', () => {
       [ok.replace('"version": "0.1.0"', '"version": 1'), 'version'],
       [ok.replace('"entry": "components/XhCard/index.js"', '"entry": 7'), 'components.XhCard.entry'],
       [ok.replace('"consumes": []', '"consumes": [1]'), 'components.XhCard.tokens.consumes'],
+      [ok.replace('"consumes": []', '"consumes": [], "optional": "--x"'), 'components.XhCard.tokens.optional'],
+      [ok.replace('"consumes": []', '"consumes": [], "hooks": [2]'), 'components.XhCard.tokens.hooks'],
       [ok.replace('"module": null', '"module": 3'), 'engine.module'],
       [ok.replace('"name": "granum-engine-wind"', '"name": 3'), 'engine.name'],
       [ok.replace('"warnings": [', '"warnings": [{},'), 'warnings.0.code'],

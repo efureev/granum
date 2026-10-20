@@ -31,6 +31,22 @@ function distFixture(): { root: string, dist: string } {
 }
 
 describe('scanObjectProvider', () => {
+  it('токен только с запасным значением — tokens.optional, хуки дескриптора — tokens.hooks', async () => {
+    const { dist } = distFixture()
+    writeFileSync(join(dist, 'components/Table/styles.css'), '.t{color:var(--hook, red);border-color:var(--lost, red);margin:var(--space, 0);width:var(--set, 1px)}\n')
+    // Имя строковым литералом — возможно присваивание в рантайме: `setProperty`.
+    writeFileSync(join(dist, 'components/Table/index.js'), 'export const Table = { cls: "m-2", set: el => el.style.setProperty("--set", "2px") }\n')
+    const provider = defineGranumProvider({
+      id: '@x/kit',
+      contractVersion: 2,
+      baseUrl: `${pathToFileURL(dist).href}/`,
+      components: [{ name: 'Card', dependencies: ['Table'] }, { name: 'Table', hookTokens: ['hook'] }],
+    })
+    const table = (await scanObjectProvider(provider, testEngine()))!.manifest.components.Table!
+    expect(table.tokens.optional).toEqual(['--hook', '--lost', '--space'])
+    expect(table.tokens.hooks).toEqual(['--hook'])
+  })
+
   it('файлы компонента и общие чанки; классы только с правилом; токены из JS и CSS; индекс каталога по данным', async () => {
     const { dist } = distFixture()
     const provider = defineGranumProvider({

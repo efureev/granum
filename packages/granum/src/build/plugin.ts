@@ -30,7 +30,7 @@ import { collectImportSpecifiers } from '../node/imports'
 import { loadPackageManifest, MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
 import { subcomponentsFromExports } from '../node/subcomponents'
 import { readComponentThemesDir, readRegistry, readThemeDataFile, themeDataError } from '../node/themeFiles'
-import { extractRequiredTokenUses, scanTokenConsumption } from '../node/tokenScan'
+import { extractRequiredTokenUses, fallbackOnlyTokens, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
 import { analyzeBundle, findUndeclaredEdges } from './graph'
@@ -550,10 +550,13 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         const consumes = new Set(info.consumes)
         const requires = new Set(info.requires)
         const assigns = new Set(info.assigns)
+        const uses = new Set(info.uses)
         for (const path of declaredCss) {
           const scan = scanTokenConsumption(copiedCss.get(path) ?? '', path)
-          for (const name of scan.uses.keys())
+          for (const name of scan.uses.keys()) {
             consumes.add(`--${name}`)
+            uses.add(`--${name}`)
+          }
           for (const name of scan.required)
             requires.add(`--${name}`)
           for (const name of scan.assigns)
@@ -622,6 +625,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
             ...(themes !== undefined && Object.keys(themes).length > 0 ? { themes } : {}),
             consumes: sortedUnique(consumes),
             requires: sortedUnique(requires),
+            optional: fallbackOnlyTokens(uses, requires, assigns, new Set(info.literals)),
+            hooks: sortedUnique((descriptor.hookTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
             dynamic: sortedUnique((descriptor.dynamicTokens ?? []).map(t => (t.startsWith('--') ? t : `--${t}`))),
           },
           hash: `sha256-${digest.digest('hex')}`,

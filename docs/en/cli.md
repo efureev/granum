@@ -60,6 +60,7 @@ legal but suspicious.
 | `css-double-delivery` | warn | component CSS is both inlined and imported by its chunk |
 | `safelist-dead` | warn | a safelist entry without a rule in the engine |
 | `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself (including a `v-bind()` variable from `<style>`) and `dynamicTokens` are not findings |
+| `token-fallback-only` | warn | a component reads a token only through `var(--x, fallback)` and no layer declares it: the component always renders the fallback — the token was renamed, say. Declare an intentional hook in the descriptor's `hookTokens`; `dynamicTokens` are not findings |
 | `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
 | `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
 | `component-mode-missing` | warn | a component has no file for a mode of the build or its ancestors: the literals come from the default mode — a forgotten `dark.json`, say; a value that is the same in every mode belongs in `root.json` |

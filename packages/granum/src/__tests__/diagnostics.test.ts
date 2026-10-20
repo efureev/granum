@@ -120,6 +120,22 @@ describe('granum doctor', () => {
     expect(tokens).toEqual(['--really-missing'])
   })
 
+  it('token-fallback-only: токен только с запасным значением, которого не объявил ни один слой и не хук', async () => {
+    const f = fixture()
+    const card = f.manifest.manifest.components.Card as unknown as { tokens: Record<string, unknown> }
+    // `--bg` объявлен темой, `--hook-a` — хук, `--dyn-q` — dynamicTokens, `--un-x` — переменная движка.
+    card.tokens = { ...card.tokens, requires: [], optional: ['--bg', '--dyn-q', '--hook-a', '--lost', '--un-x'], hooks: ['--hook-*'], dynamic: ['--dyn-*'] }
+    const report = await granumDoctor(await app(f, { modes: BOTH }))
+    const found = report.diagnostics.filter(d => d.code === 'token-fallback-only')
+    expect(found.map(d => [d.level, d.subject, d.items])).toEqual([['warn', '@x/kit:Card', ['--lost']]])
+    expect(found[0]!.message).toContain('hookTokens')
+  })
+
+  it('token-fallback-only: манифест без tokens.optional находки не даёт', async () => {
+    const report = await granumDoctor(await app(fixture(), { modes: BOTH }))
+    expect(report.diagnostics.some(d => d.code === 'token-fallback-only')).toBe(false)
+  })
+
   it('манифест без requires проверяется по consumes — старое поведение', async () => {
     const f = fixture()
     const report = await granumDoctor(await prepareTestApp({ providers: [f.manifest], components: ['@x/kit:Panel'] }, f.root))

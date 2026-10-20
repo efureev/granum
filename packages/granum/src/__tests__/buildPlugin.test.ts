@@ -56,9 +56,11 @@ function makeFixture(options: {
   name?: string
   /** Каталог тем; `false` — провайдер без тем: владелец каталога в приложении один. */
   catalog?: boolean
+  /** Потребления с запасным значением у Card и хук `t-fg` у Panel. */
+  hooks?: boolean
 } = {}): Fixture {
   const root = mkdtempSync(join(tmpdir(), 'granum-build-'))
-  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, rootImport = false, packageJson = {}, name = '@t/kit', catalog = true } = options
+  const { declareDependency = true, exportsOk = true, nodeImport = false, brokenCss = false, engineRules = false, plain = false, fileInput = false, panelStyle = false, dotPaths = false, vbind = false, runtimeConfig = false, rootImport = false, packageJson = {}, name = '@t/kit', catalog = true, hooks = false } = options
   const at = dotPaths ? './' : ''
   const input = fileInput ? '<input type="file" accept="image/*" class="sr-only">' : ''
 
@@ -77,7 +79,7 @@ function makeFixture(options: {
   write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: { 't-radius': '4px' }, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
   write(root, 'src/components/Card/Card.vue', plain
     ? `<script setup lang="ts"></script>\n<template><div class="t-card"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);}</style>\n`
-    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}${vbind ? `const color = 'red'` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;${vbind ? 'color:v-bind(color);' : ''}}</style>\n`)
+    : `<script setup lang="ts">${nodeImport ? `import { readFileSync } from 'node:fs'; void readFileSync` : ''}${vbind ? `const color = 'red'` : ''}</script>\n<template>${input}<div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space);@apply font-bold;${vbind ? 'color:v-bind(color);' : ''}${hooks ? '--t-own:blue;border-color:var(--t-own, red);outline-color:var(--t-mixed, red);background:var(--t-mixed);color:var(--t-maybe, red);' : ''}}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n${runtimeConfig ? `export { cardConfig } from './config.ts'\n` : ''}`)
   if (runtimeConfig)
     write(root, 'src/components/Card/config.ts', `import { defineGranumComponent } from '@feugene/granum/contract'\nexport const cardConfig = defineGranumComponent(import.meta.url, { name: 'Card', cssFiles: ['./card.css'], themesDir: './themes' })\n`)
@@ -96,6 +98,7 @@ function makeFixture(options: {
     ...(declareDependency ? { dependencies: ['Card'] } : {}),
     cssFiles: ['./styles.css'],
     dynamicTokens: ['t-z'],
+    ...(hooks ? { hookTokens: ['t-fg'] } : {}),
   })
   const provider = defineGranumProvider({
     id: name,
@@ -461,6 +464,18 @@ describe('granumProvider с настоящим Vite', () => {
     const escaping = { ...provider, theme: { ...provider.theme!, tokensCss: '../outside.css' } }
     expect(() => granumProvider({ provider: escaping, engine: testEngine() })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
     expect(() => granumProvider({ provider, engine: testEngine(), engineModule: '/abs/engine.js' })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+  })
+
+  it('токен только с запасным значением — tokens.optional; хуки дескриптора — tokens.hooks', async () => {
+    const { manifest } = await run(makeFixture({ hooks: true }))
+    const card = manifest.components.Card!.tokens
+    // `--t-own` компонент присваивает сам, у `--t-mixed` есть потребление без запасного.
+    expect(card.optional).toEqual(['--t-maybe'])
+    expect(card.requires).toEqual(['--t-bg', '--t-mixed', '--t-space'])
+    expect(card.hooks).toEqual([])
+    const panel = manifest.components.Panel!.tokens
+    expect(panel.optional).toEqual(['--t-fg'])
+    expect(panel.hooks).toEqual(['--t-fg'])
   })
 
   it('переменная v-bind() из <style> — присваивание самого компонента, не требование', async () => {

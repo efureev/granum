@@ -17,7 +17,7 @@ import { stripCssComments } from '../../engine/extract'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { packageSubcomponents } from '../subcomponents'
-import { findUndefinedTokens } from '../undefinedTokens'
+import { findFallbackOnlyTokens, findUndefinedTokens } from '../undefinedTokens'
 
 export interface DoctorProviderInfo {
   readonly id: string
@@ -67,6 +67,7 @@ export type DoctorDiagnosticCode
     | 'mode-extends-cycle'
     | 'token-conflict'
     | 'token-undefined'
+    | 'token-fallback-only'
     | 'safelist-redundant'
     | 'safelist-dead'
     | 'css-double-delivery'
@@ -369,6 +370,11 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   for (const { token, component: key } of undefinedTokens)
     warn('token-undefined', `${key}:${token}`, `token '${token}' is consumed by ${key} but no granum layer defines it for any active theme — it may still come from the application CSS or an engine rule`)
 
+  // Запасное значение `var()` прячет токен, которого никто не задаёт: компонент
+  // молча рисует его всегда. Хук объявляет, что так задумано.
+  for (const { component: key, tokens } of findFallbackOnlyTokens(resolution))
+    warn('token-fallback-only', key, 'reads these tokens only through var() fallbacks, and no granum layer defines them for the active theme — the component always renders the fallback; define them, or list intentional hooks in hookTokens', tokens)
+
   // Safelist без правила у движка — мёртвая запись.
   const safelistAll = sortedUnique(resolution.selection.entries.flatMap(e => e.component.safelist))
   if (safelistAll.length > 0) {
@@ -493,6 +499,7 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'provider-classes-dropped',
   'provider-classes-recovered',
   'token-undefined',
+  'token-fallback-only',
   'token-conflict',
   'override-skipped',
   'css-double-delivery',

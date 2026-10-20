@@ -62,6 +62,10 @@ export interface ComponentNode {
    * `consumesTokens`: разделить нечем, и диагностика ведёт себя как прежде.
    */
   readonly requiresTokens: readonly string[]
+  /** Подмножество `consumesTokens`, читаемое только через `var(--x, запасное)`; у объектной формы пусто. */
+  readonly optionalTokens: readonly string[]
+  /** Хуки компонента, с `--`; допускается `*` в конце. */
+  readonly hookTokens: readonly string[]
   readonly dynamicTokens: readonly string[]
   readonly group: string | null
 }
@@ -115,6 +119,8 @@ function fromObject(provider: GranumProvider): ProviderNode {
       ...(descriptor.sourceUrl !== undefined ? { sourceUrl: descriptor.sourceUrl } : {}),
       consumesTokens: EMPTY,
       requiresTokens: EMPTY,
+      optionalTokens: EMPTY,
+      hookTokens: (descriptor.hookTokens ?? EMPTY).map(t => (t.startsWith('--') ? t : `--${t}`)),
       dynamicTokens: descriptor.dynamicTokens ?? EMPTY,
       group: descriptor.group ?? null,
     })),
@@ -154,6 +160,8 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
       themeTokens: component.tokens.themes ?? EMPTY_RECORD,
       consumesTokens: component.tokens.consumes,
       requiresTokens: component.tokens.requires ?? component.tokens.consumes,
+      optionalTokens: component.tokens.optional ?? EMPTY,
+      hookTokens: component.tokens.hooks ?? EMPTY,
       dynamicTokens: component.tokens.dynamic,
       group: component.group,
     })),

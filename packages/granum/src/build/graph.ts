@@ -46,6 +46,10 @@ export interface ComponentBundleInfo {
   readonly consumes: string[]
   /** Потребления без fallback: значение обязан дать кто-то извне. */
   readonly requires: string[]
+  /** Токены из `var(--x…)` — с запасным значением или без. */
+  readonly uses: string[]
+  /** Токены, записанные строковым литералом (`'--x'`). */
+  readonly literals: string[]
   /** Токены, которым компонент присваивает значение сам: они требование закрывают. */
   readonly assigns: string[]
   /** Компоненты, чьи entry достигаются из entry этого: `Name` того же провайдера или `pkg:Name` чужого. */
@@ -168,6 +172,8 @@ export async function analyzeBundle(
     // разница между ними и есть «нужен извне».
     const required = new Set<string>()
     const assigns = new Set<string>()
+    const uses = new Set<string>()
+    const literals = new Set<string>()
     const cssAssets = new Set<string>()
     const cssImportedByChunk = new Set<string>()
 
@@ -176,10 +182,14 @@ export async function analyzeBundle(
       for (const token of engine.extract(chunk.code, file))
         candidates.add(token)
       const scan = scanTokenConsumption(chunk.code, file)
-      for (const name of scan.uses.keys())
+      for (const name of scan.uses.keys()) {
         consumes.add(`--${name}`)
-      for (const name of scan.literals)
+        uses.add(`--${name}`)
+      }
+      for (const name of scan.literals) {
         consumes.add(`--${name}`)
+        literals.add(`--${name}`)
+      }
       for (const name of scan.required)
         required.add(`--${name}`)
       for (const name of scan.assigns)
@@ -194,8 +204,10 @@ export async function analyzeBundle(
       const asset = bundle[css]
       if (asset && asset.type === 'asset' && typeof asset.source === 'string') {
         const scan = scanTokenConsumption(asset.source, css)
-        for (const name of scan.uses.keys())
+        for (const name of scan.uses.keys()) {
           consumes.add(`--${name}`)
+          uses.add(`--${name}`)
+        }
         for (const name of scan.required)
           required.add(`--${name}`)
         for (const name of scan.assigns)
@@ -216,6 +228,8 @@ export async function analyzeBundle(
       classes: sortedUnique(classes),
       consumes: sortedUnique(consumes),
       requires: sortedUnique(required),
+      uses: sortedUnique(uses),
+      literals: sortedUnique(literals),
       assigns: sortedUnique(assigns),
       edges: sortedUnique(edges),
       cssImportedByChunk: sortedUnique(cssImportedByChunk),

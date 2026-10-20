@@ -8,4 +8,6 @@ import { defineGranumComponent } from '@feugene/granum/contract'
 export const tcChartConfig = defineGranumComponent(import.meta.url, {
   name: 'TcChart',
   themesDir: './themes',
+  // Под другими темами сетка берёт запасное значение `var()` — так задумано.
+  hookTokens: ['tc-chart-grid'],
 })

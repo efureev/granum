@@ -328,6 +328,10 @@ function validateComponentCommon(c: Record<string, unknown>, p: string, file?: s
   expectStringArray(tokens.consumes, `${p}.tokens.consumes`, file)
   if (tokens.requires !== undefined)
     expectStringArray(tokens.requires, `${p}.tokens.requires`, file)
+  if (tokens.optional !== undefined)
+    expectStringArray(tokens.optional, `${p}.tokens.optional`, file)
+  if (tokens.hooks !== undefined)
+    expectStringArray(tokens.hooks, `${p}.tokens.hooks`, file)
   expectStringArray(tokens.dynamic, `${p}.tokens.dynamic`, file)
   expectString(c.hash, `${p}.hash`, file)
   if (c.subcomponents !== undefined) {

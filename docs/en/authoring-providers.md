@@ -46,6 +46,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
   dependencies: ['XhIcon', '@acme/base:XBox'],
   safelist: ['p-2', 'p-3', 'bg-[var(--xh-btn-bg)]'],
   dynamicTokens: ['xh-z-*'],
+  hookTokens: ['xh-btn-ring'],
   cssFiles: ['./styles.css'],
   themesDir: './themes',
   group: 'controls',
@@ -65,6 +66,7 @@ package: list `@feugene/granum` in `peerDependencies`, otherwise the build write
 | `dependencies` | components whose code this component imports; the short form means the same provider, `id:Name` another one |
 | `safelist` | only classes assembled in JS at runtime; template literals are not listed here — the build extracts them |
 | `dynamicTokens` | tokens whose name is assembled at runtime; pruning keeps them while the component is in the build |
+| `hookTokens` | hooks: tokens the component reads only through `var(--x, fallback)`, which a theme or the application may set. Without the declaration such a token, set by no layer, is the `doctor` finding `token-fallback-only` |
 | `cssFiles` | CSS read as is; path relative to `config.ts`, inside the component directory. A `styles.css` next to an SFC `<style>` is merged with it into one file, the declared CSS first |
 | `themesDir` | folder of the component's tokens per theme: `<theme>/root.{json,css}`, `<theme>/modes/<mode>.{json,css}`; keys without `--` |
 | `group` | shared chunks of several components go to `groups/<g>/shared/` |

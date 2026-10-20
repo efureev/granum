@@ -66,6 +66,13 @@ export interface GranumComponentDescriptor<Name extends string = string> {
    */
   readonly dynamicTokens?: readonly string[]
   /**
+   * Хуки: токены, которые компонент читает только через `var(--x, запасное)`, а
+   * задать их вправе тема или приложение. БЕЗ `--`, допускается `*` в конце.
+   * Объявление снимает находку `token-fallback-only`: запасное значение — норма,
+   * а не недосмотр.
+   */
+  readonly hookTokens?: readonly string[]
+  /**
    * CSS компонента, читаемый как есть. После `defineGranumComponent` — пути
    * относительно корня раскладки пакета (`components/<Name>/<file>`);
    * исходное расположение восстанавливается через {@link sourceUrl}.

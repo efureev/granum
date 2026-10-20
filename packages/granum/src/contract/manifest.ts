@@ -47,6 +47,16 @@ export interface GranumManifestComponentTokens {
    * диагностика на нём смотрит весь `consumes`.
    */
   readonly requires?: readonly string[]
+  /**
+   * Подмножество `consumes`, которое компонент читает только через
+   * `var(--x, запасное)` и сам не присваивает. По нему доктор выносит
+   * `token-fallback-only`.
+   *
+   * Необязательное: манифест без поля находки не даёт.
+   */
+  readonly optional?: readonly string[]
+  /** Хуки из `hookTokens` дескриптора, с `--`; допускается `*` в конце. Поля нет — хуков нет. */
+  readonly hooks?: readonly string[]
   readonly dynamic: readonly string[]
 }
 

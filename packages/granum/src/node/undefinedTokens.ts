@@ -16,6 +16,7 @@
  */
 import type { ComponentKey } from '../core/registry'
 import type { GranumResolution } from '../core/resolve'
+import { sortedUnique } from '../core/dedupe'
 import { allTokenChains } from '../core/tokenLayers'
 import { readCssSync } from './css'
 import { scanCssDeclarations } from './cssDeclarations'
@@ -27,7 +28,8 @@ export interface UndefinedToken {
   readonly component: ComponentKey
 }
 
-export function findUndefinedTokens(resolution: GranumResolution): UndefinedToken[] {
+/** Токены, которые объявляет хоть один слой granum в активной теме, с `--`. */
+function definedTokens(resolution: GranumResolution): Set<string> {
   const defined = new Set<string>()
   for (const chain of allTokenChains(resolution.tokens.active)) {
     if (chain.effective !== undefined)
@@ -45,7 +47,11 @@ export function findUndefinedTokens(resolution: GranumResolution): UndefinedToke
     for (const decl of scanCssDeclarations(css))
       defined.add(`--${decl.token}`)
   }
+  return defined
+}
 
+export function findUndefinedTokens(resolution: GranumResolution): UndefinedToken[] {
+  const defined = definedTokens(resolution)
   const out: UndefinedToken[] = []
   for (const { provider, component } of resolution.selection.entries) {
     const dynamic = component.dynamicTokens.map(patternMatcher)
@@ -54,6 +60,30 @@ export function findUndefinedTokens(resolution: GranumResolution): UndefinedToke
         continue
       out.push({ token, component: `${provider.id}:${component.name}` as ComponentKey })
     }
+  }
+  return out
+}
+
+export interface FallbackOnlyTokens {
+  readonly component: ComponentKey
+  readonly tokens: readonly string[]
+}
+
+/**
+ * Вердикт `token-fallback-only`: токен компонент читает только через
+ * `var(--x, запасное)`, и ни один слой его не объявляет — компонент всегда
+ * рисует запасное значение. Переименованный или забытый токен так не виден ни
+ * глазу, ни `token-undefined`. Хук (`hookTokens`) — объявление автора, что это
+ * норма; `dynamicTokens` и переменные движка вычитаются, как у `token-undefined`.
+ */
+export function findFallbackOnlyTokens(resolution: GranumResolution): FallbackOnlyTokens[] {
+  const defined = definedTokens(resolution)
+  const out: FallbackOnlyTokens[] = []
+  for (const { provider, component } of resolution.selection.entries) {
+    const declared = [...component.hookTokens, ...component.dynamicTokens].map(patternMatcher)
+    const tokens = sortedUnique(component.optionalTokens).filter(token => !defined.has(token) && !token.startsWith('--un-') && !declared.some(match => match(token)))
+    if (tokens.length > 0)
+      out.push({ component: `${provider.id}:${component.name}` as ComponentKey, tokens })
   }
   return out
 }

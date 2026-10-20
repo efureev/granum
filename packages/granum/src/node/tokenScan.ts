@@ -11,6 +11,7 @@
  *     «неопределённый», даже если ни один слой granum его не задаёт.
  */
 
+import { sortedUnique } from '../core/dedupe'
 import { stripComments } from '../engine/extract'
 
 /**
@@ -68,6 +69,16 @@ export function extractRequiredTokenUses(text: string): Set<string> {
       found.add(match[1]!)
   }
   return found
+}
+
+/**
+ * Токены, которые компонент читает только через `var(--x, запасное)`: потребление
+ * `var()` есть, ни одного без запасного, и сам компонент значение не присваивает.
+ * Имя строковым литералом сюда не входит: `setProperty('--x', …)` — тоже
+ * присваивание, и отличить его от чтения статика не может. Имена — с `--`.
+ */
+export function fallbackOnlyTokens(uses: Iterable<string>, required: ReadonlySet<string>, assigns: ReadonlySet<string>, literals: ReadonlySet<string>): string[] {
+  return sortedUnique([...uses].filter(token => !required.has(token) && !assigns.has(token) && !literals.has(token)))
 }
 
 /** Имена токенов (без `--`), записанные строковым литералом целиком. */

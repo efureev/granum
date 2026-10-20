@@ -27,6 +27,7 @@ export interface DefineGranumComponentOptions<Name extends string = string> {
   readonly dependencies?: readonly GranumComponentDependency[]
   readonly safelist?: readonly string[]
   readonly dynamicTokens?: readonly string[]
+  readonly hookTokens?: readonly string[]
   /** Пути относительно `config.ts`: `'./styles.css'`, `'./css/extra.css'`. */
   readonly cssFiles?: readonly string[]
   /** Папка токенов компонента по темам относительно `config.ts`: `'./themes'`. */
@@ -58,6 +59,7 @@ export function defineGranumComponent<Name extends string>(
     dependencies: [...(options.dependencies ?? [])],
     safelist: [...(options.safelist ?? [])],
     dynamicTokens: [...(options.dynamicTokens ?? [])],
+    hookTokens: [...(options.hookTokens ?? [])],
     cssFiles: (options.cssFiles ?? []).map(file => componentRelativePath(options.name, file)),
     ...(options.themesDir !== undefined ? { themesDir: componentRelativePath(options.name, options.themesDir, 'themesDir') } : {}),
     ...(options.group ? { group: options.group } : {}),

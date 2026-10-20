@@ -223,6 +223,13 @@ a selected component requires from outside (except `dynamicTokens`) that got no
 value in any mode of the active theme and is not declared by inlined
 files. Tokens of the application's own markup are not part of it.
 
+A token a component reads **only** through `var(--x, fallback)` is not required
+from outside, yet staying silent about it is risky: if no layer sets it, the
+component always renders the fallback, and a renamed token hides exactly this way.
+The build records such tokens in the manifest separately, and `doctor` reports the
+unset ones as `token-fallback-only`. An intentional hook — a default a theme or the
+application may override — is declared by the component in `hookTokens`.
+
 ## Token pruning
 
 ```ts

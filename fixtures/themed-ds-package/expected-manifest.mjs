@@ -17,5 +17,8 @@ export default function ({ manifest, check }) {
 
   // Хук бейджа со значением по умолчанию извне не требуется (T-5); роль внутри значения по умолчанию — требуется.
   check(c.TdBadge.tokens.requires.join(' ') === '--th-accent --th-accent-fg', `TdBadge.requires: ${c.TdBadge.tokens.requires}`)
+  // Сам хук читается только через запасное значение и объявлен хуком.
+  check(c.TdBadge.tokens.optional?.join(' ') === '--td-badge-bg', `TdBadge.optional: ${c.TdBadge.tokens.optional}`)
+  check(c.TdBadge.tokens.hooks?.join(' ') === '--td-badge-bg', `TdBadge.hooks: ${c.TdBadge.tokens.hooks}`)
   check(manifest.warnings.length === 0, `warnings: ${JSON.stringify(manifest.warnings)}`)
 }

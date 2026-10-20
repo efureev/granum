@@ -45,6 +45,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
   dependencies: ['XhIcon', '@acme/base:XBox'],
   safelist: ['p-2', 'p-3', 'bg-[var(--xh-btn-bg)]'],
   dynamicTokens: ['xh-z-*'],
+  hookTokens: ['xh-btn-ring'],
   cssFiles: ['./styles.css'],
   themesDir: './themes',
   group: 'controls',
@@ -64,6 +65,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 | `dependencies` | компоненты, чей код этот компонент импортирует; короткая форма — тот же провайдер, `id:Name` — чужой |
 | `safelist` | только классы, которые собираются в JS в рантайме; литералы шаблона сюда не пишутся — их извлечёт сборка |
 | `dynamicTokens` | токены, чьё имя собирается в рантайме; обрезка их не удалит, пока компонент в сборке |
+| `hookTokens` | хуки: токены, которые компонент читает только через `var(--x, запасное)`, а задать их вправе тема или приложение. Без объявления такой токен, не заданный ни одним слоем, — находка `doctor` `token-fallback-only` |
 | `cssFiles` | CSS, читаемый как есть; путь относительно `config.ts`, внутри директории компонента. `styles.css` рядом с `<style>` SFC склеивается с ним в один файл: сначала объявленный |
 | `themesDir` | папка токенов компонента по темам: `<тема>/root.{json,css}`, `<тема>/modes/<режим>.{json,css}`; ключи без `--` |
 | `group` | общие чанки нескольких компонентов кладутся в `groups/<g>/shared/` |

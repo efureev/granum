@@ -8,7 +8,7 @@
 |---|---|
 | `TdButton` | `themes/paper/modes/{light,dark}.json`, `themes/ink/modes/light.json`; остальное у `ink` — по цепочкам `ink → paper` и `dim → dark` |
 | `TdCard` | `themes/paper/root.json` — режимонезависимый токен |
-| `TdBadge` | нет: хук `var(--td-badge-bg, var(--th-accent))` со значением по умолчанию |
+| `TdBadge` | нет: хук `var(--td-badge-bg, var(--th-accent))` со значением по умолчанию, объявлен в `hookTokens` |
 
 ```bash
 yarn workspace @granum-fixtures/themed-ds build
