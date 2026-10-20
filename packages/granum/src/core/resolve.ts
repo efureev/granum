@@ -20,9 +20,9 @@ import { collectTokenLayers, tokenValueIn } from './tokenLayers'
 export interface GranumResolveInput {
   readonly providers: readonly GranumProviderInput[]
   readonly components?: ComponentSelection
-  /** Активная тема: id каталога, `providerId:id` или тема-объект приложения (A-22). */
+  /** Активная тема: id каталога, `providerId:id` или тема-объект приложения. */
   readonly theme?: GranumThemeChoice
-  /** Темы для показа рядом с активной (A-32). */
+  /** Темы для показа рядом с активной. */
   readonly previews?: readonly GranumThemeChoice[]
   readonly modes?: GranumModesInput
   /**

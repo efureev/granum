@@ -72,7 +72,7 @@ export interface GranumPluginOptions {
 /** `plugin.api` — то, что интеграции хоста читают у плагина до сборки. */
 export interface GranumPluginApi {
   /**
-   * Манифест режимов сборки (T-17) — тот же, что `virtual:granum/themes`, но
+   * Манифест режимов сборки — тот же, что `virtual:granum/themes`, но
    * доступный на этапе конфигурации хоста: скрипт режима в `<head>` строится
    * раньше, чем Vite начнёт сборку. `root` — корень приложения; без него —
    * корень Vite, а до разрешения его конфига — текущий каталог процесса.
@@ -194,7 +194,7 @@ function providerFilesOf(app: PreparedApp): string[] {
   return files
 }
 
-/** Файлы, из которых приложение собрало тему-объект (A-33): их правка перезагружает конфиг. */
+/** Файлы, из которых приложение собрало тему-объект: их правка перезагружает конфиг. */
 function themeSourcesOf(config: GranumConfig, root: string): string[] {
   return [config.theme, ...(config.previews ?? [])]
     .flatMap(choice => (typeof choice === 'object' && choice !== null ? choice.sources ?? [] : []))
@@ -567,7 +567,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
       server = devServer
       const dirs = (config.appSources?.dirs ?? []).map(d => resolve(root, d))
       // Тема-объект живёт в конфиге, а конфиг читается один раз на процесс
-      // Vite: правку её файлов подхватывает только перезапуск сервера (A-33).
+      // Vite: правку её файлов подхватывает только перезапуск сервера.
       const themeSources = themeSourcesOf(config, root)
       const sourceDirs = themeSources.filter(file => existsSync(file) && statSync(file).isDirectory())
       if (themeSources.length > 0)

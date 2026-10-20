@@ -152,7 +152,7 @@ export function parseManifest(text: string, baseUrl: string, file?: string): Gra
 
 /**
  * Темы манифеста формата 2: CSS-файлы, структурные блоки, токены компонентов по
- * темам. Без них манифест спутника читается (M-11); с ними — нет.
+ * темам. Без них манифест спутника читается; с ними — нет.
  */
 function legacyThemes(raw: Record<string, unknown>): string | undefined {
   const theme = isRecord(raw.theme) ? raw.theme : {}
@@ -401,7 +401,7 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
 }
 
 /**
- * Манифест формата 2 без тем (M-11), приведённый к форме 3: остаются
+ * Манифест формата 2 без тем, приведённый к форме 3: остаются
  * тема-независимые файлы и объявленные токены, поля тем уходят. Хеш сверяется
  * по исходному файлу.
  */

@@ -106,7 +106,7 @@ export interface DoctorReport {
   }
   readonly providers: readonly DoctorProviderInfo[]
   readonly components: readonly DoctorComponentInfo[]
-  /** Тема и режимы (D-10): что собрано и откуда. */
+  /** Тема и режимы: что собрано и откуда. */
   readonly themes: {
     readonly theme: string | null
     readonly themeSource: ThemeSource | null
@@ -244,8 +244,8 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
 
   // Литералы компонента в режиме сборки, взятые из режима по умолчанию: у
   // компонента нет файла ни этого режима, ни его предков по `extends`, и,
-  // например, забытый `dark.json` молча даёт тёмному режиму светлые значения
-  // (A-24). Формула с `var(` сама следует ролям режима — её не считаем. Режимы
+  // например, забытый `dark.json` молча даёт тёмному режиму светлые значения.
+  // Формула с `var(` сама следует ролям режима — её не считаем. Режимы
   // `define` наследуют свою базу — их не считаем повторно.
   const activeTheme = resolution.themes.theme
   if (activeTheme) {

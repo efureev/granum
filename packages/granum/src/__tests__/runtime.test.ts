@@ -36,7 +36,7 @@ const MANIFEST: GranumThemeManifest = {
   activation: { attribute: 'data-theme' },
 }
 
-describe('getThemeManifest — из той же резолюции, что и CSS (T-4)', () => {
+describe('getThemeManifest — из той же резолюции, что и CSS', () => {
   const owner = makeManifest('@p/ds', {}, {
     theme: {
       defaultTheme: 'paper',
@@ -96,7 +96,7 @@ describe('getThemeManifest — из той же резолюции, что и CS
   })
 })
 
-describe('resolveThemeActivation — пара обратно в режим (RT-5)', () => {
+describe('resolveThemeActivation — пара обратно в режим', () => {
   it('известная пара — режим, чужая или пустая — undefined', () => {
     expect(resolveThemeActivation(MANIFEST, 'ink-dim')?.name).toBe('dim')
     expect(resolveThemeActivation(MANIFEST, 'paper-dark')).toBeUndefined()
@@ -112,7 +112,7 @@ describe('themeModeValue — пара для острова или превью'
   })
 })
 
-describe('createThemeController (RT-1)', () => {
+describe('createThemeController', () => {
   it('режим по умолчанию, переключение, хранение имени режима, cycle и подписки', () => {
     const target = createTarget()
     const storage = memoryStorage()
@@ -139,7 +139,7 @@ describe('createThemeController (RT-1)', () => {
     expect(createThemeController(MANIFEST, { target: createTarget(), storage: null, initial: 'dim' }).mode).toBe('dim')
   })
 
-  it('поверх уже выставленной пары: режим узнан, корень не тронут (RT-5)', () => {
+  it('поверх уже выставленной пары: режим узнан, корень не тронут', () => {
     const target = createTarget({ 'data-theme': 'ink-dark' })
     const themes = createThemeController(MANIFEST, { target, storage: memoryStorage({ 'granum-theme': 'dim' }) })
     expect(themes.mode).toBe('dark')
@@ -187,7 +187,7 @@ describe('createThemeController (RT-1)', () => {
   })
 })
 
-describe('createThemeScript (RT-3)', () => {
+describe('createThemeScript', () => {
   interface ScriptEnv { attribute?: string | undefined, stored?: string | null, cookie?: string, dark?: boolean, noMatchMedia?: boolean, storageThrows?: boolean }
 
   function runCode(code: string, env: ScriptEnv = {}): { attribute: string | undefined, listeners: Map<string, () => void> } {
@@ -307,7 +307,7 @@ describe('createThemeScript (RT-3)', () => {
   })
 })
 
-describe('cookie для SSR (RT-4)', () => {
+describe('cookie для SSR', () => {
   it('cookie с SameSite=None пишется с Secure — без него браузер её отклоняет', () => {
     const written = (options: Parameters<typeof createCookieStorage>[0]): string => {
       const doc = { cookie: '' }

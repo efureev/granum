@@ -1,7 +1,7 @@
 /**
  * Данные темы (`GranumThemeData`): форма, цепочки режимов, наследование темы
- * от темы и полнота по реестру. Чистые функции — их зовут сборка провайдера
- * (C-24…C-30), чтение данных приложением и проверка темы-объекта в конфиге.
+ * от темы и полнота по реестру. Чистые функции — их зовут сборка провайдера,
+ * чтение данных приложением и проверка темы-объекта в конфиге.
  */
 import type { GranumModeData, GranumThemeData } from '../contract/types'
 
@@ -120,7 +120,7 @@ export function checkThemeData(raw: unknown, options: { readonly partial?: boole
   return checkModeGraph(raw as unknown as GranumThemeData)
 }
 
-/** `defaultMode` и цепочки `extends` режимов полной темы (C-25, C-26). */
+/** `defaultMode` и цепочки `extends` режимов полной темы. */
 export function checkModeGraph(data: GranumThemeData): ThemeDataIssue | undefined {
   const defaultMode = data.defaultMode ?? DEFAULT_MODE
   if (!Object.hasOwn(data.modes, defaultMode)) {
@@ -157,7 +157,7 @@ export function modeChain(data: Pick<GranumThemeData, 'modes'>, mode: string): {
   return { names, cycle: false }
 }
 
-/** Итоговые токены режима: предки по цепочке, затем свои (C-26). */
+/** Итоговые токены режима: предки по цепочке, затем свои. */
 export function modeTokens(data: Pick<GranumThemeData, 'modes'>, mode: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const name of [...modeChain(data, mode).names].reverse())
@@ -185,7 +185,7 @@ export interface ThemePatch {
 }
 
 /**
- * Тема каталога с `extends` — родитель плюс отличия (C-27). Токены
+ * Тема каталога с `extends` — родитель плюс отличия. Токены
  * сливаются по ключу, фолбэки режима и `baseCss` отличий заменяют родительские
  * целиком, `extensions` сливаются на верхнем уровне. Метаданные — из `meta`
  * (записи каталога), а не из родителя.
@@ -231,7 +231,7 @@ export function mergeThemePatch(
 export type TokenNature = 'root' | 'mode'
 
 /**
- * Полнота темы по реестру (C-30): токен `root` — в `root`, токен `mode` — в
+ * Полнота темы по реестру: токен `root` — в `root`, токен `mode` — в
  * итоговых токенах каждого режима. Возвращает недостающее как `<где>:<токен>`
  * (`root:xh-radius`, `dark:xh-bg`), отсортированным.
  */

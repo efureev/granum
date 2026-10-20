@@ -87,7 +87,7 @@ function defaultPrefersDark(): boolean {
 }
 
 /**
- * Контроллер режимов активной темы поверх манифеста сборки (RT-1).
+ * Контроллер режимов активной темы поверх манифеста сборки.
  *
  * Значения всех режимов уже в CSS — контроллер лишь выставляет пару в атрибут
  * корня. Хранит он имя режима, а не пару: смена темы на сборке не сбрасывает
@@ -154,7 +154,7 @@ export function createThemeController(
     if (requested !== 'auto')
       return { name: requested, applied: false }
 
-    // Пара уже на корне: контроллер узнаёт её и корень не трогает (RT-5).
+    // Пара уже на корне: контроллер узнаёт её и корень не трогает.
     const present = resolveThemeActivation(manifest, target?.getAttribute(attribute))
     if (present)
       return { name: present.name, applied: true }

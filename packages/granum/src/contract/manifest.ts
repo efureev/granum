@@ -106,7 +106,7 @@ export interface GranumManifestWarning {
 }
 
 export interface GranumManifest {
-  /** `2` — манифест спутника без тем, прочитанный по M-11 и приведённый к форме 3. */
+  /** `2` — манифест спутника без тем: формат 2 у пакета без тем читается как прежде и приводится к форме 3. */
   readonly granum: typeof GRANUM_MANIFEST_VERSION | 2
   readonly contractVersion: 2 | 1
   readonly id: string

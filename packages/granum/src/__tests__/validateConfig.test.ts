@@ -97,7 +97,7 @@ describe('validateGranumConfig', () => {
     [{ providers: ['a'], engine, modes: { define: { 'deep-sea': { extends: 'dark' } } } }, 'modes.define.deep-sea'],
     [{ providers: ['a'], engine, modes: { system: 'auto' } }, 'modes.system'],
     [{ providers: ['a'], engine, modes: { activation: { attribute: '1x' } } }, 'modes.activation.attribute'],
-    // Тема-объект — полные данные: C-24…C-26 с путём до поля.
+    // Тема-объект — полные данные: id, имена режимов, режим по умолчанию и `extends` режимов проверяются с путём до поля.
     [{ providers: ['a'], engine, theme: '' }, 'theme'],
     [{ providers: ['a'], engine, theme: { id: 'Brand', title: 'B', root: {}, modes: { light: { colorScheme: 'light', tokens: {} } } } }, 'theme.id'],
     [{ providers: ['a'], engine, theme: { id: 'brand', title: 'B', root: {}, modes: { dark: { colorScheme: 'dark', tokens: {} } } } }, 'theme.modes'],
@@ -141,7 +141,7 @@ describe('неизвестный ключ конфига — ошибка с п�
     [{ content: { filesystem: ['src/**'] } }, 'content', /provider manifests.*appSources/],
     [{ unocss: { rules: [] } }, 'unocss', /engine factory/],
     [{ rules: [] }, 'rules', /engine factory/],
-    // Ключи `themes.*` granum 2: каждый — со своим новым местом (A-30).
+    // Ключи `themes.*` granum 2: каждый — со своим новым местом.
     [{ themes: { names: ['light', 'dark'] } }, 'themes.names', /use 'modes\.names'/],
     [{ themes: { define: { ocean: { extends: 'dark' } } } }, 'themes.define', /use 'modes\.define'/],
     [{ themes: { tokenOverrides: { dark: {} } } }, 'themes.tokenOverrides', /use 'modes\.tokenOverrides'/],

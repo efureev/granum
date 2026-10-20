@@ -1,5 +1,5 @@
 /**
- * Манифест тем — канал между сборкой и рантаймом (T-4).
+ * Манифест тем — канал между сборкой и рантаймом.
  *
  * Тема выбирается на сборке: в CSS ровно одна активная тема, её режимы стоят
  * под атрибутом на корне, `data-theme="<тема>-<режим>"` по умолчанию. Значения
@@ -21,7 +21,7 @@ export interface GranumModeEntry {
   readonly value: string
 }
 
-/** Тема превью (A-32): её пары есть в CSS сборки, но корень она не занимает. */
+/** Тема превью: её пары есть в CSS сборки, но корень она не занимает. */
 export interface GranumPreviewEntry {
   readonly theme: { readonly id: string, readonly title: string }
   readonly modes: readonly GranumModeEntry[]
@@ -46,7 +46,7 @@ export interface GranumThemeManifest {
   readonly extensions?: Readonly<Record<string, unknown>>
 }
 
-/** Пара режима по шаблону активации (A-28): `{theme}-{mode}` → `slate-dark`. */
+/** Пара режима по шаблону активации: `{theme}-{mode}` → `slate-dark`. */
 export function themePairValue(template: string, theme: string, mode: string): string {
   return template.replaceAll('{theme}', theme).replaceAll('{mode}', mode)
 }
@@ -62,7 +62,7 @@ export interface GranumThemeManifestInput {
 
 /**
  * Манифест режимов по описанию темы — каталогу провайдера или своему списку —
- * тем же правилом пары и тем же порядком, что у сборки (A-28, T-9). Нужен тому,
+ * тем же правилом пары и тем же порядком, что у сборки. Нужен тому,
  * у кого `virtual:granum/themes` нет: CSS темы подключён готовым файлом, а
  * контроллеру нужны пары.
  */
@@ -86,7 +86,7 @@ export function createThemeManifest(input: GranumThemeManifestInput): GranumThem
 }
 
 /**
- * Режим по значению атрибута — чтение пары обратно (RT-5): серверный HTML или
+ * Режим по значению атрибута — чтение пары обратно: серверный HTML или
  * ранний скрипт уже выставили пару, и контроллер обязан её узнать.
  */
 export function resolveThemeActivation(manifest: GranumThemeManifest, value: string | null | undefined): GranumModeEntry | undefined {

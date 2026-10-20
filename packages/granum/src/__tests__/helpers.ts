@@ -159,7 +159,7 @@ export function catalogProvider(options: {
 
 /**
  * Все режимы темы и режимы приложения — явным `modes.names`. Без него сборка
- * берёт только режим по умолчанию (A-25), а тестам слоёв и эмиссии нужны все.
+ * берёт только режим по умолчанию, а тестам слоёв и эмиссии нужны все.
  */
 export function allModes(theme: GranumThemeData, modes: GranumModesInput = {}): GranumModesInput {
   return modes.names ? modes : { ...modes, names: [...Object.keys(theme.modes), ...Object.keys(modes.define ?? {})] }

@@ -1,6 +1,6 @@
 import type { InvalidProviderError } from '../core/errors'
 /**
- * Файлы тем на диске: папка `themesDir` компонента (C-33, C-34, C-13), данные
+ * Файлы тем на диске: папка `themesDir` компонента, данные
  * темы и реестр токенов.
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'

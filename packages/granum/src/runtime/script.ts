@@ -1,5 +1,5 @@
 /**
- * Режим до первого кадра (RT-3) и cookie для SSR (RT-4). Чистые функции:
+ * Режим до первого кадра и cookie для SSR. Чистые функции:
  * строку скрипта вставляет приложение или плагин, cookie читает сервер.
  */
 import type { GranumThemeStorage } from './controller'
@@ -56,7 +56,7 @@ function systemPair(manifest: GranumThemeManifest, scheme: 'light' | 'dark'): st
  * Код скрипта, ставящего пару на корень до первого кадра, без тега `<script>` —
  * для хоста, который вставляет его сам (`injectScript` Astro).
  *
- * Правило — то же, что у контроллера с `initial: 'auto'` (RT-1, RT-5): пара,
+ * Правило — то же, что у контроллера с `initial: 'auto'`: пара,
  * уже стоящая на корне, остаётся; иначе режим из cookie, из `localStorage`,
  * первый режим системной схемы, режим по умолчанию. Код собирается под
  * манифест: пары и выбор по схеме — константами, ветка cookie — только при
@@ -140,7 +140,7 @@ function readCookie(header: string, name: string): string | undefined {
 }
 
 /**
- * Хранилище режима в cookie (RT-4): сервер читает его из заголовка запроса и
+ * Хранилище режима в cookie: сервер читает его из заголовка запроса и
  * сразу отдаёт `<html data-theme="<пара>">` — скрипт до первого кадра тогда не нужен.
  */
 export function createCookieStorage(options: GranumCookieStorageOptions = {}): GranumThemeStorage {

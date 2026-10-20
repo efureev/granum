@@ -79,7 +79,7 @@ export type PreparedWarning
  * так же, как в синтетическом манифесте медленного пути.
  *
  * Строковая зависимость, которой нет в `providers`, подгружается как пакет с
- * манифестом от каталога зависимого провайдера (A-31): при строгой раскладке
+ * манифестом от каталога зависимого провайдера: при строгой раскладке
  * `node_modules` от корня приложения транзитивный пакет не виден. Ids таких
  * доноров попадают в `donors` — их компоненты селекция `'all'` не выбирает.
  */
@@ -159,7 +159,7 @@ function providerDirOf(input: GranumProviderInput): string | undefined {
 /**
  * Зависимость не разрешилась, а провайдеры с токенами компонентов по темам
  * остались без владельца каталога: тема не соберётся, и это точнее, чем «нет
- * провайдера с таким id» (A-31). Без тем — прежняя ошибка графа.
+ * провайдера с таким id». Без тем — прежняя ошибка графа.
  */
 function assertThemeOwnerPresent(inputs: readonly GranumProviderInput[], unresolved: readonly { readonly id: string, readonly from: string }[]): void {
   const nodes = inputs.map(toProviderNode)
@@ -262,7 +262,7 @@ export function materializeAppModes(modes: GranumModesInput | undefined, root: s
 }
 
 /**
- * Данные тем, которые собирает сборка: активная и превью из каталога (T-6).
+ * Данные тем, которые собирает сборка: активная и превью из каталога.
  * Остальные темы каталога не читаются.
  */
 export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], providers: readonly ProviderNode[]): Record<string, Record<string, GranumThemeData>> {
@@ -378,7 +378,7 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
     if (!config.appSources)
       warnings.push({ kind: 'app-sources-unset' })
     components = config.components
-    // Донор, подгруженный по зависимости, компонентов не выбирает (C-4): `'all'` — это провайдеры приложения.
+    // Донор, подгруженный по зависимости, компонентов не выбирает: `'all'` — это провайдеры приложения.
     if ((components === undefined || components === 'all') && donors.size > 0)
       components = inputs.map(providerIdOf).filter(id => !donors.has(id)).map(provider => ({ provider, names: 'all' as const }))
   }

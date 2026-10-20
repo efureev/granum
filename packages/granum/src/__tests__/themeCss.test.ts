@@ -1,5 +1,5 @@
 /**
- * Блоки CSS темы и режимов (T-8…T-13, A-32): что уходит в слой `tokens`, что в
+ * Блоки CSS темы и режимов: что уходит в слой `tokens`, что в
  * `themes`, под какими селекторами и в каком порядке.
  */
 import type { GranumEngine } from '../engine/types'
@@ -23,7 +23,7 @@ async function layers(app: PreparedApp): Promise<{ tokens: string, themes: strin
   return layers
 }
 
-describe('корень и режимы (T-8, T-9, T-12)', () => {
+describe('корень и режимы', () => {
   it('литералы root — в tokens под :root; формулы root — под :root, [attr]', async () => {
     const { root, provider } = catalogProvider()
     const app = await prepareTestApp({ providers: [provider] }, root)
@@ -46,7 +46,7 @@ describe('корень и режимы (T-8, T-9, T-12)', () => {
     expect(blockOf(themes, ':root, [data-theme="ink-light"]')).toContain('color-scheme: light;')
   })
 
-  it('классов .light/.dark нет (T-11); данных других тем нет (T-6)', async () => {
+  it('классов .light/.dark нет; данных других тем нет', async () => {
     const { root, provider } = catalogProvider()
     const { css } = await emitCss(await prepareTestApp({ providers: [provider], theme: 'ink' }, root))
     expect(css).not.toMatch(/\.(?:light|dark)\b/)
@@ -55,7 +55,7 @@ describe('корень и режимы (T-8, T-9, T-12)', () => {
   })
 })
 
-describe('формулы режимов (T-10)', () => {
+describe('формулы режимов', () => {
   it('формула, одинаковая во всех режимах, — один раз под общей границей; разная — в блоках режимов', async () => {
     const theme = themeData('t', {
       light: { 'p-bg': '#fff', 'p-soft': 'color-mix(in oklab, var(--p-bg) 90%, black)', 'p-edge': 'var(--p-bg)' },
@@ -96,7 +96,7 @@ describe('фолбэки, системная схема', () => {
     expect(themes).toContain('[data-theme="t-plain"] {\n    --p-bg: white;')
   })
 
-  it('system: media — тёмный режим по prefers-color-scheme, пока атрибут не выставлен (T-13)', async () => {
+  it('system: media — тёмный режим по prefers-color-scheme, пока атрибут не выставлен', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
     const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], system: 'media' } }, root))
     expect(themes).toContain('@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {\n    color-scheme: dark;\n    --p-bg: #000;')
@@ -163,7 +163,7 @@ describe('формулы превью на корне активной темы'
   })
 })
 
-describe('режим приложения поверх режима темы — `ocean` (A-26)', () => {
+describe('режим приложения поверх режима темы — `ocean`', () => {
   it('ocean extends dark: значения dark и токены компонента для dark по цепочке, своё — поверх', async () => {
     const { root, provider } = catalogProvider({
       components: { Card: { themes: { paper: { modes: { dark: { 'c-shade': '#020617' } } } } } },
@@ -185,7 +185,7 @@ describe('режим приложения поверх режима темы —
   })
 })
 
-describe('превью (A-32)', () => {
+describe('превью', () => {
   it('полные блоки пар превью, никогда под :root; формулы под списком её пар', async () => {
     const { root, provider } = catalogProvider()
     const { themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'ink', previews: ['paper'] }, root))
@@ -228,7 +228,7 @@ describe('без тем', () => {
   })
 })
 
-describe('селектор тёмных режимов для движка (E-20)', () => {
+describe('селектор тёмных режимов для движка', () => {
   it('пары режимов с colorScheme dark входом generate; без тёмных режимов поля нет', async () => {
     const seen: (string | undefined)[] = []
     const engine: GranumEngine = { ...TEST_ENGINE, generate: (input) => {

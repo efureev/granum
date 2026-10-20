@@ -5,7 +5,7 @@ export default function ({ manifest, check }) {
   check(manifest.theme.catalog === undefined, 'своего каталога нет')
   check(Object.keys(c).join(',') === 'TdBadge,TdButton,TdCard', `состав: ${Object.keys(c)}`)
 
-  // themesDir материализован в манифест по темам и режимам (C-33).
+  // themesDir материализован в манифест по темам и режимам.
   const button = c.TdButton.tokens.themes
   check(Object.keys(button).join(',') === 'ink,paper', `TdButton.themes: ${Object.keys(button)}`)
   check(Object.keys(button.paper.modes).sort().join(',') === 'dark,light', 'paper: light и dark')
@@ -15,7 +15,7 @@ export default function ({ manifest, check }) {
   check(c.TdCard.tokens.themes.paper.root['td-card-pad'] === '12px', 'TdCard: root.json')
   check(c.TdBadge.tokens.themes === undefined, 'TdBadge без themesDir')
 
-  // Хук бейджа со значением по умолчанию извне не требуется (T-5); роль внутри значения по умолчанию — требуется.
+  // Хук бейджа со значением по умолчанию извне не требуется; роль внутри значения по умолчанию — требуется.
   check(c.TdBadge.tokens.requires.join(' ') === '--th-accent --th-accent-fg', `TdBadge.requires: ${c.TdBadge.tokens.requires}`)
   // Сам хук читается только через запасное значение и объявлен хуком.
   check(c.TdBadge.tokens.optional?.join(' ') === '--td-badge-bg', `TdBadge.optional: ${c.TdBadge.tokens.optional}`)

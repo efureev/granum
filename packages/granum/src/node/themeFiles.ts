@@ -1,6 +1,6 @@
 /**
  * Файлы тем на диске: данные темы (JSON `GranumThemeData`), реестр токенов и
- * папка `themesDir` компонента (C-33, C-34). Читают их сборка провайдера —
+ * папка `themesDir` компонента. Читают их сборка провайдера —
  * чтобы материализовать в манифест — и медленный путь объектной формы.
  */
 import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumManifestCatalogEntry, GranumProvider, GranumThemeData } from '../contract'
@@ -61,7 +61,7 @@ export function readThemeDataFile(providerId: string, themeId: string, file: str
 /**
  * Файл значений токенов компонента: JSON `{ "<токен>": "<значение>" }` либо CSS
  * с одним плоским блоком — его селектор не важен, селекторы назначает
- * приложение (C-33, C-13).
+ * приложение.
  */
 function readTokenFile(providerId: string, componentName: string, scope: string, file: string): Record<string, string> {
   try {
@@ -111,7 +111,7 @@ function valueFile(providerId: string, componentName: string, dir: string, base:
 
 /**
  * Папка `themesDir`: `<тема>/root.{json,css}` и `<тема>/modes/<режим>.{json,css}`.
- * Имя подпапки — id темы, имя файла режима — имя режима (C-34).
+ * Имя подпапки — id темы, имя файла режима — имя режима.
  */
 export function readComponentThemesDir(providerId: string, componentName: string, dir: string): Record<string, GranumComponentThemeTokens> {
   if (!existsSync(dir) || !statSync(dir).isDirectory())
@@ -186,8 +186,8 @@ export function readObjectComponentThemes(provider: GranumProvider, baseDir?: st
 }
 
 /**
- * Индекс каталога объектного провайдера (C-29) по данным с диска. Данные
- * объектной формы обязаны быть полными (C-27): дополнять их из родителя умеет
+ * Индекс каталога объектного провайдера по данным с диска. Данные
+ * объектной формы обязаны быть полными: дополнять их из родителя умеет
  * только сборка провайдера.
  */
 export function readObjectCatalog(provider: GranumProvider, baseDir: string, onData?: (data: GranumThemeData) => void): Record<string, GranumManifestCatalogEntry> {

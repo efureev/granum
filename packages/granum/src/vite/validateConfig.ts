@@ -51,7 +51,7 @@ const V1_SCAN = `granum does not scan files for package classes: they come from 
 const ENGINE_RULES = `application rules go to the engine factory, e.g. windEngine({ rules }) from '@feugene/granum-engine-wind'`
 const THEMES_V2 = `removed in granum 3: the build has one theme ('theme') and its modes ('modes') — `
   + `themes.names → modes.names, themes.define → modes.define, themes.tokenOverrides → modes.tokenOverrides, themes.strictTokens → modes.strictTokens`
-/** Ключи `themes.*` granum 2 → их место в 3 (A-30). */
+/** Ключи `themes.*` granum 2 → их место в 3. */
 const THEMES_V2_KEYS: Readonly<Record<string, string>> = {
   names: 'modes.names',
   define: 'modes.define',
@@ -155,7 +155,7 @@ function validateEngine(engine: unknown): void {
     throw new InvalidConfigError('engine.vocabulary', 'expected a non-empty fingerprint of the generated name set (vocabularyFingerprint)')
 }
 
-/** Тема-объект приложения: полные данные (C-24…C-26) плюс `extends` и `sources`. */
+/** Тема-объект приложения: полные данные плюс `extends` и `sources`. */
 function validateAppTheme(value: unknown, path: string): void {
   if (typeof value === 'string') {
     if (value.trim().length === 0)
@@ -263,7 +263,7 @@ function validateModes(modes: unknown): void {
 export function validateGranumConfig(config: unknown): asserts config is GranumConfig {
   if (!isRecord(config))
     throw new InvalidConfigError('', 'expected an object')
-  // Ключи `themes.*` granum 2 — по одному, с их новым местом (A-30).
+  // Ключи `themes.*` granum 2 — по одному, с их новым местом.
   if (isRecord(config.themes)) {
     const key = Object.keys(config.themes).find(k => Object.hasOwn(THEMES_V2_KEYS, k))
     if (key !== undefined)

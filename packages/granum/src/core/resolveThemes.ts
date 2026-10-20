@@ -1,5 +1,5 @@
 /**
- * Активная тема и её режимы (A-22…A-32): владелец каталога, выбор темы,
+ * Активная тема и её режимы: владелец каталога, выбор темы,
  * набор режимов с `define`, активация и превью. Значения токенов считает
  * `tokenLayers` — здесь только то, ЧТО собирается.
  */
@@ -16,16 +16,16 @@ export const APP_THEME_SOURCE = '(app)'
 
 /**
  * Тема-объект приложения: полные данные. `extends` называет тему каталога,
- * чьи токены компонентов служат основой (A-24): данные он не дополняет —
+ * чьи токены компонентов служат основой: данные он не дополняет —
  * наследование данных приложение разрешает само, до конфига.
  */
 export interface GranumAppTheme extends GranumThemeData {
   readonly extends?: string
-  /** Файлы, из которых собран объект: их правка в dev перезагружает конфиг (A-33). */
+  /** Файлы, из которых собран объект: их правка в dev перезагружает конфиг. */
   readonly sources?: readonly string[]
 }
 
-/** Режим приложения поверх режимов темы (A-26). */
+/** Режим приложения поверх режимов темы. */
 export interface GranumModeDefinition {
   /** Режим темы или другой `define`, чьи итоговые значения берутся за основу. */
   readonly extends: string
@@ -59,7 +59,7 @@ export interface GranumModesInput {
   readonly tokenOverrides?: Readonly<Record<string, Readonly<Record<string, string>>>>
   /** Override токена, которого нет ни в данных темы, ни в токенах компонентов, отбрасывается. */
   readonly strictTokens?: boolean
-  /** `media` — тёмный режим по `prefers-color-scheme`, пока атрибут не выставлен (T-13). */
+  /** `media` — тёмный режим по `prefers-color-scheme`, пока атрибут не выставлен. */
   readonly system?: 'none' | 'media'
 }
 
@@ -87,7 +87,7 @@ export interface ResolvedTheme {
   /** Владелец каталога; у темы-объекта приложения — {@link APP_THEME_SOURCE}. */
   readonly providerId: string
   readonly data: GranumThemeData
-  /** Цепочка тем для токенов компонентов: сама тема, затем предки по каталогу (A-24). */
+  /** Цепочка тем для токенов компонентов: сама тема, затем предки по каталогу. */
   readonly chain: readonly string[]
 }
 
@@ -118,7 +118,7 @@ export interface ResolvedThemes {
   readonly themeSource: ThemeSource | undefined
   /** Владелец каталога в графе. */
   readonly owner: string | undefined
-  /** Режимы в порядке эмиссии: режим по умолчанию первым (T-9). */
+  /** Режимы в порядке эмиссии: режим по умолчанию первым. */
   readonly modes: readonly ResolvedMode[]
   /** Все режимы `define`, включая не вошедшие в набор, — база раньше наследника. */
   readonly definitions: readonly ResolvedMode[]
@@ -142,7 +142,7 @@ export interface ThemePlan {
   readonly previews: readonly ThemePick[]
 }
 
-/** Владелец каталога: 0 или 1 в графе (A-23). */
+/** Владелец каталога: 0 или 1 в графе. */
 export function findThemeOwner(providers: readonly ProviderNode[]): ProviderNode | undefined {
   const owners = providers.filter(ownsThemes)
   if (owners.length > 1) {
@@ -157,7 +157,7 @@ export function findThemeOwner(providers: readonly ProviderNode[]): ProviderNode
   return owners[0]
 }
 
-/** `providerId:id` → провайдер и id; разбор по последнему двоеточию (C-1). */
+/** `providerId:id` → провайдер и id; разбор по последнему двоеточию. */
 export function splitThemeKey(key: string): { providerId?: string, id: string } {
   const at = key.lastIndexOf(':')
   return at > 0 ? { providerId: key.slice(0, at), id: key.slice(at + 1) } : { id: key }
@@ -182,7 +182,7 @@ function pickCatalogTheme(owner: ProviderNode | undefined, key: string, role: 't
 
 /**
  * Что собирается: владелец, активная тема и превью — до чтения данных.
- * Node-слой читает по этому плану только нужные файлы (T-6).
+ * Node-слой читает по этому плану только нужные файлы.
  */
 export function planThemes(providers: readonly ProviderNode[], input: ResolveThemesInput = {}): ThemePlan {
   const owner = findThemeOwner(providers)
@@ -390,7 +390,7 @@ export function resolveThemes(
   const defaultMode = theme.data.defaultMode ?? DEFAULT_MODE
   const fromTheme = themeModes(theme, template)
   const define = modesInput.define ?? {}
-  // Имя `define`, совпавшее с режимом темы, — та же пара: коллизия активации (A-28).
+  // Имя `define`, совпавшее с режимом темы, — та же пара: коллизия активации.
   for (const name of Object.keys(define)) {
     if (fromTheme.some(mode => mode.name === name)) {
       throw new ThemeResolutionError(
@@ -435,7 +435,7 @@ export function resolveThemes(
     // собирается под приложение, и второй режим темы — решение, а не умолчание.
     names = [defaultMode, ...definitions.order]
   }
-  // Режим по умолчанию — первым, если он в наборе: под `:root` его блок решает позиция (T-9).
+  // Режим по умолчанию — первым, если он в наборе: под `:root` его блок решает позиция.
   if (names.includes(defaultMode))
     names = [defaultMode, ...names.filter(name => name !== defaultMode)]
 
@@ -472,7 +472,7 @@ export function resolveThemes(
   }
 }
 
-/** Режимы-предки режима темы по `extends` и режим по умолчанию — порядок поиска токенов компонента (A-24). */
+/** Режимы-предки режима темы по `extends` и режим по умолчанию — порядок поиска токенов компонента. */
 export function componentModeSequence(data: GranumThemeData, mode: string): string[] {
   const sequence = [...modeChain(data, mode).names]
   const defaultMode = data.defaultMode ?? DEFAULT_MODE

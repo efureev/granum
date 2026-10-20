@@ -5,7 +5,7 @@ import { tcChartConfig } from '../components/TcChart/config.ts'
 
 export const PROVIDER_ID = '@granum-fixtures/themed-companion'
 
-/** Спутник: без каталога, токены — для одной темы дизайн-системы (C-35). */
+/** Спутник: без каталога, токены — для одной темы дизайн-системы. */
 export const themedCompanionProvider = defineGranumProvider({
   id: PROVIDER_ID,
   contractVersion: 2,

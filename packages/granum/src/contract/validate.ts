@@ -84,7 +84,7 @@ export function validateProvider(provider: GranumProvider): void {
   validateThemeContribution(provider)
 }
 
-/** Ключи вклада в темы контракта 1: их место заняли каталог и `themesDir` (C-38). */
+/** Ключи вклада в темы контракта 1: их место заняли каталог и `themesDir`. */
 const LEGACY_THEME_KEYS = ['themes', 'defaultThemes', 'tokenDefinitions', 'tokenDefinitionsRef'] as const
 const LEGACY_COMPONENT_KEYS = ['tokenDefinitions', 'tokenDefinitionsRef'] as const
 
@@ -96,7 +96,7 @@ function hasThemes(provider: GranumProvider): boolean {
 
 /**
  * Контракт 2; `1` — только у провайдера без тем: так читается манифест
- * формата 2 спутника, которому темы не нужны (C-2, M-11).
+ * формата 2 спутника, которому темы не нужны.
  */
 function validateContractVersion(provider: GranumProvider): void {
   const version = provider.contractVersion as unknown

@@ -5,7 +5,7 @@ import { windEngine } from '@feugene/granum-engine-wind'
  * Тема `ink` — наследница `paper` в каталоге. Токены компонентов, которых у
  * `ink` нет, берутся по цепочкам: темы (`ink → paper`) и режима (`dim → dark`).
  * `paper` показывается рядом превью — полными блоками своих пар, не выходя под
- * `:root` (A-32).
+ * `:root`.
  */
 export default defineGranumConfig({
   engine: windEngine(),

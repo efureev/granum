@@ -32,7 +32,7 @@ export interface GranumTokenSet {
 
 /**
  * Ссылка на CSS с одним плоским блоком токенов: `modes.define[*].tokensRef`
- * приложения. Читается на сборке строго (C-13).
+ * приложения. Читается на сборке строго.
  */
 export interface GranumTokenRef {
   /** Абсолютный URL после `define*`-хелперов; во вводе допустим относительный путь. */
@@ -80,7 +80,7 @@ export interface GranumComponentDescriptor<Name extends string = string> {
    * Токены компонента по темам: `<dir>/<тема>/root.{json,css}` и
    * `<dir>/<тема>/modes/<режим>.{json,css}`. После `define*` — путь относительно
    * корня раскладки (`components/<Name>/themes`); папку читает сборка
-   * провайдера и материализует в манифест (C-33).
+   * провайдера и материализует в манифест.
    */
   readonly themesDir?: string
   /** Группа общих чанков `groups/<g>/shared/`. */
@@ -117,7 +117,7 @@ export interface GranumModeFallback {
 /**
  * Тема — дизайн-язык: полный набор значений токенов без селекторов. Один тип
  * для темы провайдера и темы приложения: селекторы назначает приложение из
- * активации режима (ADR-11).
+ * активации режима.
  */
 export interface GranumThemeData {
   /** Slug: `/^[a-z][a-z0-9-]*$/`. */

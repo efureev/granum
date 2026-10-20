@@ -164,7 +164,7 @@ describe('granum doctor', () => {
     expect(report.engine).toEqual({ name: TEST_ENGINE.name, dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary })
     expect(report.components.map(c => c.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.themes).toMatchObject({ theme: 'kit', themeSource: 'default', owner: '@x/kit', modesSource: 'theme', previews: [] })
-    // Без `modes.names` — только режим по умолчанию темы (A-25).
+    // Без `modes.names` — только режим по умолчанию темы.
     expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light'])
     expect(formatDoctorReport(report)).toContain('Theme: kit (source: defaultTheme of the catalog owner, catalog of @x/kit)')
     expect(formatDoctorReport(report)).toContain('Modes: [light] (source: default mode of the theme and modes.define)')
@@ -372,7 +372,7 @@ describe('granum tokens', () => {
     expect(own.uses).toEqual([])
     const deep = granumTokens(a, 'Panel', 'deep')
     expect(deep.components).toEqual(['@x/kit:Panel', '@x/kit:Card'])
-    // Токен компонента из режима по умолчанию доходит и до тёмного (T-10); override — только в светлом.
+    // Токен компонента из режима по умолчанию доходит и до тёмного; override — только в светлом.
     expect(deep.declares).toEqual([
       expect.objectContaining({ token: 'card-pad', mode: 'dark', from: 'kit/light', declaredBy: '@x/kit:Card', value: 'var(--space)', effective: 'var(--space)', overridden: false, unusedInScope: true }),
       expect.objectContaining({ token: 'card-pad', mode: 'light', from: 'kit/light', value: 'var(--space)', effective: '4px', overridden: true }),
@@ -429,7 +429,7 @@ describe('granum prune', () => {
     const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
     const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine, modes: BOTH })
     const report = await granumTokenPrune(a)
-    // Данные темы и токены компонентов — пакетный слой: никем не потребляемые режутся (T-14).
+    // Данные темы и токены компонентов — пакетный слой: никем не потребляемые режутся.
     expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused'])
     expect(report.kept.find(k => k.token === 'unused')?.reason).toEqual({ kind: 'engine-css' })
     expect(formatTokenPruneReport(report, a.root)).toContain('--unused — used by engine utilities or preflight')
@@ -538,7 +538,7 @@ describe('formatDoctorReport: сводка и детали по требован
   })
 })
 
-describe('doctor: режим без файла у компонента (A-24)', () => {
+describe('doctor: режим без файла у компонента', () => {
   const card = (modes: Record<string, Record<string, string>>) => ({ Card: { themes: { paper: { modes } } } })
 
   it('литералы компонента для dark взяты из light — предупреждение с именами токенов', async () => {

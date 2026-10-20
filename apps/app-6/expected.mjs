@@ -1,6 +1,6 @@
 export default {
   doctor: {
-    // Токены `XTokenized` для темы `heavy` в этом графе не применяются (C-36).
+    // Токены `XTokenized` для темы `heavy` в этом графе не применяются.
     warnings: { 'component-theme-unknown': 1 },
   },
   purpose: 'собственные режимы приложения вместо light/dark темы',

@@ -2,7 +2,7 @@
 export default {
   purpose: 'тема ink: цепочки тем и режимов для токенов компонентов, превью paper полными блоками',
   doctor: {
-    // Папка `themes/unknown/` спутника — тема, которой нет ни в одном каталоге (C-36).
+    // Папка `themes/unknown/` спутника — тема, которой нет ни в одном каталоге.
     warnings: { 'component-theme-unknown': 1 },
   },
   css: {

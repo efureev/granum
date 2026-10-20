@@ -45,7 +45,7 @@ export interface GranumBuildReport {
     readonly gained: readonly string[]
   }[]
   readonly selection: readonly { readonly key: string, readonly dependencies: readonly string[] }[]
-  /** Активная тема, режимы, превью и их источники (A-19). */
+  /** Активная тема, режимы, превью и их источники. */
   readonly themes: {
     readonly theme: string | null
     readonly themeSource: string | null

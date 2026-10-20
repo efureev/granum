@@ -63,7 +63,7 @@ describe('значения тем и режимов молча не теряют
   })
 })
 
-describe('активная тема (A-22, A-23)', () => {
+describe('активная тема', () => {
   it('по умолчанию — defaultTheme владельца, источник default', () => {
     const r = resolve()
     expect(r.theme?.id).toBe('paper')
@@ -113,14 +113,14 @@ describe('активная тема (A-22, A-23)', () => {
     expect(reasonOf(() => resolveThemes([toProviderNode(owner())], {}, [], {}))).toBe('theme-data-missing')
   })
 
-  it('план читает только активную тему и превью (T-6)', () => {
+  it('план читает только активную тему и превью', () => {
     const plan = planThemes([toProviderNode(owner())], { theme: 'ink', previews: ['paper'] })
     expect(plan.active).toEqual({ kind: 'catalog', providerId: '@p/ds', id: 'ink', data: 'themes/ink.json' })
     expect(plan.previews.map(p => p.kind === 'catalog' ? p.id : '')).toEqual(['paper'])
   })
 })
 
-describe('режимы (A-25, A-26, A-28)', () => {
+describe('режимы', () => {
   it('без modes.names — только режим по умолчанию темы, пара по шаблону', () => {
     const r = resolve({ theme: 'ink' })
     expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light'])
@@ -178,14 +178,14 @@ describe('режимы (A-25, A-26, A-28)', () => {
   })
 })
 
-describe('превью (A-32)', () => {
+describe('превью', () => {
   it('режимы превью — все режимы её данных, пары своей темы', () => {
     const r = resolve({ theme: 'ink', previews: ['paper'] })
     expect(r.previews.map(p => `${p.theme.id}:${p.modes.map(m => m.value).join(',')}`)).toEqual(['paper:paper-light,paper-dark'])
   })
 })
 
-describe('токены компонентов чужих тем (C-36)', () => {
+describe('токены компонентов чужих тем', () => {
   it('тема, которой нет ни в одном каталоге, — component-theme-unknown', () => {
     const ds = makeManifest('@p/ui', { Chart: { tokens: { themes: { unknown: { modes: { light: { x: '1' } } }, paper: { modes: {} } }, consumes: [], dynamic: [] } } })
     const providers = [owner(), ds].map(toProviderNode)

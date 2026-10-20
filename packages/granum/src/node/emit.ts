@@ -127,7 +127,7 @@ export async function generateEngineCss(app: PreparedApp): Promise<{ engineInput
   return { engineInput, generated }
 }
 
-/** Пары режимов активной темы с `colorScheme: 'dark'` — селектор варианта `dark:` движка (E-20). */
+/** Пары режимов активной темы с `colorScheme: 'dark'` — селектор варианта `dark:` движка. */
 export function darkModesSelector(resolution: PreparedApp['resolution']): string | undefined {
   const { attribute } = resolution.themes.activation
   const dark = resolution.themes.modes.filter(mode => mode.colorScheme === 'dark')
@@ -182,7 +182,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
       tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => pruneCssDeclarations(s.css, prune!.isKept).css)
   }
 
-  // 5. Темы: блоки активной темы и превью из резолюции; при `on` — без обрезанных токенов (T-14).
+  // 5. Темы: блоки активной темы и превью из резолюции; при `on` — без обрезанных токенов.
   const themeCss = emitThemeCss(resolution, mode === 'on' && prune ? prune.isKept : undefined)
 
   // Preflight движка — базового уровня, поэтому уезжает в `base` и **первым**:

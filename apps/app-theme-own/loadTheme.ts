@@ -10,7 +10,7 @@ const json = (file: string): any => JSON.parse(readFileSync(file, 'utf8'))
 /**
  * Тема приложения из папки: `theme.json` (id, title, extends), `root.json`,
  * `modes/<режим>.json` — только отличия. Наследование темы разрешает
- * приложение до конфига (C-27): granum получает полные данные, а `extends`
+ * приложение до конфига: granum получает полные данные, а `extends`
  * оставляет ему цепочку для токенов компонентов.
  */
 export function loadTheme(dirUrl: URL): GranumAppTheme {

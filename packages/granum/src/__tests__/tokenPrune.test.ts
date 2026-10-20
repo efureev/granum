@@ -24,7 +24,7 @@ const manifest = makeManifest('pkg', {
   B: { tokens: { consumes: [], dynamic: ['--by-pattern'] } },
 }, { theme: { defaultTheme: 'paper', catalog: { paper: { title: 'P', data: 'themes/paper.json', modes: ['light', 'dark'], defaultMode: 'light' } }, declares: [] } })
 
-/** Данные темы — пакетный слой: обрезаются по достижимости (T-14). */
+/** Данные темы — пакетный слой: обрезаются по достижимости. */
 const PAPER = themeData('paper', {
   light: { 'role': 'var(--seed)', 'role-unused': '#999', 'only-light': '#aaa' },
   dark: { 'role': 'var(--seed)', 'role-unused': '#000', 'only-dark': 'var(--lonely)' },
@@ -126,7 +126,7 @@ describe('planTokenPrune: замыкание', () => {
     expect(p.kept.get('chain-b')?.kind).toBe('referenced-by')
   })
 
-  it('данные темы не корень: недостижимый токен темы — removable во всех режимах (T-14, T-15)', () => {
+  it('данные темы не корень: недостижимый токен темы — removable во всех режимах', () => {
     const p = plan({ components: ['pkg:B'] })
     expect(p.removable).toContain('role-unused')
     expect(p.removable).toContain('only-dark')

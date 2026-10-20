@@ -37,7 +37,7 @@ function resolve(theme: GranumThemeChoice | undefined, modes?: GranumModesInput,
   })
 }
 
-describe('данные темы (T-7 слой 1, T-10)', () => {
+describe('данные темы — первый слой; значение в каждом режиме', () => {
   it('root отдельно от режимов; режим наследует предков по extends', () => {
     const r = resolve('ink')
     expect(r.tokens.active!.root.get('p-radius')!.effective).toBe('2px')
@@ -67,7 +67,7 @@ describe('фолбэки режима', () => {
   })
 })
 
-describe('токены компонентов (A-24)', () => {
+describe('токены компонентов', () => {
   it('по токену: сначала режим и его предки, внутри — цепочка тем', () => {
     const r = resolve('ink')
     // ink-light: своё значение темы ink.
@@ -89,7 +89,7 @@ describe('токены компонентов (A-24)', () => {
     expect(resolveTokenValue(resolve('ink', undefined, [ui({ Chart: { ink: { modes: { light: { 'c-grid': '#ccc' } } } } })]), 'light', 'c-grid')).toBe('#ccc')
   })
 
-  it('тема-объект приложения перекрывает токены компонентов (A-27) и наследует их через extends', () => {
+  it('тема-объект приложения перекрывает токены компонентов и наследует их через extends', () => {
     const brand = { ...themeData('brand', { light: { 'p-bg': '#fafafa', 'b-shadow': 'brand' }, dark: { 'p-bg': '#111' } }), extends: 'ink' }
     const r = resolve(brand)
     const chain = r.tokens.active!.modes.get('light')!.get('b-shadow')!
@@ -99,7 +99,7 @@ describe('токены компонентов (A-24)', () => {
   })
 })
 
-describe('режимы приложения и override (T-7 слои 4–5)', () => {
+describe('режимы приложения и override — последние слои', () => {
   it('define берёт итог базы и дописывает своё', () => {
     const r = resolve('paper', { define: { ocean: { extends: 'dark', tokens: { 'p-accent': '#0ea5e9' } } } })
     expect(resolveTokenValue(r, 'ocean', 'p-accent')).toBe('#0ea5e9')
@@ -130,7 +130,7 @@ describe('режимы приложения и override (T-7 слои 4–5)', (
   })
 })
 
-describe('превью (A-32)', () => {
+describe('превью', () => {
   it('полный набор своей темы; значение превью — по id темы', () => {
     const r = resolve('ink', undefined, [BUTTON])
     const withPreview = resolveGranum({ providers: [OWNER, BUTTON], theme: 'ink', previews: ['paper'], themeData: { '@p/ds': { paper: PAPER, ink: INK } } })

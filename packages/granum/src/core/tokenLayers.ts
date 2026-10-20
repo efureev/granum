@@ -1,7 +1,7 @@
 /**
  * Единственный источник правды о значениях токенов: какие
  * слои писали каждый токен в каждом режиме, в каком порядке и что уедет в
- * CSS (T-7). Из него сериализуется CSS и считаются отчёты, `granum tokens` и
+ * CSS. Из него сериализуется CSS и считаются отчёты, `granum tokens` и
  * обрезка — расходиться им негде.
  */
 import type { ComponentNode } from './providerNode'
@@ -22,7 +22,7 @@ export interface TokenLayerValue {
   readonly theme?: string
   /**
    * Режим, из которого взято значение: сам режим, предок по `extends`, режим по
-   * умолчанию (T-10) или `root` — режимонезависимое.
+   * умолчанию или `root` — режимонезависимое.
    */
   readonly mode?: string
   /** Квалифицированный ключ компонента-автора — только у `component`. */
@@ -98,7 +98,7 @@ function modeValues(theme: ResolvedTheme, mode: string): Map<string, { value: st
 
 /**
  * Данные темы: `root`, затем каждый режим по цепочке `extends` и недостающее —
- * из режима по умолчанию (T-10). Недостающее — запасной вариант: значение,
+ * из режима по умолчанию. Недостающее — запасной вариант: значение,
  * которое режиму уже дал другой слой (токены компонента под темой-объектом
  * приложения), им не перекрывается.
  *
@@ -128,7 +128,7 @@ function applyThemeData(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: rea
 }
 
 /**
- * Токены компонентов для темы (A-24): по каждому токену — первый найденный
+ * Токены компонентов для темы: по каждому токену — первый найденный
  * в последовательности режимов [режим, предки по `extends`, режим по умолчанию],
  * внутри режима — по цепочке тем [тема, предки по каталогу].
  */
@@ -194,7 +194,7 @@ function applyFallbacks(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: rea
 function collectThemeTokens(theme: ResolvedTheme, components: readonly ComponentNode[]): ThemeTokenSet {
   const set: ThemeTokenSet = { themeId: theme.id, root: new Map(), modes: new Map(), fallbacks: new Map() }
   const modeNames = Object.keys(theme.data.modes)
-  // Тема-объект приложения — слой после токенов компонентов (A-27): приложение
+  // Тема-объект приложения — слой после токенов компонентов: приложение
   // вправе перекрасить компонент провайдера своими данными.
   let fromDefault: Map<string, Set<string>>
   if (theme.providerId === APP_THEME_SOURCE) {
