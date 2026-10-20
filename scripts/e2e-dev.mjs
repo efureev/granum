@@ -30,21 +30,26 @@
  * каскад браузера без фичи. Рядом — формулы превью: префикс значения пары не
  * должен доставать корень активной темы.
  *
+ * Пятый — собранный лист настоящих стендов (`app-theme-ink`, `app-5`):
+ * минификатор Vite сливает соседние правила фолбэков и режимов и переписывает
+ * значения, а каскад обязан остаться тем же, что у вывода `emitCss`.
+ *
  * Правка исходника откатывается в `finally` при любом исходе: файл рабочего
  * дерева, и оставить его изменённым нельзя.
  *
  * Запуск: `yarn e2e` (в CI — своя джоба; в `test:all` не входит, чтобы
  * локальный прогон не тянул браузер).
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, URL } from 'node:url'
 import { resolveTokenValue } from '@feugene/granum'
-import { emitCss, getThemeManifest, prepareApp } from '@feugene/granum/node'
+import { emitCss, getThemeManifest, loadGranumConfigFile, prepareApp } from '@feugene/granum/node'
 import { windEngine } from '@feugene/granum-engine-wind'
 import { chromium } from 'playwright'
-import { createServer } from 'vite'
+import { build, createServer } from 'vite'
 
 const root = fileURLToPath(new URL('../apps/app-1/', import.meta.url))
 const appSource = join(root, 'src/App.vue')
@@ -365,8 +370,100 @@ finally {
   await browser?.close()
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper, ветка фолбэков)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Собранный лист стенда против вывода `emitCss` той же конфигурации. Значение
+ * токена сравнивается вычисленным: оно подставляется в настоящие свойства, и
+ * `#eee` против `#eeeeee` расхождением не считается, а другой цвет — считается.
+ * Условие фолбэков подменяется истинным в Chromium — ветка браузера без фичи.
+ */
+const FALLBACK_CONDITION = /@supports\s+not\s*\(\s*color\s*:\s*color-mix\([^)]*\)\s*\)/g
+// Только ненаследуемые свойства: невалидный в них токен даёт начальное значение,
+// а не значение родителя — стили страницы стенда (шрифт, цвет текста) не мешают.
+const PROBE_PROPERTIES = ['background-color', 'box-shadow', 'padding-left', 'border-top-left-radius']
+for (const stand of ['app-theme-ink', 'app-5']) {
+  const standRoot = fileURLToPath(new URL(`../apps/${stand}/`, import.meta.url))
+  const outDir = mkdtempSync(join(tmpdir(), `granum-e2e-${stand}-`))
+  try {
+    const { config } = await loadGranumConfigFile('granum.config.ts', standRoot)
+    const app = await prepareApp(config, standRoot)
+    const emitted = (await emitCss(app)).css
+    await build({ root: standRoot, configFile: join(standRoot, 'vite.config.ts'), logLevel: 'silent', build: { outDir, emptyOutDir: true } })
+    const assets = join(outDir, 'assets')
+    const built = readdirSync(assets).filter(f => f.endsWith('.css')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
+    const fallbackOn = css => css.replace(FALLBACK_CONDITION, '@supports (display: block)')
+    check(fallbackOn(emitted) !== emitted && fallbackOn(built) !== built, `${stand}: условие фолбэков найдено и в emitCss, и в собранном листе`)
+
+    const tokens = [...new Set([...emitted.matchAll(/(--[a-z][\w-]*)\s*:/g)].map(m => m[1]))].filter(t => !t.startsWith('--un-'))
+    const { modes, previews, system } = app.resolution.themes
+    const pairs = modes.map(mode => mode.value)
+    const islands = [...pairs, ...previews.flatMap(preview => preview.modes.map(mode => mode.value))]
+    const states = [{}, ...pairs.map(root => ({ root })), ...islands.map(island => ({ root: pairs[0], island }))]
+
+    browser = await chromium.launch()
+    const page = await browser.newPage()
+    const signatures = async (css, { root, island, scheme }) => {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.setContent(`<!doctype html><html${root ? ` data-theme="${root}"` : ''}><head><style>${css}</style></head><body>${island ? `<div id="island" data-theme="${island}"></div>` : ''}</body></html>`)
+      return page.evaluate(([selector, names, properties]) => {
+        const probe = document.createElement('i')
+        document.querySelector(selector).append(probe)
+        const out = {}
+        for (const name of names) {
+          for (const property of properties)
+            probe.style.setProperty(property, `var(${name})`)
+          const computed = getComputedStyle(probe)
+          out[name] = properties.map(property => computed.getPropertyValue(property)).join(' | ')
+        }
+        return out
+      }, [island ? '#island' : 'body', tokens, PROBE_PROPERTIES])
+    }
+
+    const diffs = []
+    let compared = 0
+    for (const state of states) {
+      for (const scheme of ['light', 'dark']) {
+        for (const withFallback of [false, true]) {
+          const fromEmit = await signatures(withFallback ? fallbackOn(emitted) : emitted, { ...state, scheme })
+          const fromBuild = await signatures(withFallback ? fallbackOn(built) : built, { ...state, scheme })
+          for (const token of tokens) {
+            compared++
+            if (fromEmit[token] !== fromBuild[token])
+              diffs.push(`${JSON.stringify({ ...state, scheme, withFallback })} ${token}: emitCss «${fromEmit[token]}» ≠ сборка «${fromBuild[token]}»`)
+          }
+        }
+      }
+    }
+    check(diffs.length === 0, `${stand}: каскад собранного листа совпал с emitCss — ${compared} сравнений по ${states.length} состояниям${diffs.length ? `; расхождений ${diffs.length}, первое: ${diffs[0]}` : ''}`)
+
+    // Ветка фолбэков действительно другая: иначе сравнение выше ничего не доказывает.
+    const plain = await signatures(built, { root: pairs[0], scheme: 'light' })
+    const fallen = await signatures(fallbackOn(built), { root: pairs[0], scheme: 'light' })
+    check(tokens.some(token => plain[token] !== fallen[token]), `${stand}: фолбэк меняет значения на корне ${pairs[0]}`)
+
+    // Системная схема: корень без атрибута при тёмной схеме — тот же тёмный режим, что парой.
+    if (system === 'media') {
+      const dark = modes.find(mode => mode.colorScheme === 'dark')
+      for (const withFallback of [false, true]) {
+        const css = withFallback ? fallbackOn(built) : built
+        const bySystem = await signatures(css, { scheme: 'dark' })
+        const byPair = await signatures(css, { root: dark.value, scheme: 'light' })
+        const differ = tokens.filter(token => bySystem[token] !== byPair[token])
+        check(differ.length === 0, `${stand}: тёмная схема без атрибута = пара ${dark.value}${withFallback ? ' с фолбэками' : ''}${differ.length ? `; расходятся: ${differ.join(' ')}` : ''}`)
+      }
+    }
+  }
+  catch (error) {
+    failures.push(`собранный лист ${stand}: прогон упал: ${error?.message ?? error}`)
+  }
+  finally {
+    await browser?.close()
+    browser = undefined
+    rmSync(outDir, { recursive: true, force: true })
+  }
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper, ветка фолбэков, собранные листы app-theme-ink и app-5)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ слои, HMR, режимы, превью и фолбэки подтверждены в браузере\n'
+  ? '✓ слои, HMR, режимы, превью, фолбэки и собранные листы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1
