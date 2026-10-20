@@ -48,6 +48,11 @@ if (expected.css) {
 }
 if (expected.js)
   match(read('.js'), expected.js, 'js')
+// HTML страниц сборки: что плагин вставил в `<head>` — скрипт до первого кадра, ссылки.
+if (expected.html) {
+  const html = readdirSync(join(dir, 'dist')).filter(f => f.endsWith('.html')).map(f => readFileSync(join(dir, 'dist', f), 'utf8')).join('\n')
+  match(html, expected.html, 'html')
+}
 // CSS каждой HTML-страницы сборки — листы, которые она подключает. Склейка всех
 // ассетов не различит, что одна страница получила лист, а другая нет.
 if (expected.pages) {

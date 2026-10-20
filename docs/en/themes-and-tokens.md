@@ -326,6 +326,10 @@ await themes.setTheme('paper') // the paper sheet, then <html data-theme="paper-
 themes.subscribe(({ theme, mode }) => {})
 ```
 
+The complete example is `apps/app-theme-switch`: two package themes and the
+application's own theme, a theme and mode switcher, islands and the choice before the
+first frame.
+
 The manifest is the build themes in config order (each with its modes and their pairs
 in CSS order, the default mode, the sheet's `href` for an additional theme and
 `extensions`), `defaultTheme` and the activation attribute; apart from the sheet
