@@ -42,8 +42,8 @@ type Keep = (token: string) => boolean
 
 const isFormula = (value: string): boolean => value.includes('var(')
 
-function attributeSelector(attribute: string, value?: string, operator = '='): string {
-  return value === undefined ? `[${attribute}]` : `[${attribute}${operator}"${value.replace(/["\\]/g, '\\$&')}"]`
+function attributeSelector(attribute: string, value?: string): string {
+  return value === undefined ? `[${attribute}]` : `[${attribute}="${value.replace(/["\\]/g, '\\$&')}"]`
 }
 
 /** Объявления блока: `color-scheme` первым, токены по имени. */
@@ -184,15 +184,15 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     const split = splitSet(set)
     const part: string[] = []
     previewParts.push({ id: preview.theme.id, blocks: part })
-    // Общая граница превью — пары темы по префиксу шаблона. Шаблон, где режим
-    // стоит раньше темы, префикса не даёт: тогда формулы идут в блок каждой пары.
-    const template = themes.activation.value
-    const prefix = template.slice(0, template.indexOf('{mode}')).replaceAll('{theme}', preview.theme.id)
-    const common = prefix ? serializeBlock(attributeSelector(attribute, prefix, '^='), split.shared, keep) : undefined
+    // Общая граница превью — список её пар. Префикс значения совпал бы и с
+    // парами активной темы: `slate-` — с `slate-hc-light`, статика шаблона
+    // перед режимом — со всеми парами.
+    const pairs = preview.modes.map(mode => attributeSelector(attribute, mode.value)).join(', ')
+    const common = serializeBlock(pairs, split.shared, keep)
     if (common)
       push(part, common)
     for (const mode of preview.modes) {
-      const chains = [...split.rootLiterals, ...(prefix ? [] : split.shared), ...split.modeChains(mode.name)]
+      const chains = [...split.rootLiterals, ...split.modeChains(mode.name)]
       const block = serializeBlock(attributeSelector(attribute, mode.value), chains, keep, mode.colorScheme)
       if (block)
         push(part, block)

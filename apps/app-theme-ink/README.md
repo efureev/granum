@@ -15,7 +15,7 @@
 | свой литерал `root` темы | `--th-radius:2px` |
 | свой токен кнопки для `ink/light` | `--td-button-shadow:0 0 0 1px var(--th-fg)` |
 | токены спутника, заведённые только для `ink`, на месте | `--tc-chart-grid:#374151` |
-| превью `paper`: формулы под префиксом её пар, полные блоки пар | `[data-theme^=paper-]{`, `[data-theme=paper-light]{…--td-card-pad:12px` |
+| превью `paper`: формулы под списком её пар, полные блоки пар | `[data-theme=paper-light],[data-theme=paper-dark]{`, `[data-theme=paper-light]{…--td-card-pad:12px` |
 | вариант `dark:` — по парам обоих тёмных режимов | `[data-theme=ink-dim] .dark\:underline` |
 
 ```bash

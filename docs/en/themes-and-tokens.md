@@ -152,7 +152,7 @@ catalog of the graph declares is a `component-theme-unknown` warning, not an err
   @supports not (color: color-mix(in oklab, red, red)) {
     :root:not([data-theme]), [data-theme="ink-light"] { … }
   }
-  [data-theme^="paper-"] { … }                       /* preview: formulas */
+  [data-theme="paper-light"], [data-theme="paper-dark"] { … }  /* preview: formulas */
   [data-theme="paper-light"] { … }                   /* preview: full block */
 }
 ```
@@ -173,7 +173,9 @@ mode's fallbacks inside the same media query. A mode's `colorScheme` is a
 `previews` show other catalog themes next to the active one — on a design
 system page or a portal. Every preview pair gets a full block: its own
 `root` literals, the mode, the component tokens of the selection and the fallbacks;
-formulas go under the prefix of its pairs (`[data-theme^="paper-"]`). A preview never
+formulas go once under the list of its pairs (`[data-theme="paper-light"], [data-theme="paper-dark"]`).
+A value prefix would also match the active theme's pairs (`slate-` matches
+`slate-hc-light`). A preview never
 goes under `:root`, and token pruning cuts it the same way as the active theme.
 
 By default the preview blocks sit in the shared sheet, and every page pays for them.

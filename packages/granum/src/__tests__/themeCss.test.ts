@@ -138,6 +138,30 @@ describe('каскад в браузере, которому нужен фолб
   })
 })
 
+describe('формулы превью на корне активной темы', () => {
+  const theme = (id: string, ring: string): ReturnType<typeof themeData> => themeData(id, {
+    light: { 'p-accent': '#2563eb' },
+    dark: { 'p-accent': '#60a5fa' },
+  }, { root: { 'p-ring': ring } })
+  const WIDE = '0 0 0 3px var(--p-accent)'
+  const THIN = '0 0 0 1px var(--p-accent)'
+
+  it('id активной темы начинается с id превью и дефиса: формулы превью до корня не доходят', async () => {
+    const { root, provider } = catalogProvider({ themes: { 'slate-hc': theme('slate-hc', WIDE), 'slate': theme('slate', THIN) } })
+    const { tokens, themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'slate-hc', previews: ['slate'] }, root))
+    expect(cascade([tokens, themes], { root: 'slate-hc-light' }).get('--p-ring')).toBe(WIDE)
+    expect(cascade([tokens, themes], { root: 'slate-hc-light', island: 'slate-dark' }).get('--p-ring')).toBe(THIN)
+  })
+
+  it('шаблон со статикой перед режимом: формулы превью до корня не доходят', async () => {
+    const { root, provider } = catalogProvider({ themes: { paper: theme('paper', WIDE), ink: theme('ink', THIN) } })
+    const activation = { attribute: 'data-theme', value: 'x-{mode}-{theme}' }
+    const { tokens, themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'paper', previews: ['ink'], modes: { activation } }, root))
+    expect(cascade([tokens, themes], { root: 'x-light-paper' }).get('--p-ring')).toBe(WIDE)
+    expect(cascade([tokens, themes], { root: 'x-light-paper', island: 'x-dark-ink' }).get('--p-ring')).toBe(THIN)
+  })
+})
+
 describe('режим приложения поверх режима темы — `ocean` (A-26)', () => {
   it('ocean extends dark: значения dark и токены компонента для dark по цепочке, своё — поверх', async () => {
     const { root, provider } = catalogProvider({
@@ -161,7 +185,7 @@ describe('режим приложения поверх режима темы —
 })
 
 describe('превью (A-32)', () => {
-  it('полные блоки пар превью, никогда под :root; формулы под префиксом её пар', async () => {
+  it('полные блоки пар превью, никогда под :root; формулы под списком её пар', async () => {
     const { root, provider } = catalogProvider()
     const { themes } = await layers(await prepareTestApp({ providers: [provider], theme: 'ink', previews: ['paper'] }, root))
     const paperLight = blockOf(themes, '[data-theme="paper-light"]')!
@@ -169,8 +193,9 @@ describe('превью (A-32)', () => {
     expect(paperLight).toContain('--p-accent: #2563eb;')
     expect(paperLight).toContain('color-scheme: light;')
     expect(themes).not.toContain(':root, [data-theme="paper-')
-    expect(blockOf(themes, '[data-theme^="paper-"]')).toContain('--p-ring:')
-    expect(themes.indexOf('[data-theme^="paper-"]')).toBeGreaterThan(themes.indexOf('[data-theme="ink-dim"]'))
+    const pairs = '[data-theme="paper-light"], [data-theme="paper-dark"]'
+    expect(blockOf(themes, pairs)).toContain('--p-ring:')
+    expect(themes.indexOf(pairs)).toBeGreaterThan(themes.indexOf('[data-theme="ink-dim"]'))
   })
 
   it('baseCss активной темы и превью — в слой base, без повторов', async () => {
