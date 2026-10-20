@@ -147,7 +147,9 @@ catalog of the graph declares is a `component-theme-unknown` warning, not an err
   :root, [data-theme="ink-light"] { color-scheme: light; --th-bg: #ffffff; }
   [data-theme="ink-dark"] { color-scheme: dark; --th-bg: #0f172a; }
   [data-theme="ink-dim"] { color-scheme: dark; --th-bg: #1e293b; }
-  @supports not (color: color-mix(in oklab, red, red)) { … }
+  @supports not (color: color-mix(in oklab, red, red)) {
+    :root:not([data-theme]), [data-theme="ink-light"] { … }
+  }
   [data-theme^="paper-"] { … }                       /* preview: formulas */
   [data-theme="paper-light"] { … }                   /* preview: full block */
 }
@@ -157,8 +159,10 @@ A formula referencing `var(` — in `root` or identical in every mode — sits u
 shared boundary `:root, [data-theme]`: it is recomputed on every mode island
 instead of being inherited ready-made from the root. The default mode comes first under
 `:root` and its own pair, the others follow the set order; with equal specificity
-position decides. Then come the `@supports` fallbacks in the same order and the
-`prefers-color-scheme` block with `system: 'media'`. A mode's `colorScheme` is a
+position decides. Then come the `@supports` fallbacks in the same order: the default
+mode's one goes under `:root:not([data-theme])` and its pair rather than under `:root`,
+otherwise it would override another mode's pair on the root by position. With
+`system: 'media'` the `prefers-color-scheme` block closes the list. A mode's `colorScheme` is a
 `color-scheme` declaration in its block. The theme data's `baseCss` goes to the `base` layer.
 
 ## Previews

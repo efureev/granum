@@ -147,7 +147,9 @@ granum не выводит. Вариант `dark:` движка строится
   :root, [data-theme="ink-light"] { color-scheme: light; --th-bg: #ffffff; }
   [data-theme="ink-dark"] { color-scheme: dark; --th-bg: #0f172a; }
   [data-theme="ink-dim"] { color-scheme: dark; --th-bg: #1e293b; }
-  @supports not (color: color-mix(in oklab, red, red)) { … }
+  @supports not (color: color-mix(in oklab, red, red)) {
+    :root:not([data-theme]), [data-theme="ink-light"] { … }
+  }
   [data-theme^="paper-"] { … }                       /* превью: формулы */
   [data-theme="paper-light"] { … }                   /* превью: полный блок */
 }
@@ -157,8 +159,10 @@ granum не выводит. Вариант `dark:` движка строится
 общей границей `:root, [data-theme]`: она пересчитывается на каждом острове
 режима, а не наследуется готовой от корня. Режим по умолчанию идёт первым под
 `:root` и своей парой, остальные — по порядку набора; при равной специфичности
-решает позиция. Затем фолбэки `@supports` в том же порядке и блок
-`prefers-color-scheme` при `system: 'media'`. `colorScheme` режима — объявление
+решает позиция. Затем фолбэки `@supports` в том же порядке: фолбэк режима по
+умолчанию — под `:root:not([data-theme])` и своей парой, а не под `:root`, иначе он
+перебил бы позицией пару другого режима на корне. При `system: 'media'` список
+замыкает блок `prefers-color-scheme`. `colorScheme` режима — объявление
 `color-scheme` в его блоке. `baseCss` данных темы уходит в слой `base`.
 
 ## Превью

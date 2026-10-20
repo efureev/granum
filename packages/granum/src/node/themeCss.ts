@@ -7,7 +7,8 @@
  *   - слой `themes`: `:root, [attr] { формулы }` — режимонезависимые со ссылкой
  *     `var(` и режимные, одинаковые во всех режимах; затем режим по умолчанию
  *     под `:root, [attr="пара"]`, остальные под `[attr="пара"]`, фолбэки
- *     `@supports`, блок `prefers-color-scheme` и превью-темы.
+ *     `@supports` (у режима по умолчанию — под `:root:not([attr])` и парой),
+ *     блок `prefers-color-scheme` и превью-темы.
  *
  * Формула под `[attr]` пересчитывается на каждом острове: под одним `:root` она
  * вычислилась бы по ролям корня и унаследовалась бы островом готовой.
@@ -142,9 +143,17 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     const common = serializeBlock(`:root, ${attributeSelector(attribute)}`, split.shared, keep)
     if (common)
       push(shared, common)
+    const bareRoot = `:root:not(${attributeSelector(attribute)})`
     const selectorOf = (mode: ResolvedMode): string => {
       const own = attributeSelector(attribute, mode.value)
       return mode.name === themes.defaultMode ? `:root, ${own}` : own
+    }
+    // Фолбэки идут после всех режимов, и под голым `:root` фолбэк режима по
+    // умолчанию перебил бы позицией пару другого режима на корне. Корень без
+    // атрибута — тот же, что у блока системной схемы.
+    const fallbackSelectorOf = (mode: ResolvedMode): string => {
+      const own = attributeSelector(attribute, mode.value)
+      return mode.name === themes.defaultMode ? `${bareRoot}, ${own}` : own
     }
     const partOf = (name: string): string[] => modeParts.find(part => part.name === name)!.blocks
     for (const mode of themes.modes)
@@ -155,10 +164,10 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
         push(partOf(mode.name), block)
     }
     for (const mode of themes.modes)
-      push(partOf(mode.name), ...fallbackBlocks(active, mode, selectorOf(mode), keep))
+      push(partOf(mode.name), ...fallbackBlocks(active, mode, fallbackSelectorOf(mode), keep))
     if (themes.system === 'media') {
       const dark = themes.modes.find(mode => mode.colorScheme === 'dark')
-      const inner = dark ? serializeBlock(`:root:not(${attributeSelector(attribute)})`, split.modeChains(dark.name), keep, 'dark', '  ') : undefined
+      const inner = dark ? serializeBlock(bareRoot, split.modeChains(dark.name), keep, 'dark', '  ') : undefined
       if (dark && inner)
         push(partOf(dark.name), `@media (prefers-color-scheme: dark) {\n${inner}\n}`)
     }

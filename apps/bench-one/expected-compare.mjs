@@ -22,6 +22,9 @@ export default {
     '|[data-theme=dark]',
     '@supports not (color:color-mix(in oklab,red,blue))|.dark',
     '@supports not (color:color-mix(in oklab,red,blue))|[data-theme=dark]',
+    // Фолбэк светлого режима v1 стоял под `:root` и на корне с тёмной парой
+    // перебивал её позицией; у granum он под корнем без атрибута и своей парой.
+    '@supports not (color:color-mix(in oklab,red,blue))|:root',
   ],
   /**
    * Их место заняли блоки пар `heavy-light`/`heavy-dark` и общий блок формул
@@ -34,6 +37,7 @@ export default {
     '|[data-theme=heavy-dark]',
     '@supports not (color:color-mix(in oklab,red,blue))|[data-theme=heavy-light]',
     '@supports not (color:color-mix(in oklab,red,blue))|[data-theme=heavy-dark]',
+    '@supports not (color:color-mix(in oklab,red,blue))|:root:not([data-theme])',
   ],
   /**
    * Preflight инициализирует кастомные свойства, которыми пользуются утилиты.

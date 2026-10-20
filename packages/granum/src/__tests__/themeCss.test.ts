@@ -7,6 +7,7 @@ import type { PreparedApp } from '../node/prepare'
 import { describe, expect, it } from 'vitest'
 import { resolveTokenValue } from '../core/resolve'
 import { emitCss } from '../node/emit'
+import { cascade } from './cascade'
 import { catalogProvider, INK, PAPER, prepareTestApp, TEST_ENGINE, themeData } from './helpers'
 
 function blockOf(css: string, selector: string): string | undefined {
@@ -74,12 +75,12 @@ describe('фолбэки, системная схема', () => {
     dark: { 'p-bg': '#000' },
   })
 
-  it('@supports после всех режимов, под селектором режима', async () => {
+  it('@supports после всех режимов, под селектором режима; у режима по умолчанию — корень без атрибута и пара', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
     const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'] } }, root))
     const supports = themes.indexOf('@supports not (color: oklch(0 0 0)) {')
     expect(supports).toBeGreaterThan(themes.indexOf('[data-theme="t-dark"] {'))
-    expect(themes.slice(supports)).toContain(':root, [data-theme="t-light"] {\n    --p-bg: white;')
+    expect(themes.slice(supports)).toContain(':root:not([data-theme]), [data-theme="t-light"] {\n    --p-bg: white;')
   })
 
   it('режим приложения: фолбэки базы, затем свои — свои перекрывают по токену', async () => {
@@ -98,6 +99,26 @@ describe('фолбэки, системная схема', () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
     const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], system: 'media' } }, root))
     expect(themes).toContain('@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {\n    color-scheme: dark;\n    --p-bg: #000;')
+  })
+})
+
+describe('каскад в браузере, которому нужен фолбэк', () => {
+  const OLD = 'not (color: oklch(0 0 0))'
+  const light = { colorScheme: 'light' as const, tokens: { 'p-bg': 'oklch(98% 0 0)', 'p-fg': '#111111' }, fallbacks: [{ supports: OLD, tokens: { 'p-bg': '#fafafa' } }] }
+
+  async function pageCss(theme: ReturnType<typeof themeData>, system?: 'media'): Promise<string[]> {
+    const { root, provider } = catalogProvider({ themes: { t: theme } })
+    const { tokens, themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], ...(system ? { system } : {}) } }, root))
+    return [tokens, themes]
+  }
+
+  it('фолбэк режима по умолчанию не перебивает другой режим на корне', async () => {
+    const css = await pageCss(themeData('t', { light, dark: { 'p-bg': '#000000', 'p-fg': '#eeeeee' } }))
+    expect(cascade(css, { root: 't-dark', supports: [OLD] }).get('--p-bg')).toBe('#000000')
+    // Сам фолбэк действует: на корне без атрибута и на паре режима по умолчанию.
+    expect(cascade(css, { supports: [OLD] }).get('--p-bg')).toBe('#fafafa')
+    expect(cascade(css, { root: 't-light', supports: [OLD] }).get('--p-bg')).toBe('#fafafa')
+    expect(cascade(css, { root: 't-light', island: 't-dark', supports: [OLD] }).get('--p-bg')).toBe('#000000')
   })
 })
 
