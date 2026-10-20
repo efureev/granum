@@ -236,7 +236,8 @@ What a component declares and consumes; for every token — where the value
 comes from (`own`, `component`, `theme`, `provider`, `app`, `none`) and the chain of
 layers for every mode of the active theme: the theme and mode the value came from
 (`component @acme/ui:XhButton (paper/dark)` for mode `ink-dim`). `--deep` includes the
-component's dependencies.
+component's dependencies. `provider` means an inlined file of the provider (`tokensCss`)
+declares the token; a token only another catalog theme has is `none`, as in `doctor`.
 
 ## `themes`
 

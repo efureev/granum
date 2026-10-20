@@ -10,8 +10,9 @@ import type { PreparedApp } from '../prepare'
 import { resolveComponentTarget, splitComponentKey } from '../../core/registry'
 import { collectDependencyClosure } from '../../core/resolveSelection'
 import { describeLayer } from '../../core/tokenLayers'
+import { inlinedTokenDeclarations } from '../undefinedTokens'
 
-/** `theme` — данные активной темы; `provider` — только `declares` манифеста (тема-независимые файлы). */
+/** `theme` — данные активной темы; `provider` — только инлайнимые файлы провайдера (`tokensCss`). */
 export type TokenOrigin = 'own' | 'component' | 'theme' | 'provider' | 'app' | 'none'
 
 export interface TokensValueChain {
@@ -86,12 +87,11 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
   const scopeSet = new Set<string>(scopeKeys)
   const included = resolution.selection.order.includes(key)
 
-  // Чей токен: по слоям структурных значений; иначе — по `declares` манифестов.
+  // Чей токен: по слоям значений активной темы; иначе — по инлайнимым файлам
+  // провайдеров, как у доктора: `declares` манифеста знает и чужие темы каталога.
   const declaredByProvider = new Map<string, string>()
-  for (const provider of resolution.providers) {
-    for (const t of provider.theme.declares)
-      declaredByProvider.set(t.replace(/^--/, ''), `provider:${provider.id}`)
-  }
+  for (const [token, providerId] of inlinedTokenDeclarations(resolution))
+    declaredByProvider.set(token.replace(/^--/, ''), `provider:${providerId}`)
   const active = resolution.tokens.active
   const scopes: [string, ReadonlyMap<string, TokenChain>][] = active ? [['root', active.root], ...active.modes] : []
   const chainsOf = (token: string): TokensValueChain[] => {

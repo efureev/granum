@@ -389,6 +389,17 @@ describe('granum tokens', () => {
     expect(card.declares.find(d => d.mode === 'light')?.layers.map(l => l.source)).toEqual(['component', 'app-override'])
   })
 
+  it('токен только из declares манифеста (другая тема каталога) не объявлен — то же, что у doctor', async () => {
+    const f = fixture()
+    const theme = f.manifest.manifest.theme as unknown as { declares: string[] }
+    theme.declares = [...theme.declares, '--ink-only']
+    const card = f.manifest.manifest.components.Card as unknown as { tokens: { consumes: string[] } }
+    card.tokens = { ...card.tokens, consumes: [...card.tokens.consumes, '--ink-only'] }
+    const a = await app(f, { modes: BOTH })
+    expect(granumTokens(a, 'Card').uses.find(u => u.token === 'ink-only')?.origin).toBe('none')
+    expect((await granumDoctor(a)).undefinedTokens.map(u => u.token)).toContain('--ink-only')
+  })
+
   it('неизвестное имя: unresolved', async () => {
     const report = granumTokens(await app(fixture()), 'Nope')
     expect(report.unresolved).toBe('unknown')

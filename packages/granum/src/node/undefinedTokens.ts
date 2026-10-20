@@ -28,13 +28,13 @@ export interface UndefinedToken {
   readonly component: ComponentKey
 }
 
-/** Токены, которые объявляет хоть один слой granum в активной теме, с `--`. */
-function definedTokens(resolution: GranumResolution): Set<string> {
-  const defined = new Set<string>()
-  for (const chain of allTokenChains(resolution.tokens.active)) {
-    if (chain.effective !== undefined)
-      defined.add(`--${chain.token}`)
-  }
+/**
+ * Токены, которые объявляют инлайнимые файлы провайдеров (`tokensCss` и
+ * прочие), с `--` — и чей файл объявил первым. `theme.declares` манифеста
+ * сюда не годится: в нём токены всех тем каталога, а не только активной.
+ */
+export function inlinedTokenDeclarations(resolution: GranumResolution): Map<string, string> {
+  const declared = new Map<string, string>()
   for (const source of resolveInlinedCssSources(resolution)) {
     let css: string
     try {
@@ -44,8 +44,20 @@ function definedTokens(resolution: GranumResolution): Set<string> {
       // Отсутствующий файл — находка `missing-file` доктора, а не повод молчать о токенах.
       continue
     }
-    for (const decl of scanCssDeclarations(css))
-      defined.add(`--${decl.token}`)
+    for (const decl of scanCssDeclarations(css)) {
+      if (!declared.has(`--${decl.token}`))
+        declared.set(`--${decl.token}`, source.providerId)
+    }
+  }
+  return declared
+}
+
+/** Токены, которые объявляет хоть один слой granum в активной теме, с `--`. */
+function definedTokens(resolution: GranumResolution): Set<string> {
+  const defined = new Set<string>(inlinedTokenDeclarations(resolution).keys())
+  for (const chain of allTokenChains(resolution.tokens.active)) {
+    if (chain.effective !== undefined)
+      defined.add(`--${chain.token}`)
   }
   return defined
 }
