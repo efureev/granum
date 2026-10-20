@@ -111,6 +111,11 @@ export interface GranumCookieStorageOptions {
   readonly maxAge?: number
   readonly path?: string
   readonly sameSite?: 'lax' | 'strict' | 'none'
+  /**
+   * Атрибут `Secure`. По умолчанию — только при `sameSite: 'none'`: без него
+   * браузер такую cookie отклоняет, и выбор режима молча не сохраняется.
+   */
+  readonly secure?: boolean
   /** Доступ к `document.cookie`; по умолчанию глобальный `document`. */
   readonly document?: { cookie: string }
 }
@@ -136,6 +141,10 @@ function readCookie(header: string, name: string): string | undefined {
  */
 export function createCookieStorage(options: GranumCookieStorageOptions = {}): GranumThemeStorage {
   const name = options.name ?? DEFAULT_THEME_STORAGE_KEY
+  const sameSite = options.sameSite ?? 'lax'
+  const secure = options.secure ?? sameSite === 'none'
+  if (sameSite === 'none' && !secure)
+    throw new TypeError(`createCookieStorage: SameSite=None requires Secure — browsers reject such a cookie, and the chosen mode would never persist`)
   const doc = (): { cookie: string } | undefined => options.document ?? (globalThis as { document?: { cookie: string } }).document
   return {
     getItem: () => {
@@ -146,7 +155,7 @@ export function createCookieStorage(options: GranumCookieStorageOptions = {}): G
       const target = doc()
       if (!target)
         return
-      target.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${options.maxAge ?? 31536000}; Path=${options.path ?? '/'}; SameSite=${options.sameSite ?? 'lax'}`
+      target.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${options.maxAge ?? 31536000}; Path=${options.path ?? '/'}; SameSite=${sameSite}${secure ? '; Secure' : ''}`
     },
   }
 }

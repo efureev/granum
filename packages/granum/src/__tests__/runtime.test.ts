@@ -308,6 +308,18 @@ describe('createThemeScript (RT-3)', () => {
 })
 
 describe('cookie для SSR (RT-4)', () => {
+  it('cookie с SameSite=None пишется с Secure — без него браузер её отклоняет', () => {
+    const written = (options: Parameters<typeof createCookieStorage>[0]): string => {
+      const doc = { cookie: '' }
+      createCookieStorage({ ...options, document: doc }).setItem('ignored', 'dark')
+      return doc.cookie
+    }
+    expect(written({ sameSite: 'none' })).toMatch(/; SameSite=none; Secure$/)
+    expect(written({ secure: true })).toMatch(/; SameSite=lax; Secure$/)
+    expect(written({})).not.toContain('Secure')
+    expect(() => createCookieStorage({ sameSite: 'none', secure: false })).toThrow(/SameSite=None requires Secure/)
+  })
+
   it('хранилище пишет и читает режим; сервер находит его в заголовке', () => {
     const doc = { cookie: '' }
     const storage = createCookieStorage({ name: 'mode', document: doc })

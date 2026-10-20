@@ -60,7 +60,9 @@ const attrs = mode ? themeRootAttributes(manifest, mode.name) : {}   // { 'data-
 The user's choice reaches the server in a cookie: on the client it is written by
 `createCookieStorage()`, the server reads it with `modeFromCookie`. A name that is not
 among the build's modes is never returned by `modeFromCookie`: no CSS blocks were emitted
-for it.
+for it. An application framed by another site needs `sameSite: 'none'` — the storage writes
+such a cookie with `Secure`, without which the browser rejects it; `secure: true` adds the
+attribute with other values too.
 
 Without the cookie the server does not know the choice — it may live in `localStorage`
 or follow the system scheme. Leave the root without a pair and put the script from the
