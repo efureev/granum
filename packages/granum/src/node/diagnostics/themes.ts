@@ -5,7 +5,7 @@
  */
 import type { GranumConfig } from '../../config'
 import { toProviderNode } from '../../core/providerNode'
-import { findThemeOwner } from '../../core/resolveThemes'
+import { findThemeOwner, splitThemeKey } from '../../core/resolveThemes'
 import { loadProviderInputs } from '../prepare'
 
 export interface ThemesCatalogEntry {
@@ -44,7 +44,7 @@ export function granumThemes(config: GranumConfig, root: string): ThemesReport {
   const idOf = (choice: GranumConfig['theme']): string | null => {
     if (choice === undefined)
       return null
-    return typeof choice === 'string' ? choice.slice(choice.lastIndexOf(':') + 1) : choice.id
+    return typeof choice === 'string' ? splitThemeKey(choice).id : choice.id
   }
   return {
     owner: owner?.id ?? null,

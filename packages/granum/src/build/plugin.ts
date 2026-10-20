@@ -24,7 +24,7 @@ import { sortedUnique } from '../core/dedupe'
 import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, ManifestNotFoundError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
 import { ownerOf, toProviderNode } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
-import { checkThemeData, mergeThemePatch, missingRegistryTokens, themeModeOrder, themeTokenNames } from '../core/themeData'
+import { checkThemeData, DEFAULT_MODE, mergeThemePatch, missingRegistryTokens, themeModeOrder, themeTokenNames } from '../core/themeData'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { collectImportSpecifiers } from '../node/imports'
 import { loadPackageManifest, MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
@@ -529,7 +529,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
           ...(entry.extends !== undefined ? { extends: entry.extends } : {}),
           data: themePaths.catalog[id]!,
           modes: themeModeOrder(data),
-          defaultMode: data.defaultMode ?? 'light',
+          defaultMode: data.defaultMode ?? DEFAULT_MODE,
         }
       }
 

@@ -1,3 +1,4 @@
+export { DEFAULT_ACTIVATION_ATTRIBUTE, DEFAULT_ACTIVATION_VALUE } from './activation'
 export { createDebug, isDebugEnabled } from './debug'
 export * from './errors'
 export { expandProviders } from './expandProviders'
@@ -31,8 +32,6 @@ export type {
 export {
   APP_THEME_SOURCE,
   componentModeSequence,
-  DEFAULT_ACTIVATION_ATTRIBUTE,
-  DEFAULT_ACTIVATION_VALUE,
   findThemeOwner,
   planModeDefinitions,
   planThemes,

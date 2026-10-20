@@ -10,6 +10,7 @@
  *
  * Модуль browser-safe: только типы и чистые функции.
  */
+import { DEFAULT_ACTIVATION_ATTRIBUTE, DEFAULT_ACTIVATION_VALUE } from '../core/activation'
 
 /** Режим активной темы в манифесте. */
 export interface GranumModeEntry {
@@ -68,8 +69,8 @@ export interface GranumThemeManifestInput {
 export function createThemeManifest(input: GranumThemeManifestInput): GranumThemeManifest {
   if (!input.modes.some(mode => mode.name === input.defaultMode))
     throw new Error(`createThemeManifest: default mode '${input.defaultMode}' is not among the modes: ${input.modes.map(mode => mode.name).join(', ') || '—'}.`)
-  const attribute = input.activation?.attribute ?? 'data-theme'
-  const value = input.activation?.value ?? '{theme}-{mode}'
+  const attribute = input.activation?.attribute ?? DEFAULT_ACTIVATION_ATTRIBUTE
+  const value = input.activation?.value ?? DEFAULT_ACTIVATION_VALUE
   const ordered = [...input.modes].sort((a, b) => Number(b.name === input.defaultMode) - Number(a.name === input.defaultMode))
   return {
     theme: { id: input.theme.id, title: input.theme.title },

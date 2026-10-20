@@ -28,7 +28,11 @@ export interface GranumThemeScriptOptions extends GranumThemeScriptCodeOptions {
 
 /** Имя cookie — токен RFC 6265: в нём нет ни `;`, ни `=`, ни символов, ломающих `<script>`. */
 const COOKIE_NAME_RE = /^[!#$%&'*+\-.^\w`|~]+$/
-/** Имя режима — идентификатор (C-25): ключ объекта без кавычек. */
+/**
+ * Ключ объекта, который можно написать без кавычек. Это правило синтаксиса JS,
+ * а не правило имени режима: если имена режимов когда-нибудь расширят, ключ
+ * просто уйдёт в кавычки, а скрипт в `<head>` останется валидным.
+ */
 const IDENTIFIER_RE = /^[a-z][a-z0-9]*$/
 
 function escapeAttribute(value: string): string {

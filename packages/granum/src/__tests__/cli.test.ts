@@ -275,6 +275,13 @@ describe('granum cli: вызов и коды выхода', () => {
     expect(JSON.parse(json.out.join('\n'))).toMatchObject({ owner: '@x/kit', defaultTheme: 'kit', active: 'kit', themes: [{ id: 'kit' }, { id: 'night', extends: 'kit' }] })
   })
 
+  it('themes: квалифицированный ключ темы и превью сводится к id', async () => {
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), theme: '@x/kit:night', previews: ['@x/kit:kit'] }\n` })
+    const json = io(root)
+    expect(await runGranumCli(['themes', 'granum.config.mjs', '--json'], json.io)).toBe(0)
+    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ active: 'night', previews: ['kit'] })
+  })
+
   it('prune: 0 всегда, 1 с --strict при наличии удаляемых', async () => {
     const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], modes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
     const t = io(root)

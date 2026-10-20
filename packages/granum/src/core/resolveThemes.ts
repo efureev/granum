@@ -6,15 +6,13 @@
 import type { GranumComponentThemeTokens, GranumModeFallback, GranumThemeData, GranumTokenRef } from '../contract'
 import type { ComponentNode, ProviderNode } from './providerNode'
 import { themePairValue } from '../runtime/manifest'
+import { DEFAULT_ACTIVATION_ATTRIBUTE, DEFAULT_ACTIVATION_VALUE } from './activation'
 import { ThemeResolutionError } from './errors'
 import { ownsThemes } from './providerNode'
 import { DEFAULT_MODE, modeChain, themeModeOrder } from './themeData'
 
 /** Идентификатор источника для вкладов самого приложения. */
 export const APP_THEME_SOURCE = '(app)'
-
-export const DEFAULT_ACTIVATION_ATTRIBUTE = 'data-theme'
-export const DEFAULT_ACTIVATION_VALUE = '{theme}-{mode}'
 
 /**
  * Тема-объект приложения: полные данные. `extends` называет тему каталога,
@@ -160,7 +158,7 @@ export function findThemeOwner(providers: readonly ProviderNode[]): ProviderNode
 }
 
 /** `providerId:id` → провайдер и id; разбор по последнему двоеточию (C-1). */
-function splitThemeKey(key: string): { providerId?: string, id: string } {
+export function splitThemeKey(key: string): { providerId?: string, id: string } {
   const at = key.lastIndexOf(':')
   return at > 0 ? { providerId: key.slice(0, at), id: key.slice(at + 1) } : { id: key }
 }
