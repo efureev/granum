@@ -206,6 +206,9 @@ theme: {
 }
 ```
 
+An `extends` absent from the catalog is the error `unknown-theme` listing the available
+ones: otherwise the component tokens of that chain would silently not apply.
+
 The theme object is a layer after component tokens: a button token's value in one of its
 modes overrides the component token. `sources` are the files the theme is assembled from:
 the config is read once per Vite process, so editing them in dev restarts the

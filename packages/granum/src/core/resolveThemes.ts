@@ -226,6 +226,18 @@ function themeChain(owner: ProviderNode | undefined, id: string | undefined): st
 function materializePick(pick: ThemePick, owner: ProviderNode | undefined, themeData: ThemeDataInput): ResolvedTheme {
   if (pick.kind === 'app') {
     const { extends: base, sources: _sources, ...data } = pick.theme
+    // Неизвестная база молча не дала бы токенов компонентов своей цепочки.
+    if (base !== undefined && owner?.theme.catalog[base] === undefined) {
+      const available = owner ? Object.keys(owner.theme.catalog) : []
+      throw new ThemeResolutionError(
+        'unknown-theme',
+        owner
+          ? `theme object '${data.id}' extends '${base}', which is not in the catalog of '${owner.id}'. Available: ${available.join(', ') || '—'}.`
+          : `theme object '${data.id}' extends '${base}', but no provider in the graph declares a theme catalog.`,
+        base,
+        available,
+      )
+    }
     return { id: data.id, title: data.title, providerId: APP_THEME_SOURCE, data, chain: [data.id, ...themeChain(owner, base)] }
   }
   const data = themeData[pick.providerId]?.[pick.id]

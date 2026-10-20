@@ -109,7 +109,7 @@ manifest is produced only by the build.
 
 | Error | Cause and what to do |
 |---|---|
-| `ThemeResolutionError (unknown-theme)` | `theme` or `previews` name a theme absent from the catalog; the error lists the available ones. Without `theme` and without a `defaultTheme` in a catalog of several themes — the same error |
+| `ThemeResolutionError (unknown-theme)` | `theme` or `previews` name a theme absent from the catalog; the error lists the available ones. Without `theme` and without a `defaultTheme` in a catalog of several themes — the same error; so is a theme object's `extends` absent from the catalog |
 | `ThemeResolutionError (unknown-mode)` | a name in `modes.names` or a `modes.tokenOverrides` key is neither a theme mode nor a `define` |
 | `ThemeResolutionError (multiple-theme-owners)` | two providers of the graph declare a theme catalog; hand the extra themes to the application as an object in `theme` |
 | `ThemeResolutionError (theme-owner-missing)` | a package has component tokens per theme, and its theme-owner dependency does not resolve from the package directory; install it or add it to `providers` |

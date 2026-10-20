@@ -47,6 +47,20 @@ describe('значения тем и режимов молча не теряют
     // Пустой набор, активация, системная схема и строгость значений не несут.
     expect(reasonOf(() => resolve({ modes: { names: [], tokenOverrides: {}, define: {}, activation: { attribute: 'data-mode' }, system: 'media', strictTokens: true }, previews: [] }, none))).toBeUndefined()
   })
+
+  it('extends темы-объекта не из каталога — unknown-theme со списком доступных', () => {
+    const brand: GranumAppTheme = { ...themeData('brand', { light: { a: '1' } }), extends: 'papr' }
+    expect(reasonOf(() => resolve({ theme: brand }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ theme: 'paper', previews: [brand] }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ theme: brand }, none))).toBe('unknown-theme')
+    try {
+      resolve({ theme: brand })
+    }
+    catch (error) {
+      expect((error as ThemeResolutionError).available).toEqual(['paper', 'ink'])
+    }
+    expect(resolve({ theme: { ...brand, extends: 'ink' } }).theme?.chain).toEqual(['brand', 'ink', 'paper'])
+  })
 })
 
 describe('активная тема (A-22, A-23)', () => {

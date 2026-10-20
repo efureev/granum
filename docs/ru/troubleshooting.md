@@ -107,7 +107,7 @@
 
 | Ошибка | Причина и что делать |
 |---|---|
-| `ThemeResolutionError (unknown-theme)` | `theme` или `previews` называют тему, которой нет в каталоге; в ошибке — список доступных. Без `theme` и без `defaultTheme` у каталога из нескольких тем — та же ошибка |
+| `ThemeResolutionError (unknown-theme)` | `theme` или `previews` называют тему, которой нет в каталоге; в ошибке — список доступных. Без `theme` и без `defaultTheme` у каталога из нескольких тем — та же ошибка; и `extends` темы-объекта, которого нет в каталоге |
 | `ThemeResolutionError (unknown-mode)` | имя в `modes.names` или ключ `modes.tokenOverrides` — не режим темы и не `define` |
 | `ThemeResolutionError (multiple-theme-owners)` | каталог тем объявляют два провайдера графа; лишние темы отдайте приложению объектом в `theme` |
 | `ThemeResolutionError (theme-owner-missing)` | у пакета есть токены компонентов по темам, а его зависимость-владелец тем не разрешается из каталога пакета; установите её или добавьте в `providers` |
