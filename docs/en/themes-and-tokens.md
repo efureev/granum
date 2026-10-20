@@ -83,7 +83,9 @@ and override them token by token. An unknown
 base and a cycle are warnings `mode-extends-unresolved` and `mode-extends-cycle`;
 such a mode inherits the default mode. A `define` named like a mode of the
 theme is the same pair — error `activation-collision`. `tokensRef` is an
-application CSS file with one flat block of tokens; literal `tokens` win.
+application CSS file with one flat block of tokens; literal `tokens` win. A file with
+several blocks is the error `multiple-blocks` unless `selector` names the block
+wanted.
 
 `tokenOverrides.root` goes into the mode-independent values, `tokenOverrides.<mode>` —
 into the mode; a mode outside the set is `unknown-mode`. With `strictTokens: true` an

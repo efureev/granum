@@ -151,6 +151,7 @@ describe('неизвестный ключ конфига — ошибка с п�
     // Опции, удалённые в этом выпуске: почему их нет.
     [{ js: { virtualComponents: false } }, 'js.virtualComponents', /removed/],
     [{ css: { expandDirectives: true } }, 'css.expandDirectives', /removed/],
+    [{ modes: { define: { ocean: { extends: 'light', tokensRef: { url: './o.css', as: '.x' } } } } }, 'modes.define.ocean.tokensRef.as', /removed.*pair/],
     // Ничего похожего — перечень допустимых ключей уровня.
     [{ foo: 1 }, 'foo', /expected one of: providers, components/],
   ])('%j → %s', (extra, path, message) => {

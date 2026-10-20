@@ -18,14 +18,14 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isLoadedManifest } from '../contract/manifest'
 import { sortedUnique } from '../core/dedupe'
-import { DuplicateProviderIdError, ThemeDataError, ThemeResolutionError, TokenRefError } from '../core/errors'
+import { DuplicateProviderIdError, ThemeDataError, ThemeResolutionError, TokenParseError, TokenRefError } from '../core/errors'
 import { ownerOf, ownsThemes, toProviderNode, uniqueDeclarers } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE, planThemes } from '../core/resolveThemes'
 import { checkThemeData } from '../core/themeData'
 import { scanAppSources } from './appSources'
-import { tokenSetFromCssSync } from './cssTokens'
+import { parseCssTokenBlocks, tokenSetFromCssSync } from './cssTokens'
 import { reconcileProviderEngines } from './dialects'
 import { resolveProviderPath } from './inlinedCss'
 import { loadPackageManifest } from './manifest'
@@ -234,6 +234,19 @@ export function materializeAppModes(modes: GranumModesInput | undefined, root: s
     const url = /^[a-z]+:/i.test(ref.url) ? ref.url : pathToFileURL(resolvePath(root, ref.url)).href
     let parsed
     try {
+      // Файл режима — один плоский блок: без `selector` второй блок молча
+      // пропал бы, а первый попавшийся выдавался бы за весь файл.
+      if (ref.selector === undefined && ref.strict !== false) {
+        const blocks = parseCssTokenBlocks(url)
+        if (blocks.length > 1) {
+          throw new TokenParseError(
+            `${ref.url} has ${blocks.length} token blocks (${blocks.map(b => JSON.stringify(b.selector)).join(', ')}); a mode file holds one flat block — or name the block with 'selector'.`,
+            ref.url,
+            'multiple-blocks',
+            blocks.map(b => b.selector),
+          )
+        }
+      }
       parsed = tokenSetFromCssSync(url, {
         ...(ref.selector !== undefined ? { selector: ref.selector } : {}),
         ...(ref.strict !== undefined ? { strict: ref.strict } : {}),

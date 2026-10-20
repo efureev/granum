@@ -377,7 +377,7 @@ export class TokenParseError extends GranumError {
   constructor(
     message: string,
     readonly source: string,
-    readonly reason: 'unsupported-blocks' | 'no-tokens' | 'selector-not-found',
+    readonly reason: 'unsupported-blocks' | 'no-tokens' | 'selector-not-found' | 'multiple-blocks',
     readonly available?: readonly string[],
   ) {
     super(message)

@@ -37,10 +37,8 @@ export interface GranumTokenSet {
 export interface GranumTokenRef {
   /** Абсолютный URL после `define*`-хелперов; во вводе допустим относительный путь. */
   readonly url: string
-  /** Какой селектор извлечь. По умолчанию `:root`. */
+  /** Какой блок извлечь. Без него файл обязан содержать один плоский блок. */
   readonly selector?: string
-  /** Под каким селектором эмитить. По умолчанию — извлечённый. */
-  readonly as?: string
   /** Строгий разбор: нет селектора или вложенность — ошибка. По умолчанию `true`. */
   readonly strict?: boolean
 }

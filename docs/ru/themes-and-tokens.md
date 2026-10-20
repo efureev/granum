@@ -83,7 +83,9 @@ modes: {
 база и цикл — предупреждения `mode-extends-unresolved` и `mode-extends-cycle`,
 такой режим наследует режим по умолчанию. Имя `define`, совпавшее с режимом
 темы, — та же пара, ошибка `activation-collision`. `tokensRef` — CSS-файл
-приложения с одним плоским блоком токенов; литеральные `tokens` важнее.
+приложения с одним плоским блоком токенов; литеральные `tokens` важнее. Файл с
+несколькими блоками — ошибка `multiple-blocks`, если нужный блок не назван в
+`selector`.
 
 `tokenOverrides.root` ложится в режимонезависимые значения, `tokenOverrides.<режим>` —
 в режим; режим вне набора — `unknown-mode`. При `strictTokens: true` override

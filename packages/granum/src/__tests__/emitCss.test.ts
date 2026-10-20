@@ -319,6 +319,17 @@ describe('prepareApp: tokensRef режимов приложения', () => {
     expect(resolveTokenValue(app.resolution, 'crimson', 'bg')).toBe('#000')
     await expect(prepareTestApp({ providers: [manifest], modes: { define: { x: { extends: 'light', tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
   })
+
+  it('несколько плоских блоков без selector — ошибка, а не первый попавшийся; с selector — его блок', async () => {
+    const { root, manifest } = fixture()
+    mkdirSync(join(root, 'src/themes'), { recursive: true })
+    writeFileSync(join(root, 'src/themes/two.css'), ':root{--app-bg:#111}\n.alt{--app-fg:#eee}')
+    const failed = await prepareTestApp({ providers: [manifest], modes: { define: { two: { extends: 'dark', tokensRef: 'src/themes/two.css' } } } }, root).catch((e: unknown) => e)
+    expect(failed).toBeInstanceOf(TokenRefError)
+    expect((failed as TokenRefError).cause).toMatchObject({ reason: 'multiple-blocks', available: [':root', '.alt'] })
+    const app = await prepareTestApp({ providers: [manifest], modes: { define: { two: { extends: 'dark', tokensRef: { url: 'src/themes/two.css', selector: '.alt' } } } } }, root)
+    expect(resolveTokenValue(app.resolution, 'two', 'app-fg')).toBe('#eee')
+  })
 })
 
 describe('prepareApp: провайдеры и селекция', () => {

@@ -40,7 +40,7 @@ const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens'
 const MODE_DATA_KEYS = keysOf<GranumModeData>()(['title', 'colorScheme', 'extends', 'tokens', 'fallbacks'])
 const FALLBACK_KEYS = keysOf<GranumModeFallback>()(['supports', 'tokens'])
 const ACTIVATION_KEYS = keysOf<GranumModeActivation>()(['attribute', 'value'])
-const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
+const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'strict'])
 const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split', 'previews'])
 const APP_SOURCES_KEYS = keysOf<GranumAppSources>()(['dirs', 'extensions'])
 const PRUNE_TOKENS_KEYS = keysOf<GranumPruneTokensOptions>()(['mode', 'keep', 'keepPrefixes'])
@@ -215,6 +215,8 @@ function validateModes(modes: unknown): void {
     if (ref !== undefined && typeof ref !== 'string') {
       if (!isRecord(ref))
         throw new InvalidConfigError(`${at}.tokensRef`, `expected a CSS URL or { url, selector?, strict? }`)
+      if ('as' in ref)
+        throw new InvalidConfigError(`${at}.tokensRef.as`, `unknown option — removed: the tokens of a defined mode are emitted under its pair '<theme>-${name}' set by modes.activation; 'as' has had no effect since granum 3.0`)
       rejectUnknownKeys(ref, TOKEN_REF_KEYS, `${at}.tokensRef`)
     }
     if (definition.tokens !== undefined) {
