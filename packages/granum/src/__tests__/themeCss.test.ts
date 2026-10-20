@@ -82,6 +82,18 @@ describe('фолбэки, системная схема', () => {
     expect(themes.slice(supports)).toContain(':root, [data-theme="t-light"] {\n    --p-bg: white;')
   })
 
+  it('режим приложения: фолбэки базы, затем свои — свои перекрывают по токену', async () => {
+    const { root, provider } = catalogProvider({ themes: { t: theme } })
+    const ocean = { extends: 'light', tokens: { 'p-bg': '#012' }, fallbacks: [{ supports: 'not (color: oklch(0 0 0))', tokens: { 'p-bg': 'navy' } }] }
+    const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { define: { ocean, plain: { extends: 'light' } } } }, root))
+    const inherited = themes.indexOf('[data-theme="t-ocean"] {\n    --p-bg: white;')
+    const own = themes.indexOf('[data-theme="t-ocean"] {\n    --p-bg: navy;')
+    expect(inherited).toBeGreaterThan(-1)
+    expect(own).toBeGreaterThan(inherited)
+    // Без своих фолбэков режим берёт фолбэки базы как есть.
+    expect(themes).toContain('[data-theme="t-plain"] {\n    --p-bg: white;')
+  })
+
   it('system: media — тёмный режим по prefers-color-scheme, пока атрибут не выставлен (T-13)', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
     const { themes } = await layers(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], system: 'media' } }, root))

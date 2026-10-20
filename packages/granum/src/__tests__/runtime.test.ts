@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveGranum } from '../core/resolve'
 import { getThemeManifest } from '../node/themeManifest'
-import { createCookieStorage, createThemeController, createThemeScript, createThemeScriptCode, modeFromCookie, resolveThemeActivation, themeModeValue, themeRootAttributes } from '../runtime'
+import { createCookieStorage, createThemeController, createThemeManifest, createThemeScript, createThemeScriptCode, modeFromCookie, resolveThemeActivation, themeModeValue, themeRootAttributes } from '../runtime'
 import { INK, makeManifest, PAPER } from './helpers'
 
 function createTarget(initial?: Record<string, string>): GranumThemeTarget & { attributes: Map<string, string>, writes: number } {
@@ -48,7 +48,7 @@ describe('getThemeManifest — из той же резолюции, что и CS
     },
   })
   const resolve = (input: Partial<Parameters<typeof resolveGranum>[0]> = {}) =>
-    resolveGranum({ providers: [owner], themeData: { '@p/ds': { paper: PAPER, ink: { ...INK, extensions: { granularity: { componentDefaults: { Button: { size: 'm' } } } } } } }, ...input })
+    resolveGranum({ providers: [owner], themeData: { '@p/ds': { paper: { ...PAPER, extensions: { granularity: { componentDefaults: { Button: { size: 's' } } } } }, ink: { ...INK, extensions: { granularity: { componentDefaults: { Button: { size: 'm' } } } } } } }, ...input })
 
   it('тема, режимы с парами, атрибут, extensions как есть', () => {
     const manifest = getThemeManifest(resolve({ theme: 'ink', modes: { names: ['light', 'dark', 'dim', 'sepia'], define: { sepia: { extends: 'light', title: 'Сепия' } } } }))
@@ -67,9 +67,23 @@ describe('getThemeManifest — из той же резолюции, что и CS
     expect(manifest.previews).toEqual([{ theme: { id: 'paper', title: 'Бумага' }, modes: [
       { name: 'light', colorScheme: 'light', value: 'light@paper' },
       { name: 'dark', colorScheme: 'dark', value: 'dark@paper' },
-    ] }])
+    ], extensions: { granularity: { componentDefaults: { Button: { size: 's' } } } } }])
     expect(themeModeValue(manifest, 'dark', 'paper')).toBe('dark@paper')
     expect(themeModeValue(manifest, 'dim')).toBe('dim@ink')
+  })
+
+  it('createThemeManifest по описанию темы совпадает с манифестом сборки', () => {
+    const built = getThemeManifest(resolve({ theme: 'ink', modes: { names: ['dim', 'light', 'dark'] } }))
+    const made = createThemeManifest({
+      theme: { id: 'ink', title: 'Чернила' },
+      modes: [{ name: 'dim', colorScheme: 'dark' }, { name: 'light', colorScheme: 'light' }, { name: 'dark', title: 'Тёмный', colorScheme: 'dark' }],
+      defaultMode: 'light',
+    })
+    expect(made.modes.map(m => m.name)).toEqual(['light', 'dim', 'dark'])
+    expect(made.modes.map(m => m.value)).toEqual(built.modes.map(m => m.value))
+    expect(made.activation).toEqual(built.activation)
+    expect(createThemeManifest({ ...made, modes: made.modes, activation: { value: '{mode}@{theme}' } }).modes[0]!.value).toBe('light@ink')
+    expect(() => createThemeManifest({ ...made, defaultMode: 'sepia' })).toThrow(/default mode 'sepia'/)
   })
 
   it('от селекции компонентов не зависит', () => {

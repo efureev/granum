@@ -89,6 +89,9 @@ describe('validateGranumConfig', () => {
     [{ providers: ['a'], engine, modes: { tokenOverrides: { dark: '#000' } } }, 'modes.tokenOverrides.dark'],
     [{ providers: ['a'], engine, modes: { define: { ocean: { extends: 'dark', tokens: { '--p-bg': '#000' } } } } }, 'modes.define.ocean.tokens'],
     [{ providers: ['a'], engine, modes: { define: { ocean: 'dark' } } }, 'modes.define.ocean'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: { extends: 'dark', fallbacks: {} } } } }, 'modes.define.ocean.fallbacks'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: { extends: 'dark', fallbacks: [{ supports: 'x', tokens: { '--p-bg': '#000' } }] } } } }, 'modes.define.ocean.fallbacks.0.tokens'],
+    [{ providers: ['a'], engine, modes: { define: { ocean: { extends: 'dark', fallbacks: [{ tokens: {} }] } } } }, 'modes.define.ocean.fallbacks.0'],
     [{ providers: ['a'], engine, modes: { define: { ocean: { tokens: {} } } } }, 'modes.define.ocean.extends'],
     // Имя режима — slug без дефиса: оно конец пары `<тема>-<режим>`.
     [{ providers: ['a'], engine, modes: { define: { 'deep-sea': { extends: 'dark' } } } }, 'modes.define.deep-sea'],

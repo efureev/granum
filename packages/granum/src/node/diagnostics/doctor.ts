@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { isLoadedManifest } from '../../contract/manifest'
 import { sortedUnique } from '../../core/dedupe'
+import { DEFAULT_MODE, modeChain } from '../../core/themeData'
 import { allTokenChains, describeLayer } from '../../core/tokenLayers'
 import { stripCssComments } from '../../engine/extract'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
@@ -60,6 +61,7 @@ export type DoctorDiagnosticCode
     | 'apply-not-expanded'
     | 'boundary'
     | 'component-theme-unknown'
+    | 'component-mode-missing'
     | 'mode-extends-unresolved'
     | 'mode-extends-cycle'
     | 'token-conflict'
@@ -236,6 +238,33 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     const emitted = chain.layers.filter(l => l.skipped === undefined && (l.source === 'theme' || l.source === 'component'))
     if (emitted.length >= 2)
       tokenConflicts.push({ mode: chain.scope, token: chain.token, sources: chain.layers.filter(l => l.skipped === undefined).map(describeLayer), finalValue: chain.effective! })
+  }
+
+  // Литералы компонента в режиме сборки, взятые из режима по умолчанию: у
+  // компонента нет файла ни этого режима, ни его предков по `extends`, и,
+  // например, забытый `dark.json` молча даёт тёмному режиму светлые значения
+  // (A-24). Формула с `var(` сама следует ролям режима — её не считаем. Режимы
+  // `define` наследуют свою базу — их не считаем повторно.
+  const activeTheme = resolution.themes.theme
+  if (activeTheme) {
+    const defaultMode = activeTheme.data.defaultMode ?? DEFAULT_MODE
+    const fellBack = new Map<string, { mode: string, component: string, tokens: string[] }>()
+    for (const mode of resolution.themes.modes) {
+      if (definedModes.has(mode.name) || modeChain(activeTheme.data, mode.name).names.includes(defaultMode))
+        continue
+      for (const chain of resolution.tokens.active?.modes.get(mode.name)?.values() ?? []) {
+        const layer = chain.layers.find(l => l.source === 'component' && l.mode === defaultMode && l.componentKey !== undefined)
+        if (!layer?.componentKey || layer.value.includes('var('))
+          continue
+        const entry = fellBack.get(`${layer.componentKey} ${mode.name}`)
+          ?? { mode: mode.name, component: layer.componentKey, tokens: [] }
+        entry.tokens.push(`--${chain.token}`)
+        fellBack.set(`${layer.componentKey} ${mode.name}`, entry)
+      }
+    }
+    for (const { mode, component, tokens } of fellBack.values()) {
+      warn('component-mode-missing', component, `no values for mode '${mode}' of theme '${activeTheme.id}' in its themesDir — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root.json`, tokens.sort())
+    }
   }
 
   // Файлы: тема, компоненты, entry — существуют ли; заодно проверки содержимого.
@@ -457,6 +486,7 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'provider-scanned',
   'unused-provider',
   'component-theme-unknown',
+  'component-mode-missing',
   'mode-extends-unresolved',
   'mode-extends-cycle',
 ]

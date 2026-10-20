@@ -76,7 +76,10 @@ modes: {
 ```
 
 `define` is an application mode on top of a theme mode or another `define`: it takes
-the base's final values (component tokens included) and adds its own. An unknown
+the base's final values (component tokens included) and adds its own. The base hands
+over its `@supports` fallbacks computed from its own values; a mode that changes roles
+needs its own — `fallbacks: [{ supports, tokens }]`, which come after the inherited ones
+and override them token by token. An unknown
 base and a cycle are warnings `mode-extends-unresolved` and `mode-extends-cycle`;
 such a mode inherits the default mode. A `define` named like a mode of the
 theme is the same pair — error `activation-collision`. `tokensRef` is an

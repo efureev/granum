@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatThemeWarning, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
-import { makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
+import { catalogProvider, makeManifest, prepareTestApp, TEST_ENGINE } from './helpers'
 import { testEngine } from './testEngine'
 
 interface Fixture {
@@ -507,5 +507,33 @@ describe('formatDoctorReport: сводка и детали по требован
     const text = formatDoctorReport(reportWith(70), { components: true })
     expect(text).toContain('• @x/kit:C29 —')
     expect(text).toContain('--code=safelist-redundant')
+  })
+})
+
+describe('doctor: режим без файла у компонента (A-24)', () => {
+  const card = (modes: Record<string, Record<string, string>>) => ({ Card: { themes: { paper: { modes } } } })
+
+  it('литералы компонента для dark взяты из light — предупреждение с именами токенов', async () => {
+    const { root, provider } = catalogProvider({ components: card({ light: { 'c-shade': '#fff', 'c-edge': '#eee' } }) })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], define: { ocean: { extends: 'dark' } } } }, root))
+    const found = report.diagnostics.filter(d => d.code === 'component-mode-missing')
+    // Один раз на режим темы: `ocean` наследует `dark` и повторно не считается.
+    expect(found.map(d => [d.subject, d.items])).toEqual([['@p/ds:Card', ['--c-edge', '--c-shade']]])
+    expect(found[0]!.message).toContain(`mode 'dark'`)
+  })
+
+  it('файл режима есть, значение — формула или режим один — молчит', async () => {
+    const both = catalogProvider({ components: card({ light: { 'c-shade': '#fff' }, dark: { 'c-shade': '#000' } }) })
+    const ok = await granumDoctor(await prepareTestApp({ providers: [both.provider], modes: { names: ['light', 'dark'] } }, both.root))
+    expect(ok.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
+
+    // Формула через роль одинакова во всех режимах и сама следует их ролям.
+    const formula = catalogProvider({ components: card({ light: { 'c-shade': 'var(--p-bg)' } }) })
+    const shared = await granumDoctor(await prepareTestApp({ providers: [formula.provider], modes: { names: ['light', 'dark'] } }, formula.root))
+    expect(shared.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
+
+    const lightOnly = catalogProvider({ components: card({ light: { 'c-shade': '#fff' } }) })
+    const single = await granumDoctor(await prepareTestApp({ providers: [lightOnly.provider] }, lightOnly.root))
+    expect(single.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
   })
 })

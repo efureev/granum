@@ -24,6 +24,8 @@ export interface GranumModeEntry {
 export interface GranumPreviewEntry {
   readonly theme: { readonly id: string, readonly title: string }
   readonly modes: readonly GranumModeEntry[]
+  /** Расширения данных темы превью как есть — для острова, который её показывает. */
+  readonly extensions?: Readonly<Record<string, unknown>>
 }
 
 export interface GranumThemeManifest {
@@ -41,6 +43,45 @@ export interface GranumThemeManifest {
   readonly previews?: readonly GranumPreviewEntry[]
   /** `extensions` данных темы как есть: granum их не интерпретирует. */
   readonly extensions?: Readonly<Record<string, unknown>>
+}
+
+/** Пара режима по шаблону активации (A-28): `{theme}-{mode}` → `slate-dark`. */
+export function themePairValue(template: string, theme: string, mode: string): string {
+  return template.replaceAll('{theme}', theme).replaceAll('{mode}', mode)
+}
+
+export interface GranumThemeManifestInput {
+  readonly theme: { readonly id: string, readonly title: string }
+  /** Режимы набора в порядке темы; режим по умолчанию встанет первым. */
+  readonly modes: readonly { readonly name: string, readonly title?: string, readonly colorScheme: 'light' | 'dark' }[]
+  readonly defaultMode: string
+  /** Атрибут и шаблон пары; по умолчанию — как у сборки: `data-theme` и `{theme}-{mode}`. */
+  readonly activation?: { readonly attribute?: string, readonly value?: string }
+}
+
+/**
+ * Манифест режимов по описанию темы — каталогу провайдера или своему списку —
+ * тем же правилом пары и тем же порядком, что у сборки (A-28, T-9). Нужен тому,
+ * у кого `virtual:granum/themes` нет: CSS темы подключён готовым файлом, а
+ * контроллеру нужны пары.
+ */
+export function createThemeManifest(input: GranumThemeManifestInput): GranumThemeManifest {
+  if (!input.modes.some(mode => mode.name === input.defaultMode))
+    throw new Error(`createThemeManifest: default mode '${input.defaultMode}' is not among the modes: ${input.modes.map(mode => mode.name).join(', ') || '—'}.`)
+  const attribute = input.activation?.attribute ?? 'data-theme'
+  const value = input.activation?.value ?? '{theme}-{mode}'
+  const ordered = [...input.modes].sort((a, b) => Number(b.name === input.defaultMode) - Number(a.name === input.defaultMode))
+  return {
+    theme: { id: input.theme.id, title: input.theme.title },
+    modes: ordered.map(mode => ({
+      name: mode.name,
+      ...(mode.title !== undefined ? { title: mode.title } : {}),
+      colorScheme: mode.colorScheme,
+      value: themePairValue(value, input.theme.id, mode.name),
+    })),
+    defaultMode: input.defaultMode,
+    activation: { attribute, value },
+  }
 }
 
 /**

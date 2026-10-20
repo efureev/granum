@@ -203,6 +203,20 @@ const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate
 приложения. Ключ с `$` в JSON папки `themesDir` — пояснение для читателя
 (`"$comment"`), а не токен.
 
+Контроллеру режимов в таком приложении нужен манифест, а `virtual:granum/themes`
+нет. `createThemeManifest` из `@feugene/granum/runtime` собирает его по описанию
+темы — каталогу вашего пакета — тем же правилом пары, что сборка:
+
+```js
+import { createThemeManifest } from '@feugene/granum/runtime'
+
+const manifest = createThemeManifest({
+  theme: { id: 'slate', title: 'Сланец' },
+  modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
+  defaultMode: 'light',
+})
+```
+
 ## Сборка
 
 ```ts

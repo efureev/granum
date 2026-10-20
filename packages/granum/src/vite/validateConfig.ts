@@ -36,7 +36,7 @@ function keysOf<T>() {
 const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'theme', 'previews', 'modes', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
 const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'extends', 'sources'])
 const MODES_KEYS = keysOf<GranumModesInput>()(['names', 'define', 'activation', 'tokenOverrides', 'strictTokens', 'system'])
-const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme'])
+const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme', 'fallbacks'])
 const ACTIVATION_KEYS = keysOf<GranumModeActivation>()(['attribute', 'value'])
 const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
 const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split'])
@@ -204,6 +204,17 @@ function validateModes(modes: unknown): void {
       if (!isRecord(definition.tokens))
         throw new InvalidConfigError(`${at}.tokens`, 'expected an object of token values')
       rejectPrefixedTokens(definition.tokens, `${at}.tokens`)
+    }
+    if (definition.fallbacks !== undefined) {
+      if (!Array.isArray(definition.fallbacks))
+        throw new InvalidConfigError(`${at}.fallbacks`, 'expected an array of { supports, tokens }')
+      for (const [i, fallback] of definition.fallbacks.entries()) {
+        const where = `${at}.fallbacks.${i}`
+        if (!isRecord(fallback) || typeof fallback.supports !== 'string' || !isRecord(fallback.tokens))
+          throw new InvalidConfigError(where, 'expected { supports: string, tokens: { … } }')
+        rejectUnknownKeys(fallback, ['supports', 'tokens'], where)
+        rejectPrefixedTokens(fallback.tokens, `${where}.tokens`)
+      }
     }
   }
   const activation = modes.activation

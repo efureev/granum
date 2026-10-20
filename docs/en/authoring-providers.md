@@ -205,6 +205,21 @@ Tokens of companion packages are not in such a file: only an application build
 knows all the manifests. A `$`-prefixed key in a `themesDir` JSON file is a note
 for the reader (`"$comment"`), not a token.
 
+The mode controller of such an application needs a manifest, and there is no
+`virtual:granum/themes`. `createThemeManifest` from `@feugene/granum/runtime` builds it
+from a description of the theme — your package's catalog — by the same pair rule as
+a build:
+
+```js
+import { createThemeManifest } from '@feugene/granum/runtime'
+
+const manifest = createThemeManifest({
+  theme: { id: 'slate', title: 'Slate' },
+  modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
+  defaultMode: 'light',
+})
+```
+
 ## Build
 
 ```ts

@@ -221,8 +221,14 @@ export function collectTokenLayers(
     for (const [token, value] of Object.entries(definition?.tokens ?? {}))
       push(target, mode.name, token, { source: 'app-mode', value, mode: mode.name })
     set.modes.set(mode.name, target)
-    const blocks = set.fallbacks.get(mode.extends!)
-    if (blocks)
+    const own = (definition?.fallbacks ?? []).map((fallback) => {
+      const tokens = new Map<string, TokenChain>()
+      for (const [token, value] of Object.entries(fallback.tokens))
+        push(tokens, mode.name, token, { source: 'app-mode', value, mode: mode.name })
+      return { supports: fallback.supports, tokens }
+    })
+    const blocks = [...set.fallbacks.get(mode.extends!) ?? [], ...own]
+    if (blocks.length > 0)
       set.fallbacks.set(mode.name, blocks)
   }
 

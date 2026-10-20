@@ -3,8 +3,9 @@
  * набор режимов с `define`, активация и превью. Значения токенов считает
  * `tokenLayers` — здесь только то, ЧТО собирается.
  */
-import type { GranumComponentThemeTokens, GranumThemeData, GranumTokenRef } from '../contract'
+import type { GranumComponentThemeTokens, GranumModeFallback, GranumThemeData, GranumTokenRef } from '../contract'
 import type { ComponentNode, ProviderNode } from './providerNode'
+import { themePairValue } from '../runtime/manifest'
 import { ThemeResolutionError } from './errors'
 import { ownsThemes } from './providerNode'
 import { DEFAULT_MODE, modeChain, themeModeOrder } from './themeData'
@@ -36,6 +37,12 @@ export interface GranumModeDefinition {
   readonly tokensRef?: GranumTokenRef | string
   readonly title?: string
   readonly colorScheme?: 'light' | 'dark'
+  /**
+   * Фолбэки `@supports` режима — ставятся после унаследованных от базы и
+   * перекрывают их по токену. Без них режим берёт фолбэки базы как есть, а
+   * они посчитаны от её значений, а не от своих.
+   */
+  readonly fallbacks?: readonly GranumModeFallback[]
 }
 
 export interface GranumModeActivation {
@@ -232,10 +239,6 @@ function materializePick(pick: ThemePick, owner: ProviderNode | undefined, theme
   return { id: pick.id, title: data.title, providerId: pick.providerId, data, chain: themeChain(owner, pick.id) }
 }
 
-function pairValue(template: string, theme: string, mode: string): string {
-  return template.replaceAll('{theme}', theme).replaceAll('{mode}', mode)
-}
-
 function themeModes(theme: ResolvedTheme, template: string): ResolvedMode[] {
   return themeModeOrder(theme.data).map((name) => {
     const mode = theme.data.modes[name]!
@@ -243,7 +246,7 @@ function themeModes(theme: ResolvedTheme, template: string): ResolvedMode[] {
       name,
       ...(mode.title !== undefined ? { title: mode.title } : {}),
       colorScheme: mode.colorScheme,
-      value: pairValue(template, theme.id, name),
+      value: themePairValue(template, theme.id, name),
       origin: 'theme' as const,
       ...(mode.extends !== undefined ? { extends: mode.extends } : {}),
     }
@@ -369,8 +372,8 @@ export function resolveThemes(
     if (fromTheme.some(mode => mode.name === name)) {
       throw new ThemeResolutionError(
         'activation-collision',
-        `'modes.define.${name}' has the name of a mode of theme '${theme.id}', so both activate with ${attribute}="${pairValue(template, theme.id, name)}"; give the application mode its own name.`,
-        pairValue(template, theme.id, name),
+        `'modes.define.${name}' has the name of a mode of theme '${theme.id}', so both activate with ${attribute}="${themePairValue(template, theme.id, name)}"; give the application mode its own name.`,
+        themePairValue(template, theme.id, name),
       )
     }
   }
@@ -384,7 +387,7 @@ export function resolveThemes(
       name,
       ...(definition.title !== undefined ? { title: definition.title } : {}),
       colorScheme: definition.colorScheme ?? base.colorScheme,
-      value: pairValue(template, theme.id, name),
+      value: themePairValue(template, theme.id, name),
       origin: 'define',
       extends: base.name,
     })

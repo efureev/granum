@@ -27,7 +27,13 @@ export function getThemeManifest(resolution: GranumResolution): GranumThemeManif
     defaultMode: themes.defaultMode ?? '',
     activation: { attribute: themes.activation.attribute, value: themes.activation.value },
     ...(themes.previews.length > 0
-      ? { previews: themes.previews.map(preview => ({ theme: { id: preview.theme.id, title: preview.theme.title }, modes: preview.modes.map(modeEntry) })) }
+      ? {
+          previews: themes.previews.map(preview => ({
+            theme: { id: preview.theme.id, title: preview.theme.title },
+            modes: preview.modes.map(modeEntry),
+            ...(preview.theme.data.extensions !== undefined ? { extensions: preview.theme.data.extensions } : {}),
+          })),
+        }
       : {}),
     ...(theme?.data.extensions !== undefined ? { extensions: theme.data.extensions } : {}),
   }
