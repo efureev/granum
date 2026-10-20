@@ -33,6 +33,7 @@ async function buildProvider(): Promise<string> {
   }))
   write(root, 'src/theme/tokens.css', ':root{--t-space:8px;--t-unused:1px}')
   write(root, 'src/themes/kit.json', JSON.stringify({ id: 'kit', title: 'Kit', root: {}, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#000' } } } }))
+  write(root, 'src/themes/slab.json', JSON.stringify({ id: 'slab', title: 'Slab', root: {}, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#eee' } }, dark: { colorScheme: 'dark', tokens: { 't-bg': '#111' } } } }))
   write(root, 'src/components/Card/Card.vue', `<template><div class="t-card p-4 bg-[var(--t-bg)]"><slot /></div></template>\n<style>.t-card{gap:var(--t-space)}</style>\n`)
   write(root, 'src/components/Card/index.ts', `export { default as Card } from './Card.vue'\n`)
   write(root, 'src/components/Panel/Panel.vue', `<script setup lang="ts">\nimport { Card } from '../Card/index.ts'\n</script>\n<template><section class="flex gap-2"><Card /></section></template>\n`)
@@ -50,7 +51,7 @@ async function buildProvider(): Promise<string> {
       defineGranumComponent(url('Panel'), { name: 'Panel', dependencies: ['Card'] }),
       defineGranumComponent(url('Table'), { name: 'Table' }),
     ],
-    theme: { tokensCss: 'theme/tokens.css', defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: 'themes/kit.json' } } },
+    theme: { tokensCss: 'theme/tokens.css', defaultTheme: 'kit', catalog: { kit: { title: 'Kit', data: 'themes/kit.json' }, slab: { title: 'Slab', data: 'themes/slab.json' } } },
   })
   await build({ root, configFile: false, logLevel: 'silent', plugins: [vue(), granumProvider({ provider, engine: testEngine(), log: () => {} })], build: { minify: false, rolldownOptions: { external: ['vue'] } } })
   return root
@@ -294,6 +295,33 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).toContain('--t-space')
     expect(app.css).toContain('.t-card')
     expect(app.css).not.toContain('.p-4{')
+  })
+
+  describe('css.previews: лист превью отдельно', () => {
+    const PREVIEW = '[data-theme="slab-dark"]'
+    const count = (css: string, text: string): number => css.split(text).length - 1
+
+    it('по умолчанию превью — в общем листе, модуль превью пуст', async () => {
+      const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'] }, `<template><div/></template>`, `import 'virtual:granum.css'\nimport 'virtual:granum/previews.css'`)
+      expect(count(app.css, PREVIEW)).toBe(1)
+    })
+
+    it('separate: в общем листе превью нет, оно в своём модуле — в слое themes, с порядком слоёв', async () => {
+      const shared = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`)
+      expect(shared.css).not.toContain('slab-')
+      expect(shared.css).toContain('[data-theme="kit-dark"]')
+
+      const sheet = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`, `import 'virtual:granum/previews/slab.css'`)
+      expect(sheet.css).toContain('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities')
+      expect(sheet.css).toMatch(/@layer granum\.themes \{[\s\S]*\[data-theme="slab-dark"\]/)
+      expect(sheet.css).not.toContain('kit-dark')
+    })
+
+    it('тема не из previews — ошибка сборки с перечнем превью', async () => {
+      await expect(buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`, `import 'virtual:granum/previews/kit.css'`))
+        .rejects
+        .toThrow(/'kit' is not a preview theme of this build \(previews: slab\)/)
+    })
   })
 
   it('срез слоя обёрнут в свой @layer, а не отдаёт голое тело', async () => {

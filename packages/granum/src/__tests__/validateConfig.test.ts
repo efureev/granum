@@ -38,7 +38,7 @@ const FULL: GranumConfig = {
     strictTokens: true,
     system: 'media',
   },
-  css: { layers: true, layerPrefix: 'ds', split: false },
+  css: { layers: true, layerPrefix: 'ds', split: false, previews: 'separate' },
   appSources: { dirs: ['src'], extensions: ['.vue'] },
   pruneTokens: { mode: 'on', keep: ['p-*', /^p-/], keepPrefixes: ['p-'] },
   js: { dts: 'src/granum.d.ts', guard: 'warn' },
@@ -107,6 +107,7 @@ describe('validateGranumConfig', () => {
     [{ providers: ['a'], engine, appSources: { dirs: 'src' } }, 'appSources'],
     [{ providers: ['a'], engine, js: { guard: 'loud' } }, 'js.guard'],
     [{ providers: ['a'], engine, css: { layerPrefix: '1x' } }, 'css.layerPrefix'],
+    [{ providers: ['a'], engine, css: { previews: 'lazy' } }, 'css.previews'],
   ])('%j → InvalidConfigError at %s', (config, path) => {
     try {
       validateGranumConfig(config)

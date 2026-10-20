@@ -39,7 +39,7 @@ const MODES_KEYS = keysOf<GranumModesInput>()(['names', 'define', 'activation', 
 const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme', 'fallbacks'])
 const ACTIVATION_KEYS = keysOf<GranumModeActivation>()(['attribute', 'value'])
 const TOKEN_REF_KEYS = keysOf<GranumTokenRef>()(['url', 'selector', 'as', 'strict'])
-const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split'])
+const CSS_KEYS = keysOf<GranumCssOptions>()(['layers', 'layerPrefix', 'split', 'previews'])
 const APP_SOURCES_KEYS = keysOf<GranumAppSources>()(['dirs', 'extensions'])
 const PRUNE_TOKENS_KEYS = keysOf<GranumPruneTokensOptions>()(['mode', 'keep', 'keepPrefixes'])
 const JS_KEYS = keysOf<GranumJsOptions>()(['dts', 'guard'])
@@ -288,5 +288,7 @@ export function validateGranumConfig(config: unknown): asserts config is GranumC
   assertSection(css, CSS_KEYS, 'css')
   if (css?.layerPrefix !== undefined && !/^[a-z][\w-]*$/i.test(String(css.layerPrefix)))
     throw new InvalidConfigError('css.layerPrefix', 'expected an identifier')
+  if (css?.previews !== undefined && css.previews !== 'inline' && css.previews !== 'separate')
+    throw new InvalidConfigError('css.previews', `expected 'inline' or 'separate'`)
   assertSection(config.report, REPORT_KEYS, 'report')
 }

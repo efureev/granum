@@ -23,6 +23,10 @@ declare module 'virtual:granum/layers/themes.css' {}
 declare module 'virtual:granum/layers/components.css' {}
 declare module 'virtual:granum/layers/utilities.css' {}
 
+/** Блоки тем превью при `css.previews: 'separate'` — все темы или одна. */
+declare module 'virtual:granum/previews.css' {}
+declare module 'virtual:granum/previews/*' {}
+
 declare module 'virtual:granum/themes' {
   import type { GranumThemeManifest } from '@feugene/granum/runtime'
 

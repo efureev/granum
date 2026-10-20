@@ -44,6 +44,14 @@ export interface GranumCssOptions {
    * виртуальным модулем — хешированных ассетов там нет вовсе.
    */
   readonly split?: boolean
+  /**
+   * Где лежат блоки тем превью (`previews`). `'inline'` (по умолчанию) — в слое
+   * `themes` общего листа: их платит каждая страница. `'separate'` — только в
+   * `virtual:granum/previews.css` (все темы превью) и
+   * `virtual:granum/previews/<id>.css` (одна): их импортирует страница, которая
+   * превью показывает. Модуль превью при `'inline'` пуст — блоки уже в общем листе.
+   */
+  readonly previews?: 'inline' | 'separate'
 }
 
 export interface GranumJsOptions {

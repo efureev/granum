@@ -27,6 +27,11 @@ export interface EmittedCss {
   readonly engine: EngineOutput
   /** План обрезки — при `mode: 'report' | 'on'`. */
   readonly prune: TokenPrunePlan | undefined
+  /**
+   * Слой `themes` каждой темы превью без обёрток, по id. При
+   * `css.previews: 'separate'` этих блоков нет в `layers.themes`.
+   */
+  readonly previews: Readonly<Record<string, string>>
   /** Классы, поданные движку: манифесты + safelist + приложение. */
   readonly engineInput: readonly string[]
   /** Записи safelist, покрытые статикой манифестов: та же находка, что у сборки провайдера. */
@@ -186,10 +191,16 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const enginePreflight = generated.preflight?.trim()
   const baseSections = [...sections.filter(s => s.source.kind === 'base').map(s => s.css), ...themeCss.base]
 
+  // Блоки превью уходят из общего листа целиком — по владельцу, а не по селектору.
+  const previewBlocks = new Set(themeCss.parts.previews.flatMap(part => part.blocks))
+  const themes = config.css?.previews === 'separate'
+    ? themeCss.themes.filter(block => !previewBlocks.has(block))
+    : themeCss.themes
+
   const layers: Record<LayerName, string> = {
     tokens: [...tokensSections, ...(themeCss.tokens !== undefined ? [themeCss.tokens] : [])].join('\n'),
     base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
-    themes: themeCss.themes.join('\n'),
+    themes: themes.join('\n'),
     components: componentCss.join('\n'),
     utilities: generated.css,
   }
@@ -199,6 +210,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     css: wrapLayers(layers, config.css ?? {}),
     engine: generated,
     prune,
+    previews: Object.fromEntries(themeCss.parts.previews.map(part => [part.id, part.blocks.join('\n')])),
     engineInput,
     safelistRedundant,
   }

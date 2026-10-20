@@ -30,11 +30,15 @@ import { validateGranumConfig } from './validateConfig'
 
 export const VIRTUAL_CSS = 'virtual:granum.css'
 export const VIRTUAL_LAYER_PREFIX = 'virtual:granum/layers/'
+export const VIRTUAL_PREVIEWS = 'virtual:granum/previews.css'
+export const VIRTUAL_PREVIEW_PREFIX = 'virtual:granum/previews/'
 export const VIRTUAL_COMPONENTS = 'virtual:granum/components'
 export const VIRTUAL_THEMES = 'virtual:granum/themes'
 
 const RESOLVED_CSS = `\0${VIRTUAL_CSS}`
 const RESOLVED_LAYER_PREFIX = `\0${VIRTUAL_LAYER_PREFIX}`
+const RESOLVED_PREVIEWS = `\0${VIRTUAL_PREVIEWS}`
+const RESOLVED_PREVIEW_PREFIX = `\0${VIRTUAL_PREVIEW_PREFIX}`
 const RESOLVED_COMPONENTS = `\0${VIRTUAL_COMPONENTS}`
 const RESOLVED_THEMES = `\0${VIRTUAL_THEMES}`
 /** Модули приложения, в коде которых ищутся импорты компонентов из корня пакета. */
@@ -388,6 +392,20 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
         throw new Error(`granum: unknown layer '${name}' (expected one of ${LAYER_NAMES.join(', ')})`)
       return wrapLayer((await emit()).layers, name, config.css ?? {}, { declareOrder: false })
     }
+    if (id === RESOLVED_PREVIEWS || id.startsWith(RESOLVED_PREVIEW_PREFIX)) {
+      const { previews } = await emit()
+      const ids = id === RESOLVED_PREVIEWS ? Object.keys(previews) : [id.slice(RESOLVED_PREVIEW_PREFIX.length).replace(/\.css$/, '')]
+      for (const preview of ids) {
+        if (!(preview in previews))
+          throw new Error(`granum: '${preview}' is not a preview theme of this build (previews: ${Object.keys(previews).join(', ') || '—'})`)
+      }
+      if (config.css?.previews !== 'separate')
+        return ''
+      // Порядок слоёв объявлен и здесь: лист превью, подключённый раньше общего,
+      // иначе завёл бы слой `themes` первым и поменял бы каскад.
+      const themes = ids.map(preview => previews[preview]).join('\n')
+      return wrapLayer({ tokens: '', base: '', themes, components: '', utilities: '' }, 'themes', config.css)
+    }
     if (id === RESOLVED_COMPONENTS) {
       const app = await prepare()
       return `${reexports(app).map(e => `export { ${e.name} } from '${e.from}'`).join('\n')}\n`
@@ -621,7 +639,7 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     async resolveId(source, importer) {
       if (source === VIRTUAL_CSS)
         return RESOLVED_CSS
-      if (source.startsWith(VIRTUAL_LAYER_PREFIX))
+      if (source.startsWith(VIRTUAL_LAYER_PREFIX) || source === VIRTUAL_PREVIEWS || source.startsWith(VIRTUAL_PREVIEW_PREFIX))
         return `\0${source}`
       if (source === VIRTUAL_COMPONENTS)
         return RESOLVED_COMPONENTS

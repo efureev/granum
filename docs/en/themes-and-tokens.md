@@ -169,6 +169,20 @@ system page or a portal. Every preview pair gets a full block: its own
 formulas go under the prefix of its pairs (`[data-theme^="paper-"]`). A preview never
 goes under `:root`, and token pruning cuts it the same way as the active theme.
 
+By default the preview blocks sit in the shared sheet, and every page pays for them.
+`css: { previews: 'separate' }` moves them into the modules
+`virtual:granum/previews.css` (all preview themes) and
+`virtual:granum/previews/<id>.css` (one) — imported only by the page that shows the
+preview:
+
+```ts
+// src/pages/themes/[slug].astro — and nowhere else
+import 'virtual:granum/previews.css'
+```
+
+A preview module carries the layer order declaration and puts the blocks into the
+`themes` layer, so the cascade is the same as with the shared sheet.
+
 ## An application's own theme
 
 `theme` also accepts a `GranumThemeData` object — complete data. Inheriting from a
