@@ -119,7 +119,9 @@ A token's value in a mode is assembled from layers, each overriding the previous
 
 A token declared in at least one mode gets a value in every mode: along the mode's
 `extends` chain, otherwise from the default mode. Such a value is a fallback: it does
-not override what another layer already gave the mode. One function computes the value
+not override what another layer already gave the mode. A value taken from the default
+mode brings that mode's `@supports` fallbacks for the token along, ahead of the mode's
+own. One function computes the value
 for CSS, the report and the CLI: `granum tokens <id:Name> --deep` shows the layer chain for
 each mode together with the theme and mode the value came from.
 

@@ -54,6 +54,19 @@ describe('данные темы (T-7 слой 1, T-10)', () => {
   })
 })
 
+describe('фолбэки режима', () => {
+  it('из режима по умолчанию — только по взятым у него токенам и раньше своих', () => {
+    const data = themeData('solo', {
+      light: { colorScheme: 'light', tokens: { 'p-bg': 'oklch(1 0 0)', 'p-fg': 'oklch(0 0 0)' }, fallbacks: [{ supports: 'x', tokens: { 'p-bg': '#fff', 'p-fg': '#000' } }] },
+      dark: { colorScheme: 'dark', tokens: { 'p-fg': '#eee' }, fallbacks: [{ supports: 'x', tokens: { 'p-bg': '#111' } }] },
+    })
+    const blocks = resolve(data).tokens.active!.fallbacks.get('dark')!
+    expect(blocks.map(block => [...block.tokens.keys()])).toEqual([['p-bg'], ['p-bg']])
+    expect(blocks.map(block => block.tokens.get('p-bg')!.effective)).toEqual(['#fff', '#111'])
+    expect(blocks[0]!.tokens.get('p-bg')!.layers[0]).toMatchObject({ theme: 'solo', mode: 'light' })
+  })
+})
+
 describe('токены компонентов (A-24)', () => {
   it('по токену: сначала режим и его предки, внутри — цепочка тем', () => {
     const r = resolve('ink')

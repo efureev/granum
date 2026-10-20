@@ -121,6 +121,14 @@ describe('каскад в браузере, которому нужен фолб
     expect(cascade(css, { root: 't-light', island: 't-dark', supports: [OLD] }).get('--p-bg')).toBe('#000000')
   })
 
+  it('токен, взятый из режима по умолчанию, приходит с его фолбэком — на корне, на острове и по системной схеме', async () => {
+    const css = await pageCss(themeData('t', { light, dark: { 'p-fg': '#eeeeee' } }), 'media')
+    expect(cascade(css, { root: 't-dark' }).get('--p-bg')).toBe('oklch(98% 0 0)')
+    expect(cascade(css, { root: 't-dark', supports: [OLD] }).get('--p-bg')).toBe('#fafafa')
+    expect(cascade(css, { root: 't-light', island: 't-dark', supports: [OLD] }).get('--p-bg')).toBe('#fafafa')
+    expect(cascade(css, { scheme: 'dark', supports: [OLD] }).get('--p-bg')).toBe('#fafafa')
+  })
+
   it('system: media — корень без атрибута при тёмной схеме берёт фолбэки тёмного режима', async () => {
     const dark = { colorScheme: 'dark' as const, tokens: { 'p-bg': 'oklch(20% 0 0)', 'p-fg': '#eeeeee' }, fallbacks: [{ supports: OLD, tokens: { 'p-bg': '#111111' } }] }
     const css = await pageCss(themeData('t', { light, dark }), 'media')

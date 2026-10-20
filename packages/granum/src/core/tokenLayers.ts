@@ -101,21 +101,30 @@ function modeValues(theme: ResolvedTheme, mode: string): Map<string, { value: st
  * из режима по умолчанию (T-10). Недостающее — запасной вариант: значение,
  * которое режиму уже дал другой слой (токены компонента под темой-объектом
  * приложения), им не перекрывается.
+ *
+ * Возвращает по режиму токены, взятые из режима по умолчанию: с ними к режиму
+ * приходят и фолбэки режима по умолчанию.
  */
-function applyThemeData(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[], source: 'theme' | 'app-theme'): void {
+function applyThemeData(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[], source: 'theme' | 'app-theme'): Map<string, Set<string>> {
   for (const [token, value] of Object.entries(theme.data.root))
     push(set.root, 'root', token, { source, value, theme: theme.id, mode: 'root' })
   const defaults = modeValues(theme, theme.data.defaultMode ?? DEFAULT_MODE)
+  const fromDefault = new Map<string, Set<string>>()
   for (const mode of modeNames) {
     const target = ensure(set.modes, mode, () => new Map())
     const own = modeValues(theme, mode)
+    const taken = new Set<string>()
     for (const [token, found] of defaults) {
-      if (!own.has(token) && !target.has(token))
+      if (!own.has(token) && !target.has(token)) {
         push(target, mode, token, { source, value: found.value, theme: theme.id, mode: found.mode })
+        taken.add(token)
+      }
     }
+    fromDefault.set(mode, taken)
     for (const [token, found] of own)
       push(target, mode, token, { source, value: found.value, theme: theme.id, mode: found.mode })
   }
+  return fromDefault
 }
 
 /**
@@ -148,15 +157,32 @@ function applyComponentTokens(set: ThemeTokenSet, theme: ResolvedTheme, modeName
   }
 }
 
-function applyFallbacks(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[]): void {
+/**
+ * Фолбэки режима — по его цепочке `extends`, предки первыми. Токен, взятый из
+ * режима по умолчанию, приходит с фолбэками режима по умолчанию — первыми, чтобы
+ * свои фолбэки режима их перекрывали: иначе браузер без фичи остался бы со
+ * значением, которого не понимает.
+ */
+function applyFallbacks(set: ThemeTokenSet, theme: ResolvedTheme, modeNames: readonly string[], fromDefault: ReadonlyMap<string, ReadonlySet<string>>): void {
+  const source = theme.providerId === APP_THEME_SOURCE ? 'app-theme' : 'theme'
+  const defaultChain = modeChain(theme.data, theme.data.defaultMode ?? DEFAULT_MODE).names
   for (const mode of modeNames) {
+    const chain = modeChain(theme.data, mode).names
+    const taken = fromDefault.get(mode)
+    const sources = [
+      ...[...defaultChain].reverse().filter(name => !chain.includes(name)).map(name => ({ name, takes: (token: string) => taken?.has(token) === true })),
+      ...[...chain].reverse().map(name => ({ name, takes: () => true })),
+    ]
     const blocks: FallbackBlock[] = []
-    for (const name of [...modeChain(theme.data, mode).names].reverse()) {
+    for (const { name, takes } of sources) {
       for (const fallback of theme.data.modes[name]?.fallbacks ?? []) {
         const tokens = new Map<string, TokenChain>()
-        for (const [token, value] of Object.entries(fallback.tokens))
-          push(tokens, mode, token, { source: theme.providerId === APP_THEME_SOURCE ? 'app-theme' : 'theme', value, theme: theme.id, mode: name })
-        blocks.push({ supports: fallback.supports, tokens })
+        for (const [token, value] of Object.entries(fallback.tokens)) {
+          if (takes(token))
+            push(tokens, mode, token, { source, value, theme: theme.id, mode: name })
+        }
+        if (tokens.size > 0)
+          blocks.push({ supports: fallback.supports, tokens })
       }
     }
     if (blocks.length > 0)
@@ -170,15 +196,16 @@ function collectThemeTokens(theme: ResolvedTheme, components: readonly Component
   const modeNames = Object.keys(theme.data.modes)
   // Тема-объект приложения — слой после токенов компонентов (A-27): приложение
   // вправе перекрасить компонент провайдера своими данными.
+  let fromDefault: Map<string, Set<string>>
   if (theme.providerId === APP_THEME_SOURCE) {
     applyComponentTokens(set, theme, modeNames, components)
-    applyThemeData(set, theme, modeNames, 'app-theme')
+    fromDefault = applyThemeData(set, theme, modeNames, 'app-theme')
   }
   else {
-    applyThemeData(set, theme, modeNames, 'theme')
+    fromDefault = applyThemeData(set, theme, modeNames, 'theme')
     applyComponentTokens(set, theme, modeNames, components)
   }
-  applyFallbacks(set, theme, modeNames)
+  applyFallbacks(set, theme, modeNames, fromDefault)
   return set
 }
 
