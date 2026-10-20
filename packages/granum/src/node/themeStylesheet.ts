@@ -18,7 +18,7 @@ import { planThemes } from '../core/resolveThemes'
 import { readCss } from './css'
 import { wrapLayers } from './emit'
 import { resolveInlinedCssSources } from './inlinedCss'
-import { loadProviderInputs, readComponentThemes, readPlannedThemeData } from './prepare'
+import { loadProviderInputs, materializeAppModes, readComponentThemes, readPlannedThemeData } from './prepare'
 import { emitThemeCss } from './themeCss'
 
 export interface ThemeStylesheetOptions {
@@ -39,12 +39,15 @@ export interface ThemeStylesheet {
   readonly resolution: GranumResolution
 }
 
+export type ThemeResolutionOptions = Omit<ThemeStylesheetOptions, 'css'>
+
 /**
- * Объектные провайдеры не сканируются: классы и CSS компонентов теме не нужны,
- * а токены `themesDir` читаются по `sourceUrl` дескриптора. Токены компонентов —
- * всех компонентов провайдеров, кроме доноров, подгруженных по зависимости.
+ * Резолюция только тем — без скана приложения и без движка. Объектные
+ * провайдеры не сканируются: классы и CSS компонентов теме не нужны, а токены
+ * `themesDir` читаются по `sourceUrl` дескриптора. Токены компонентов — всех
+ * компонентов провайдеров, кроме доноров, подгруженных по зависимости.
  */
-export async function emitThemeStylesheet(options: ThemeStylesheetOptions): Promise<ThemeStylesheet> {
+export function resolveThemeOnly(options: ThemeResolutionOptions): GranumResolution {
   const donors = new Set<string>()
   const inputs = loadProviderInputs({ providers: options.providers }, options.root, donors)
   const nodes = inputs.map(toProviderNode)
@@ -53,14 +56,19 @@ export async function emitThemeStylesheet(options: ThemeStylesheetOptions): Prom
     ...(options.previews !== undefined ? { previews: options.previews } : {}),
   }
   const plan = planThemes(nodes, choice)
-  const resolution = resolveGranum({
+  const modes = materializeAppModes(options.modes, options.root)
+  return resolveGranum({
     providers: inputs,
     components: nodes.filter(node => !donors.has(node.id)).map(node => ({ provider: node.id, names: 'all' as const })),
     ...choice,
-    ...(options.modes !== undefined ? { modes: options.modes } : {}),
+    ...(modes !== undefined ? { modes } : {}),
     themeData: readPlannedThemeData([plan.active, ...plan.previews], nodes),
     componentThemes: readComponentThemes(inputs.filter(input => !isLoadedManifest(input))),
   })
+}
+
+export async function emitThemeStylesheet(options: ThemeStylesheetOptions): Promise<ThemeStylesheet> {
+  const resolution = resolveThemeOnly(options)
 
   const sections = await Promise.all(resolveInlinedCssSources(resolution).map(async (source) => {
     try {

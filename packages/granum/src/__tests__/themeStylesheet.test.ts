@@ -1,15 +1,21 @@
 /**
  * CSS темы провайдера без приложения и движка (T-16): тот же порядок слоёв и
  * те же блоки, что у сборки приложения, — для подключения дизайн-системы без granum.
+ * Манифест режимов без сборки (T-17) — из той же резолюции тем.
  */
+import type { GranumConfig } from '../config'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
+import { prepareApp } from '../node/prepare'
+import { getThemeManifest, resolveThemeManifest } from '../node/themeManifest'
 import { emitThemeStylesheet } from '../node/themeStylesheet'
+import { granum } from '../vite/plugin'
 import { catalogProvider } from './helpers'
+import { testEngine } from './testEngine'
 
 /** Провайдер компонентов объектной формой: токены по темам — папкой у `config.ts`, раскладки `dist` нет. */
 function uiProvider(): ReturnType<typeof defineGranumProvider> {
@@ -46,5 +52,43 @@ describe('emitThemeStylesheet', () => {
     expect(sheet.layers.themes).toContain('[data-theme="ink-dim"] {')
     expect(sheet.layers.themes).not.toContain('[data-theme="ink-dark"] {')
     expect(sheet.layers.themes).toContain('[data-theme="paper-light"] {')
+  })
+
+  it('tokensRef режима приложения читается от root, как у сборки приложения', async () => {
+    const { root, provider } = catalogProvider()
+    writeFileSync(join(root, 'ocean.css'), ':root{--p-bg:#012}')
+    const sheet = await emitThemeStylesheet({ providers: [provider], theme: 'paper', modes: { define: { ocean: { extends: 'dark', tokensRef: 'ocean.css' } } }, root })
+    expect(sheet.layers.themes).toMatch(/\[data-theme="paper-ocean"\] \{[^}]*--p-bg: #012;/)
+  })
+})
+
+describe('resolveThemeManifest', () => {
+  function app(): { root: string, config: GranumConfig } {
+    const { root, provider } = catalogProvider()
+    return {
+      root,
+      config: {
+        engine: testEngine(),
+        providers: [provider, uiProvider()],
+        theme: 'ink',
+        previews: ['paper'],
+        modes: { names: ['light', 'dim', 'ocean'], define: { ocean: { extends: 'dim', title: 'Ocean', tokens: { 'p-bg': '#012' } } } },
+        appSources: { dirs: [] },
+      },
+    }
+  }
+
+  it('совпадает с манифестом сборки приложения, включая режимы приложения и превью', async () => {
+    const { root, config } = app()
+    const built = getThemeManifest((await prepareApp(config, root)).resolution)
+    expect(built.modes.map(mode => mode.value)).toEqual(['ink-light', 'ink-dim', 'ink-ocean'])
+    expect(built.previews?.map(preview => preview.theme.id)).toEqual(['paper'])
+    expect(resolveThemeManifest({ providers: config.providers, theme: config.theme!, previews: config.previews!, modes: config.modes!, root })).toEqual(built)
+  })
+
+  it('plugin.api.themeManifest отдаёт его до сборки', async () => {
+    const { root, config } = app()
+    const built = getThemeManifest((await prepareApp(config, root)).resolution)
+    expect(await granum(config, { log: () => {} }).api!.themeManifest(root)).toEqual(built)
   })
 })

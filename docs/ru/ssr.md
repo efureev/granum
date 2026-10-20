@@ -88,6 +88,19 @@ const script = createThemeScript({ manifest, nonce, cookie: 'granum-theme' })
 `<head>` HTML-точки входа. SSR-приложение вставляет строку само или обходится
 парой, которую пишет сервер.
 
+Хосту, который рисует страницы без HTML-точки входа (Astro, свой SSR-сервер), манифест
+нужен раньше, чем Vite начнёт сборку, — `virtual:granum/themes` ещё нет. Плагин отдаёт его
+через `api` из того же конфига, поэтому скрипт и CSS разойтись не могут:
+
+```ts
+const plugin = config.vite.plugins.find(p => p?.name === 'granum:app')
+const manifest = await plugin.api.themeManifest(projectRoot)
+const script = createThemeScript({ manifest, storageKey: 'gr-theme' })
+```
+
+Без плагина — `resolveThemeManifest({ providers, theme, modes, root })` из
+`@feugene/granum/node`: результат тот же, исходники приложения не сканируются.
+
 ## Клиент читает режим, а не выбирает заново
 
 ```ts

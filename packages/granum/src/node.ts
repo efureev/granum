@@ -58,8 +58,8 @@ export {
   readRegistry,
   readThemeDataFile,
 } from './node/themeFiles'
-export { getThemeManifest } from './node/themeManifest'
-export type { ThemeStylesheet, ThemeStylesheetOptions } from './node/themeStylesheet'
+export { getThemeManifest, resolveThemeManifest } from './node/themeManifest'
+export type { ThemeResolutionOptions, ThemeStylesheet, ThemeStylesheetOptions } from './node/themeStylesheet'
 export { emitThemeStylesheet } from './node/themeStylesheet'
 export type { PlanTokenPruneInput, PrunableSection, TokenKeepReason, TokenPrunePlan } from './node/tokenPrune'
 export { planTokenPrune } from './node/tokenPrune'

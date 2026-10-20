@@ -6,6 +6,8 @@
 import type { GranumResolution } from '../core/resolve'
 import type { ResolvedMode } from '../core/resolveThemes'
 import type { GranumModeEntry, GranumThemeManifest } from '../runtime/manifest'
+import type { ThemeResolutionOptions } from './themeStylesheet'
+import { resolveThemeOnly } from './themeStylesheet'
 
 function modeEntry(mode: ResolvedMode): GranumModeEntry {
   return {
@@ -29,4 +31,13 @@ export function getThemeManifest(resolution: GranumResolution): GranumThemeManif
       : {}),
     ...(theme?.data.extensions !== undefined ? { extensions: theme.data.extensions } : {}),
   }
+}
+
+/**
+ * Тот же манифест (T-17) без сборки и без скана приложения — для интеграций
+ * хоста, которым пара нужна раньше Vite: скрипт режима в `<head>` вставляется
+ * на этапе конфигурации.
+ */
+export function resolveThemeManifest(options: ThemeResolutionOptions): GranumThemeManifest {
+  return getThemeManifest(resolveThemeOnly(options))
 }

@@ -89,6 +89,20 @@ The plugin inserts it itself with `granum(config, { themeScript: true })` — fi
 `<head>` of the HTML entry. An SSR application inserts the string itself or does with
 the pair the server writes.
 
+A host that renders pages without an HTML entry (Astro, its own SSR server) needs the
+manifest before Vite starts the build — `virtual:granum/themes` does not exist yet. The plugin
+hands it over through its `api`, from the same config, so the script and the CSS cannot
+disagree:
+
+```ts
+const plugin = config.vite.plugins.find(p => p?.name === 'granum:app')
+const manifest = await plugin.api.themeManifest(projectRoot)
+const script = createThemeScript({ manifest, storageKey: 'gr-theme' })
+```
+
+Without the plugin — `resolveThemeManifest({ providers, theme, modes, root })` from
+`@feugene/granum/node`: the same result, the app sources are not scanned.
+
 ## The client reads the mode instead of picking it
 
 ```ts

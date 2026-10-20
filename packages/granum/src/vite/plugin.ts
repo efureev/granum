@@ -9,6 +9,7 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 import type { GranumConfig } from '../config'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
+import type { GranumThemeManifest } from '../runtime/manifest'
 import type { GranumThemeScriptOptions } from '../runtime/script'
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -23,7 +24,7 @@ import { resolveInlinedCssSources, resolveProviderPath } from '../node/inlinedCs
 import { MANIFEST_FILE_NAME } from '../node/manifest'
 import { prepareApp } from '../node/prepare'
 import { buildReportFromBundles } from '../node/report'
-import { getThemeManifest } from '../node/themeManifest'
+import { getThemeManifest, resolveThemeManifest } from '../node/themeManifest'
 import { createThemeScript } from '../runtime/script'
 import { validateGranumConfig } from './validateConfig'
 
@@ -62,6 +63,17 @@ export interface GranumPluginOptions {
    */
   readonly themeScript?: boolean | Omit<GranumThemeScriptOptions, 'manifest'>
   readonly log?: (line: string) => void
+}
+
+/** `plugin.api` — то, что интеграции хоста читают у плагина до сборки. */
+export interface GranumPluginApi {
+  /**
+   * Манифест режимов сборки (T-17) — тот же, что `virtual:granum/themes`, но
+   * доступный на этапе конфигурации хоста: скрипт режима в `<head>` строится
+   * раньше, чем Vite начнёт сборку. `root` — корень приложения; без него —
+   * корень Vite, а до разрешения его конфига — текущий каталог процесса.
+   */
+  readonly themeManifest: (root?: string) => Promise<GranumThemeManifest>
 }
 
 /** Слова, которые нельзя взять в `import { … }` без `as`, хотя по форме это идентификатор. */
@@ -205,7 +217,7 @@ function assetNameOf(layer: LayerName): string {
   return `granum.${layer}.css`
 }
 
-export function granum(config: GranumConfig, options: GranumPluginOptions = {}): Plugin {
+export function granum(config: GranumConfig, options: GranumPluginOptions = {}): Plugin<GranumPluginApi> {
   validateGranumConfig(config)
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
 
@@ -495,8 +507,19 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
     return owner.name === name ? { key: `${pkg}:${name}` } : { key: `${pkg}:${owner.name}`, part: name! }
   }
 
+  const api: GranumPluginApi = {
+    themeManifest: async (at?: string) => resolveThemeManifest({
+      providers: config.providers,
+      ...(config.theme !== undefined ? { theme: config.theme } : {}),
+      ...(config.previews !== undefined ? { previews: config.previews } : {}),
+      ...(config.modes !== undefined ? { modes: config.modes } : {}),
+      root: at ?? root,
+    }),
+  }
+
   return {
     name: 'granum:app',
+    api,
     // `pre`: иначе `vite:resolve` разрешит `<pkg>/components/<Name>` раньше нас,
     // и guard импортов не увидит ни одного спецификатора.
     enforce: 'pre',
