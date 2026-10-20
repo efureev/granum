@@ -342,7 +342,7 @@ interface EngineOutput {
 | тема каталога неполна по реестру | `InvalidProviderError` (`theme-incomplete`, список токенов) | сборка провайдера |
 | подпапка `themesDir` не slug темы, файл не slug режима | `InvalidProviderError` (`invalid-theme-dir`) | сборка провайдера |
 | `tokenDefinitions` / `tokenDefinitionsRef` в дескрипторе | `InvalidProviderError` (`legacy-token-definitions`) | регистрация |
-| неизвестная тема, неизвестный режим, два владельца каталога, владелец не найден, совпавшие пары активации, данные темы не переданы резолверу | `ThemeResolutionError` (`unknown-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `activation-collision`, `theme-data-missing`) | подготовка и резолюция |
+| неизвестная тема, неизвестный режим, режимы или превью без активной темы, два владельца каталога, владелец не найден, совпавшие пары активации, данные темы не переданы резолверу | `ThemeResolutionError` (`unknown-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `theme-missing`, `activation-collision`, `theme-data-missing`) | подготовка и резолюция |
 | данные активной темы или превью не читаются или не проходят форму | `ThemeDataError` (провайдер, тема, путь) | подготовка приложения |
 | `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
 | правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |

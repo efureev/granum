@@ -105,12 +105,15 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
   // По умолчанию скан `src`; `appSources: undefined` — сборка без него.
   const { appSources, ...rest } = config
   const sources = 'appSources' in config ? appSources : { dirs: ['src'] }
+  // Оба режима — только там, где есть каталог тем (`@t/kit`): без темы режимам
+  // некуда лечь, и сборка это называет ошибкой.
+  const themed = (config.providers ?? ['@t/kit']).includes('@t/kit')
   const logs: string[] = []
   await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), modes: { names: ['light', 'dark'] }, ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), ...(themed ? { modes: { names: ['light', 'dark'] } } : {}), ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
     build: { minify: false, ...vite.build },
     ...(vite.css ? { css: vite.css } : {}),
   })

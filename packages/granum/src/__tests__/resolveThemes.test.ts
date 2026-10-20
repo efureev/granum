@@ -36,6 +36,19 @@ function reasonOf(run: () => unknown): string | undefined {
   return undefined
 }
 
+describe('значения тем и режимов молча не теряются', () => {
+  const none = [makeManifest('@p/plain')]
+
+  it('без активной темы непустые modes и previews — theme-missing', () => {
+    expect(reasonOf(() => resolve({ modes: { tokenOverrides: { root: { 'x-radius': '4px' } } } }, none))).toBe('theme-missing')
+    expect(reasonOf(() => resolve({ modes: { names: ['dark'] } }, none))).toBe('theme-missing')
+    expect(reasonOf(() => resolve({ modes: { define: { sepia: { extends: 'light' } } } }, none))).toBe('theme-missing')
+    expect(reasonOf(() => resolve({ previews: [themeData('x', { light: { a: '1' } })] }, none))).toBe('theme-missing')
+    // Пустой набор, активация, системная схема и строгость значений не несут.
+    expect(reasonOf(() => resolve({ modes: { names: [], tokenOverrides: {}, define: {}, activation: { attribute: 'data-mode' }, system: 'media', strictTokens: true }, previews: [] }, none))).toBeUndefined()
+  })
+})
+
 describe('активная тема (A-22, A-23)', () => {
   it('по умолчанию — defaultTheme владельца, источник default', () => {
     const r = resolve()

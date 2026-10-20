@@ -113,6 +113,7 @@ manifest is produced only by the build.
 | `ThemeResolutionError (unknown-mode)` | a name in `modes.names` or a `modes.tokenOverrides` key is neither a theme mode nor a `define` |
 | `ThemeResolutionError (multiple-theme-owners)` | two providers of the graph declare a theme catalog; hand the extra themes to the application as an object in `theme` |
 | `ThemeResolutionError (theme-owner-missing)` | a package has component tokens per theme, and its theme-owner dependency does not resolve from the package directory; install it or add it to `providers` |
+| `ThemeResolutionError (theme-missing)` | `modes.names`, `modes.define`, `modes.tokenOverrides` or `previews` are set, but there is no active theme: no provider of the graph declares a catalog and `theme` is not an object. The values have nowhere to go; add the theme owner or drop those options |
 | `ThemeResolutionError (activation-collision)` | two pairs coincide: a `define` named like a theme mode, a `modes.activation.value` template without `{mode}`, or preview pairs equal to active ones |
 | `ThemeDataError` | the data JSON of the active theme or a preview cannot be read or fails the schema; the field path is in the message. Rebuild the provider |
 | `InvalidProviderError (theme-incomplete)` | at provider build: a theme does not set registry tokens; the list looks like `dark:xh-bg`, `root:xh-radius` |

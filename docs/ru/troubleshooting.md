@@ -111,6 +111,7 @@
 | `ThemeResolutionError (unknown-mode)` | имя в `modes.names` или ключ `modes.tokenOverrides` — не режим темы и не `define` |
 | `ThemeResolutionError (multiple-theme-owners)` | каталог тем объявляют два провайдера графа; лишние темы отдайте приложению объектом в `theme` |
 | `ThemeResolutionError (theme-owner-missing)` | у пакета есть токены компонентов по темам, а его зависимость-владелец тем не разрешается из каталога пакета; установите её или добавьте в `providers` |
+| `ThemeResolutionError (theme-missing)` | заданы `modes.names`, `modes.define`, `modes.tokenOverrides` или `previews`, а активной темы нет: ни один провайдер графа не объявляет каталог, и `theme` — не объект. Значениям некуда лечь; добавьте владельца тем или уберите эти опции |
 | `ThemeResolutionError (activation-collision)` | две пары совпали: имя `define` равно режиму темы, шаблон `modes.activation.value` без `{mode}` или пары превью совпали с активной |
 | `ThemeDataError` | JSON данных активной темы или превью не читается или не проходит схему; путь до поля — в сообщении. Пересоберите провайдер |
 | `InvalidProviderError (theme-incomplete)` | на сборке провайдера: тема не задаёт токены реестра; перечень — `dark:xh-bg`, `root:xh-radius` |

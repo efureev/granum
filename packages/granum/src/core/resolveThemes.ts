@@ -346,6 +346,19 @@ export function resolveThemes(
   }
 
   if (!theme) {
+    // Без темы режимам и превью некуда лечь: их значения молча не теряются.
+    const carrying = [
+      ...(modesInput.names?.length ? ['modes.names'] : []),
+      ...(Object.keys(modesInput.define ?? {}).length > 0 ? ['modes.define'] : []),
+      ...(Object.keys(modesInput.tokenOverrides ?? {}).length > 0 ? ['modes.tokenOverrides'] : []),
+      ...(plan.previews.length > 0 ? ['previews'] : []),
+    ]
+    if (carrying.length > 0) {
+      throw new ThemeResolutionError(
+        'theme-missing',
+        `${carrying.join(', ')} ${carrying.length > 1 ? 'are' : 'is'} set, but the build has no active theme: no provider in the graph declares a theme catalog and 'theme' is not a theme object — the values would land nowhere.`,
+      )
+    }
     return {
       theme: undefined,
       themeSource: undefined,

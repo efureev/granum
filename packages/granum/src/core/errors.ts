@@ -217,6 +217,7 @@ export type ThemeResolutionReason
     | 'unknown-mode'
     | 'multiple-theme-owners'
     | 'theme-owner-missing'
+    | 'theme-missing'
     | 'activation-collision'
     | 'theme-data-missing'
 
