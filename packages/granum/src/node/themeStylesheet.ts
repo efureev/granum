@@ -36,7 +36,25 @@ export interface ThemeStylesheet {
   /** Слои `tokens`, `base`, `themes` в обёртках `@layer` (или плоско при `css.layers: false`). */
   readonly css: string
   readonly layers: Readonly<Record<'tokens' | 'base' | 'themes', string>>
+  /** Слои `tokens` и `themes` по частям — для раздачи темы файлом на режим. */
+  readonly parts: ThemeStylesheetParts
   readonly resolution: GranumResolution
+}
+
+/**
+ * Тема по частям, плоско (T-16). Приложение подключает `root` и нужные режимы —
+ * `root` первым: фолбэки режима перекрывают формулы `root` при равной
+ * специфичности. Каждый режим самодостаточен: его блок несёт значения целиком,
+ * с унаследованными по `extends`, и обходится без файла базы. `:root` — только
+ * у режима по умолчанию. Слой `base` в части не входит — он в `layers.base`.
+ */
+export interface ThemeStylesheetParts {
+  /** Всё, что от режима не зависит: слой `tokens`, затем общий блок слоя `themes`. */
+  readonly root: string
+  /** По режиму сборки, в порядке режимов: блок пары, фолбэки `@supports`, медиазапрос системной схемы. */
+  readonly modes: Readonly<Record<string, string>>
+  /** По теме превью: её пары целиком (A-32). */
+  readonly previews: Readonly<Record<string, string>>
 }
 
 export type ThemeResolutionOptions = Omit<ThemeStylesheetOptions, 'css'>
@@ -85,5 +103,10 @@ export async function emitThemeStylesheet(options: ThemeStylesheetOptions): Prom
     themes: theme.themes.join('\n'),
   }
   const all: Record<LayerName, string> = { ...layers, components: '', utilities: '' }
-  return { css: wrapLayers(all, options.css ?? {}), layers, resolution }
+  const parts: ThemeStylesheetParts = {
+    root: [layers.tokens, ...theme.parts.shared].filter(Boolean).join('\n'),
+    modes: Object.fromEntries(theme.parts.modes.map(part => [part.name, part.blocks.join('\n')])),
+    previews: Object.fromEntries(theme.parts.previews.map(part => [part.id, part.blocks.join('\n')])),
+  }
+  return { css: wrapLayers(all, options.css ?? {}), layers, parts, resolution }
 }

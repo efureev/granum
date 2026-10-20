@@ -61,6 +61,48 @@ describe('emitThemeStylesheet', () => {
     expect(sheet.layers.themes).toContain('[data-theme="paper-light"] {')
   })
 
+  it('части: root без режимов, режим — его пара и фолбэки, :root — только у режима по умолчанию', async () => {
+    const { root, provider } = catalogProvider()
+    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'paper', previews: ['ink'], modes: { names: ['light', 'dark'], system: 'media' }, root })
+    const { parts } = sheet
+
+    expect(Object.keys(parts.modes)).toEqual(['light', 'dark'])
+    expect(parts.root).toContain('--p-radius: 6px;')
+    expect(parts.root).not.toMatch(/paper-(?:light|dark)/)
+    expect(parts.modes.light).toContain(':root, [data-theme="paper-light"] {')
+    expect(parts.modes.light).not.toContain('paper-dark')
+    expect(parts.modes.dark).toContain('[data-theme="paper-dark"] {')
+    expect(parts.modes.dark).toContain('--b-shadow: none;')
+    expect(parts.modes.dark).not.toMatch(/:root,|paper-light/)
+    expect(parts.modes.dark).toContain('@media (prefers-color-scheme: dark)')
+    expect(Object.keys(parts.previews)).toEqual(['ink'])
+    expect(parts.previews.ink).not.toContain(':root')
+
+    // Ничего не потеряно и не задвоено: те же строки, что у слоёв.
+    const lines = (css: string): string[] => css.split('\n').filter(line => line.trim()).sort()
+    expect(lines([parts.root, ...Object.values(parts.modes), ...Object.values(parts.previews)].join('\n')))
+      .toEqual(lines(`${sheet.layers.tokens}\n${sheet.layers.themes}`))
+  })
+
+  it('фолбэки режима — в его части, после блока пары', async () => {
+    const { root, provider } = catalogProvider()
+    const fallbacks = [{ supports: 'not (color: oklch(0 0 0))', tokens: { 'p-bg': 'navy' } }]
+    const sheet = await emitThemeStylesheet({
+      providers: [provider],
+      theme: 'paper',
+      modes: { names: ['light', 'dark', 'ocean'], define: { ocean: { extends: 'dark', tokens: { 'p-bg': '#012' }, fallbacks } } },
+      root,
+    })
+    const supports = [...sheet.layers.themes.matchAll(/@supports[^{]+\{[^@]*?\}\s*\}/g)].map(match => match[0])
+
+    expect(supports.length).toBeGreaterThan(0)
+    for (const block of supports) {
+      const owner = Object.entries(sheet.parts.modes).find(([, css]) => css.includes(block))
+      expect(owner, block).toBeDefined()
+      expect(owner![1].indexOf(block)).toBeGreaterThan(owner![1].indexOf(`[data-theme="paper-${owner![0]}"] {`))
+    }
+  })
+
   it('tokensRef режима приложения читается от root, как у сборки приложения', async () => {
     const { root, provider } = catalogProvider()
     writeFileSync(join(root, 'ocean.css'), ':root{--p-bg:#012}')

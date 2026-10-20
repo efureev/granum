@@ -201,6 +201,14 @@ import { provider } from './src/granum-provider/index.ts'
 const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate', root: process.cwd() })
 ```
 
+The same sheet comes in parts — `parts`: `root` (everything that does not depend
+on the mode) and `modes.<mode>` (the mode's pair with its fallbacks). Lay them out
+as files — `themes/<id>/root.css`, `themes/<id>/<mode>.css` — and an application
+takes `root` and only its own modes; its bundler joins them into one file. `root`
+goes first. Each mode is self-contained — inheritance by `extends` is already
+resolved in it — and only the default mode carries `:root`: an application without
+it gets the pair on `<html>` from the mode script or its markup.
+
 Tokens of companion packages are not in such a file: only an application build
 knows all the manifests. A `$`-prefixed key in a `themesDir` JSON file is a note
 for the reader (`"$comment"`), not a token.

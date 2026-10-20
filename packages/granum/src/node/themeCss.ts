@@ -23,6 +23,18 @@ export interface ThemeCss {
   readonly base: readonly string[]
   /** Блоки слоя `themes` по порядку. */
   readonly themes: readonly string[]
+  /**
+   * Те же блоки слоя `themes`, разложенные по владельцу: общий блок активной
+   * темы, режим (его блок, фолбэки, медиазапрос системной схемы) и тема превью.
+   * Порядок слоя от раскладки не меняется.
+   */
+  readonly parts: ThemeCssParts
+}
+
+export interface ThemeCssParts {
+  readonly shared: readonly string[]
+  readonly modes: readonly { readonly name: string, readonly blocks: readonly string[] }[]
+  readonly previews: readonly { readonly id: string, readonly blocks: readonly string[] }[]
 }
 
 type Keep = (token: string) => boolean
@@ -106,7 +118,14 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
   const attribute = themes.activation.attribute
   const base: string[] = []
   const blocks: string[] = []
+  const shared: string[] = []
+  const modeParts: { name: string, blocks: string[] }[] = []
+  const previewParts: { id: string, blocks: string[] }[] = []
   let tokensBlock: string | undefined
+  const push = (part: string[], ...css: string[]): void => {
+    blocks.push(...css)
+    part.push(...css)
+  }
 
   const addBase = (css: readonly string[] | undefined): void => {
     for (const text of css ?? []) {
@@ -120,25 +139,28 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     addBase(themes.theme.data.baseCss)
     const split = splitSet(active)
     tokensBlock = serializeBlock(':root', split.rootLiterals, keep)
-    const shared = serializeBlock(`:root, ${attributeSelector(attribute)}`, split.shared, keep)
-    if (shared)
-      blocks.push(shared)
+    const common = serializeBlock(`:root, ${attributeSelector(attribute)}`, split.shared, keep)
+    if (common)
+      push(shared, common)
     const selectorOf = (mode: ResolvedMode): string => {
       const own = attributeSelector(attribute, mode.value)
       return mode.name === themes.defaultMode ? `:root, ${own}` : own
     }
+    const partOf = (name: string): string[] => modeParts.find(part => part.name === name)!.blocks
+    for (const mode of themes.modes)
+      modeParts.push({ name: mode.name, blocks: [] })
     for (const mode of themes.modes) {
       const block = serializeBlock(selectorOf(mode), split.modeChains(mode.name), keep, mode.colorScheme)
       if (block)
-        blocks.push(block)
+        push(partOf(mode.name), block)
     }
     for (const mode of themes.modes)
-      blocks.push(...fallbackBlocks(active, mode, selectorOf(mode), keep))
+      push(partOf(mode.name), ...fallbackBlocks(active, mode, selectorOf(mode), keep))
     if (themes.system === 'media') {
       const dark = themes.modes.find(mode => mode.colorScheme === 'dark')
       const inner = dark ? serializeBlock(`:root:not(${attributeSelector(attribute)})`, split.modeChains(dark.name), keep, 'dark', '  ') : undefined
-      if (inner)
-        blocks.push(`@media (prefers-color-scheme: dark) {\n${inner}\n}`)
+      if (dark && inner)
+        push(partOf(dark.name), `@media (prefers-color-scheme: dark) {\n${inner}\n}`)
     }
   }
 
@@ -147,22 +169,24 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
     const set = tokens.previews[i]!
     addBase(preview.theme.data.baseCss)
     const split = splitSet(set)
+    const part: string[] = []
+    previewParts.push({ id: preview.theme.id, blocks: part })
     // Общая граница превью — пары темы по префиксу шаблона. Шаблон, где режим
     // стоит раньше темы, префикса не даёт: тогда формулы идут в блок каждой пары.
     const template = themes.activation.value
     const prefix = template.slice(0, template.indexOf('{mode}')).replaceAll('{theme}', preview.theme.id)
-    const shared = prefix ? serializeBlock(attributeSelector(attribute, prefix, '^='), split.shared, keep) : undefined
-    if (shared)
-      blocks.push(shared)
+    const common = prefix ? serializeBlock(attributeSelector(attribute, prefix, '^='), split.shared, keep) : undefined
+    if (common)
+      push(part, common)
     for (const mode of preview.modes) {
       const chains = [...split.rootLiterals, ...(prefix ? [] : split.shared), ...split.modeChains(mode.name)]
       const block = serializeBlock(attributeSelector(attribute, mode.value), chains, keep, mode.colorScheme)
       if (block)
-        blocks.push(block)
+        push(part, block)
     }
     for (const mode of preview.modes)
-      blocks.push(...fallbackBlocks(set, mode, attributeSelector(attribute, mode.value), keep))
+      push(part, ...fallbackBlocks(set, mode, attributeSelector(attribute, mode.value), keep))
   }
 
-  return { tokens: tokensBlock, base, themes: blocks }
+  return { tokens: tokensBlock, base, themes: blocks, parts: { shared, modes: modeParts, previews: previewParts } }
 }

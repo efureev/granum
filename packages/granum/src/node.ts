@@ -59,7 +59,7 @@ export {
   readThemeDataFile,
 } from './node/themeFiles'
 export { getThemeManifest, resolveThemeManifest } from './node/themeManifest'
-export type { ThemeResolutionOptions, ThemeStylesheet, ThemeStylesheetOptions } from './node/themeStylesheet'
+export type { ThemeResolutionOptions, ThemeStylesheet, ThemeStylesheetOptions, ThemeStylesheetParts } from './node/themeStylesheet'
 export { emitThemeStylesheet } from './node/themeStylesheet'
 export type { PlanTokenPruneInput, PrunableSection, TokenKeepReason, TokenPrunePlan } from './node/tokenPrune'
 export { planTokenPrune } from './node/tokenPrune'
