@@ -12,6 +12,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { extractLayerBlocks } from '@feugene/granum/node'
 import { auditFailure } from './audit-dist.mjs'
+import { pageStylesheets } from './lib/pageStylesheets.mjs'
 
 const dir = process.cwd()
 const assetsDir = join(dir, 'dist', 'assets')
@@ -47,6 +48,16 @@ if (expected.css) {
 }
 if (expected.js)
   match(read('.js'), expected.js, 'js')
+// CSS каждой HTML-страницы сборки — листы, которые она подключает. Склейка всех
+// ассетов не различит, что одна страница получила лист, а другая нет.
+if (expected.pages) {
+  const pages = {}
+  for (const page of readdirSync(join(dir, 'dist')).filter(f => f.endsWith('.html'))) {
+    const html = readFileSync(join(dir, 'dist', page), 'utf8')
+    pages[page] = pageStylesheets(html).map(name => readFileSync(join(assetsDir, name), 'utf8')).join('\n')
+  }
+  expected.pages(pages, (ok, message) => { if (!ok) failures.push(`страницы: ${message}`) })
+}
 if (expected.report) {
   const reportPath = join(dir, 'dist', 'granum-report.json')
   if (!existsSync(reportPath)) {

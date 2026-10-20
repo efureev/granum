@@ -191,6 +191,8 @@ preview:
 import 'virtual:granum/previews.css'
 ```
 
+The stand is `apps/app-theme-previews`: two pages, only one gets the preview sheet.
+
 A preview module carries the layer order declaration and puts the blocks into the
 `themes` layer, so the cascade is the same as with the shared sheet.
 
