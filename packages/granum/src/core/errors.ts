@@ -214,6 +214,8 @@ export class InvalidProviderError extends GranumError {
 
 export type ThemeResolutionReason
   = | 'unknown-theme'
+    | 'duplicate-theme'
+    | 'default-theme'
     | 'unknown-mode'
     | 'multiple-theme-owners'
     | 'theme-owner-missing'

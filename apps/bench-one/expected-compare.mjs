@@ -27,12 +27,14 @@ export default {
     '@supports not (color:color-mix(in oklab,red,blue))|:root',
   ],
   /**
-   * Их место заняли блоки пар `heavy-light`/`heavy-dark` и общий блок формул
-   * под `[data-theme]`: формула, одинаковая во всех режимах, пересчитывается на
-   * каждом острове, а не наследуется готовой от корня.
+   * Их место заняли блоки пар `heavy-light`/`heavy-dark` и режим по умолчанию
+   * под `:where(:root)`: нулевая специфичность корня не даёт ему перебить пару
+   * другой темы, подключённой своим листом. Общий блок формул стоит на списке
+   * пар темы и в множестве правил сливается с их блоками: формула, одинаковая
+   * во всех режимах, пересчитывается на каждом острове.
    */
   onlyGranum: [
-    '|[data-theme]',
+    '|:where(:root)',
     '|[data-theme=heavy-light]',
     '|[data-theme=heavy-dark]',
     '@supports not (color:color-mix(in oklab,red,blue))|[data-theme=heavy-light]',

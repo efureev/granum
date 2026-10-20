@@ -7,7 +7,7 @@ export default {
   purpose: 'два режима темы в CSS и манифест тем для рантайма',
   css: {
     present: [
-      { what: 'режим по умолчанию под :root и своей парой', css: ':root,[data-theme=paper-light]{' },
+      { what: 'режим по умолчанию под :where(:root) и своей парой', css: ':where(:root),[data-theme=paper-light]{' },
       { what: 'color-scheme в блоке режима', css: 'color-scheme:light;--th-accent:#2563eb' },
       { what: 'токен компонента для light', css: '--x-tokenized:red' },
       { what: 'токен компонента для dark — уже в CSS', css: '--x-tokenized:yellow' },
@@ -30,8 +30,8 @@ export default {
     ],
   },
   report: (report, check) => {
-    check(report.themes.theme === 'paper' && report.themes.themeSource === 'default', `theme: ${report.themes.theme} (${report.themes.themeSource})`)
-    check(report.themes.modes.join(',') === 'light,dark', `modes: ${report.themes.modes}`)
-    check(report.themes.modesSource === 'explicit', report.themes.modesSource)
+    check(report.themes.defaultTheme === 'paper' && report.themes.themeSource === 'provider', `theme: ${report.themes.defaultTheme} (${report.themes.themeSource})`)
+    check(report.themes.themes[0]?.modes.join(',') === 'light,dark', `modes: ${report.themes.themes[0]?.modes}`)
+    check(report.themes.themes[0]?.modesSource === 'explicit', report.themes.themes[0]?.modesSource)
   },
 }

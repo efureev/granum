@@ -9,9 +9,9 @@ export default {
   },
   css: {
     present: [
-      { what: 'режим по умолчанию под :root и своей парой', css: ':root,[data-theme=paper-light]{' },
+      { what: 'режим по умолчанию под :where(:root) и своей парой', css: ':where(:root),[data-theme=paper-light]{' },
       { what: 'тёмный режим своей парой', css: '[data-theme=paper-dark]{' },
-      { what: 'формула root под общей границей', css: ':root,[data-theme]{--td-button-bg:var(--th-accent)' },
+      { what: 'формула root под общей границей — списком пар темы', css: ':where(:root),[data-theme=paper-light],[data-theme=paper-dark]{--td-button-bg:var(--th-accent)' },
       { what: 'литерал root темы в слое tokens', css: '--th-radius:6px' },
       { what: 'токен кнопки для paper-dark', css: '--td-button-shadow:none' },
       { what: 'вариант dark: по паре тёмного режима', css: '[data-theme=paper-dark] .dark\\:underline' },
@@ -27,8 +27,7 @@ export default {
     present: [{ what: 'манифест тем с парой тёмного режима', js: 'paper-dark' }],
   },
   report: (report, check) => {
-    check(report.themes.theme === 'paper' && report.themes.themeSource === 'provider', `theme: ${report.themes.theme} (${report.themes.themeSource})`)
-    check(report.themes.modes.join(',') === 'light,dark', `modes: ${report.themes.modes}`)
-    check(report.themes.previews.length === 0, `previews: ${report.themes.previews}`)
+    check(report.themes.defaultTheme === 'paper' && report.themes.themeSource === 'provider', `theme: ${report.themes.defaultTheme} (${report.themes.themeSource})`)
+    check(report.themes.themes.map(theme => `${theme.id}:${theme.modes.join('+')}`).join(',') === 'paper:light+dark', `themes: ${JSON.stringify(report.themes.themes)}`)
   },
 }

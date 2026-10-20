@@ -4,9 +4,9 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import config from './granum.config.ts'
 
-// Две страницы: лист превью получает только `previews.html`.
+// Две страницы: лист `ink` модулем получает только `previews.html`.
 export default defineConfig({
-  base: '/app-theme-previews/',
+  base: '/app-theme-sheets/',
   plugins: [vue(), granum(config)],
   build: {
     rolldownOptions: {

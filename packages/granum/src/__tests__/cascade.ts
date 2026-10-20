@@ -2,8 +2,8 @@
  * Каскад кастомных свойств для тестов слоёв темы: какое значение токена получит
  * элемент в браузере с заданными условиями `@supports` и системной схемой.
  * Понимает только то, что выводит сборщик тем: правила, `@supports`,
- * `@media (prefers-color-scheme: …)` и селекторы из `:root`, `:not(…)` и
- * атрибутов. Остальное — ошибка: молча не совпавший селектор доказал бы что угодно.
+ * `@media (prefers-color-scheme: …)` и селекторы из `:root`, `:not(…)`,
+ * `:where(…)` и атрибутов. Остальное — ошибка: молча не совпавший селектор доказал бы что угодно.
  */
 
 export interface CascadeAt {
@@ -81,9 +81,10 @@ function parseRules(css: string, at: CascadeAt): Rule[] {
 type Simple
   = | { readonly kind: 'root' }
     | { readonly kind: 'not', readonly inner: readonly Simple[] }
+    | { readonly kind: 'where', readonly inner: readonly Simple[] }
     | { readonly kind: 'attr', readonly op?: '=' | '^=', readonly value?: string }
 
-/** Составной селектор по простым: `:root`, `:not(…)`, атрибут активации. */
+/** Составной селектор по простым: `:root`, `:not(…)`, `:where(…)`, атрибут активации. */
 function parseCompound(selector: string, attribute: string): Simple[] {
   const out: Simple[] = []
   let rest = selector
@@ -93,9 +94,10 @@ function parseCompound(selector: string, attribute: string): Simple[] {
       rest = rest.slice(':root'.length)
       continue
     }
-    if (rest.startsWith(':not(')) {
+    if (rest.startsWith(':not(') || rest.startsWith(':where(')) {
+      const kind = rest.startsWith(':not(') ? 'not' : 'where'
       const end = rest.indexOf(')')
-      out.push({ kind: 'not', inner: parseCompound(rest.slice(':not('.length, end), attribute) })
+      out.push({ kind, inner: parseCompound(rest.slice(`:${kind}(`.length, end), attribute) })
       rest = rest.slice(end + 1)
       continue
     }
@@ -115,6 +117,8 @@ function matchesSimple(simple: Simple, element: Element): boolean {
     return element.root
   if (simple.kind === 'not')
     return !matches(simple.inner, element)
+  if (simple.kind === 'where')
+    return matches(simple.inner, element)
   if (element.value === undefined)
     return false
   if (simple.op === undefined)
@@ -126,9 +130,9 @@ function matches(compound: readonly Simple[], element: Element): boolean {
   return compound.every(simple => matchesSimple(simple, element))
 }
 
-/** Все простые селектора здесь — уровня класса: специфичность — их число, `:not` — по аргументу. */
+/** Все простые селектора здесь — уровня класса: специфичность — их число, `:not` — по аргументу, `:where` — ноль. */
 function weight(compound: readonly Simple[]): number {
-  return compound.reduce((sum, simple) => sum + (simple.kind === 'not' ? weight(simple.inner) : 1), 0)
+  return compound.reduce((sum, simple) => sum + (simple.kind === 'not' ? weight(simple.inner) : simple.kind === 'where' ? 0 : 1), 0)
 }
 
 /** Победители слоя по свойству: выше специфичность, при равной — позже в исходнике. */

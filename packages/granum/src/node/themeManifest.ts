@@ -1,7 +1,8 @@
 /**
- * Манифест тем для рантайма: активная тема, её режимы с парами,
- * атрибут и шаблон активации, пары превью — из той же резолюции, из которой эмитится CSS. От
- * селекции компонентов не зависит.
+ * Манифест тем для рантайма: темы сборки с режимами и парами, основная тема,
+ * атрибут и шаблон активации — из той же резолюции, из которой эмитится CSS.
+ * От селекции компонентов не зависит; адрес листа дополнительной темы
+ * приносит тот, кто лист выпустил, — плагин сборки.
  */
 import type { GranumResolution } from '../core/resolve'
 import type { ResolvedMode } from '../core/resolveThemes'
@@ -18,31 +19,34 @@ function modeEntry(mode: ResolvedMode): GranumModeEntry {
   }
 }
 
-export function getThemeManifest(resolution: GranumResolution): GranumThemeManifest {
+export interface ThemeManifestOptions {
+  /** Адрес листа дополнительной темы по id; `undefined` — адреса нет (манифест до сборки). */
+  readonly href?: (theme: string) => string | undefined
+}
+
+export function getThemeManifest(resolution: GranumResolution, options: ThemeManifestOptions = {}): GranumThemeManifest {
   const { themes } = resolution
-  const theme = themes.theme
   return {
-    theme: { id: theme?.id ?? '', title: theme?.title ?? '' },
-    modes: themes.modes.map(modeEntry),
-    defaultMode: themes.defaultMode ?? '',
+    themes: themes.themes.map((entry) => {
+      const href = entry.isDefault ? undefined : options.href?.(entry.theme.id)
+      return {
+        id: entry.theme.id,
+        title: entry.theme.title,
+        modes: entry.modes.map(modeEntry),
+        defaultMode: entry.defaultMode,
+        ...(href !== undefined ? { href } : {}),
+        ...(entry.theme.data.extensions !== undefined ? { extensions: entry.theme.data.extensions } : {}),
+      }
+    }),
+    defaultTheme: themes.default?.theme.id ?? '',
     activation: { attribute: themes.activation.attribute, value: themes.activation.value },
-    ...(themes.previews.length > 0
-      ? {
-          previews: themes.previews.map(preview => ({
-            theme: { id: preview.theme.id, title: preview.theme.title },
-            modes: preview.modes.map(modeEntry),
-            ...(preview.theme.data.extensions !== undefined ? { extensions: preview.theme.data.extensions } : {}),
-          })),
-        }
-      : {}),
-    ...(theme?.data.extensions !== undefined ? { extensions: theme.data.extensions } : {}),
   }
 }
 
 /**
  * Тот же манифест без сборки и без скана приложения — для интеграций
- * хоста, которым пара нужна раньше Vite: скрипт режима в `<head>` вставляется
- * на этапе конфигурации.
+ * хоста, которым пара нужна раньше Vite: скрипт в `<head>` вставляется на
+ * этапе конфигурации. Адресов листов в нём нет: ассетов ещё нет.
  */
 export function resolveThemeManifest(options: ThemeResolutionOptions): GranumThemeManifest {
   return getThemeManifest(resolveThemeOnly(options))

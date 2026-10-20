@@ -31,14 +31,16 @@ import { renderToString } from '@vue/server-renderer'
 
 ## Режим выбирает сервер
 
-Тема выбрана на сборке, и значения всех её режимов уже лежат в CSS. Переключение
-режима — это пара в атрибуте корня: `data-theme="slate-dark"`. Значения пар знает
-только сборка, и в рантайм они приезжают манифестом:
+Темы выбраны на сборке: значения основной лежат в общем листе, дополнительных — в
+их листах. Переключение темы и режима — это пара в атрибуте корня:
+`data-theme="slate-dark"`. Значения пар и адреса листов знает только сборка, и в
+рантайм они приезжают манифестом:
 
 ```ts
 import manifest from 'virtual:granum/themes'
 
-manifest.modes
+manifest.defaultTheme // 'slate'
+manifest.themes[0].modes
 // [{ name: 'light', colorScheme: 'light', value: 'slate-light' },
 //  { name: 'dark',  colorScheme: 'dark',  value: 'slate-dark' }]
 ```
@@ -50,16 +52,18 @@ manifest.modes
 
 ```ts
 // src/entry-server.ts
-import { modeFromCookie, themeRootAttributes } from '@feugene/granum/runtime'
+import { themeFromCookie, themeRootAttributes, themeSheetLink } from '@feugene/granum/runtime'
 
-const mode = modeFromCookie(manifest, request.headers.cookie)
-const attrs = mode ? themeRootAttributes(manifest, mode.name) : {}   // { 'data-theme': 'slate-dark' }
+const chosen = themeFromCookie(manifest, request.headers.cookie)
+const attrs = chosen ? themeRootAttributes(manifest, { theme: chosen.theme.id, mode: chosen.mode.name }) : {} // { 'data-theme': 'slate-dark' }
+const link = chosen && themeSheetLink(manifest, chosen.theme.id) // <link> листа дополнительной темы; у основной — undefined
 ```
 
 Выбор пользователя доезжает до сервера cookie: на клиенте его пишет
-`createCookieStorage()`, сервер читает `modeFromCookie`. Имя, которого нет среди
-режимов сборки, `modeFromCookie` не возвращает: блоков CSS под него не
-эмитировано. Приложению во фрейме чужого сайта нужен `sameSite: 'none'` — такую
+`createCookieStorage()`, сервер читает `themeFromCookie`. Ключ, который не называет
+режим выбираемой темы сборки, `themeFromCookie` не возвращает: блоков CSS под него
+нет. Для дополнительной темы сервер ставит в `<head>` и `<link>` её листа —
+порядок относительно общего листа не важен, каскад от него не зависит. Приложению во фрейме чужого сайта нужен `sameSite: 'none'` — такую
 cookie хранилище пишет с `Secure`, без которого браузер её отклоняет; `secure: true`
 добавляет атрибут и при других значениях.
 
@@ -76,8 +80,10 @@ cookie — нет и выбора.
 
 Статическому приложению пару ставит инлайн-скрипт в `<head>` — раньше, чем браузер
 нарисует первый кадр. Скрипт пары, уже выставленной сервером, не трогает; иначе
-берёт режим из cookie (если задано её имя), из `localStorage`, по системной схеме
-и, наконец, режим по умолчанию.
+берёт выбор из cookie (если задано её имя), из `localStorage`, по системной схеме
+основной темы и, наконец, её режим по умолчанию. Для дополнительной темы он сначала
+вставляет `<link rel="stylesheet" blocking="render">` её листа, а тему без адреса
+листа не выбирает: пара без листа дала бы значения основной темы.
 
 ```ts
 import { createThemeScript } from '@feugene/granum/runtime'
@@ -111,8 +117,10 @@ injectScript('head-inline', createThemeScriptCode({ manifest, storageKey: 'gr-th
 
 `createThemeScriptCode` — тот же код без тега `<script>`.
 
-Без плагина — `resolveThemeManifest({ providers, theme, modes, root })` из
+Без плагина — `resolveThemeManifest({ providers, themes, activation, root })` из
 `@feugene/granum/node`: результат тот же, исходники приложения не сканируются.
+Адресов листов в таком манифесте нет — ассетов ещё нет, — поэтому дополнительную
+тему такой скрипт не выберет; корень с её парой ставит сервер вместе с `<link>`.
 
 ## Клиент читает режим, а не выбирает заново
 
@@ -122,8 +130,10 @@ const controller = createThemeController(manifest, { storage: createCookieStorag
 ```
 
 Контроллер, поднятый поверх уже выставленной пары, узнаёт по ней режим и корень
-не трогает, поэтому первый клиентский кадр совпадает с серверным. Хранит он имя
-режима, а не пару: смена темы на сборке не сбрасывает выбор пользователя. Читать
+не трогает, поэтому первый клиентский кадр совпадает с серверным; лист
+дополнительной темы, вставленный сервером, он находит и не дублирует. Хранит он не
+пару, а ключ выбора: у основной темы — имя режима, поэтому смена основной темы на
+сборке не сбрасывает выбор пользователя. Читать
 выбор из `localStorage` в обход сервера не нужно: если сервер отдал один режим,
 а клиент переключит на другой, получится ровно та вспышка, от которой SSR и уходят.
 

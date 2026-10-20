@@ -96,8 +96,9 @@ for (const name of ['render', 'ROOT_TAG', 'themeManifest', 'readActiveMode', 'ro
   check(ssr[name] !== undefined, `серверный бандл не экспортирует ${name}`)
 
 const manifest = ssr.themeManifest
-check(manifest.theme.id === expected.theme, `тема манифеста: ${manifest.theme.id}, ожидалась ${expected.theme}`)
-const pairs = Object.fromEntries(manifest.modes.map(mode => [mode.name, mode.value]))
+const main = manifest.themes.find(theme => theme.id === manifest.defaultTheme)
+check(manifest.defaultTheme === expected.theme, `тема манифеста: ${manifest.defaultTheme}, ожидалась ${expected.theme}`)
+const pairs = Object.fromEntries(main.modes.map(mode => [mode.name, mode.value]))
 check(JSON.stringify(pairs) === JSON.stringify(expected.modes), `режимы манифеста: ${JSON.stringify(pairs)}, ожидались ${JSON.stringify(expected.modes)}`)
 
 // 2. Шаблон и подстановка ------------------------------------------------------
@@ -177,7 +178,7 @@ for (const [key, want] of Object.entries(expected.expectRender)) {
 
   // И наоборот: переключение действительно меняет состояние, то есть проверка
   // выше не проходит просто потому, что контроллер ничего не умеет.
-  const other = manifest.modes.map(m => m.name).find(name => name !== want.mode)
+  const other = main.modes.map(m => m.name).find(name => name !== want.mode)
   controller.setMode(other)
   check(
     JSON.stringify([...root.attributes].sort()) !== before,

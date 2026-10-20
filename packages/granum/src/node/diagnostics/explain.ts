@@ -124,7 +124,7 @@ export function granumExplain(app: PreparedApp, target: string): ExplainReport {
 
   // Токены компонента по теме и режиму: значение, которое он дал, и итог после слоёв приложения.
   const tokens: ExplainTokenContribution[] = []
-  const active = resolution.tokens.active
+  const active = resolution.tokens.default
   const scopes: [string, ReadonlyMap<string, TokenChain>][] = active ? [['root', active.root], ...active.modes] : []
   for (const [mode, chains] of scopes) {
     const own: ExplainTokenContribution['tokens'][number][] = []

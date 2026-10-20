@@ -25,7 +25,7 @@ export default defineGranumConfig({
     '@granum-fixtures/simple',
     '@granum-fixtures/heavy',
   ],
-  modes: { names: ['light', 'dark'] },
+  themes: [{ theme: 'heavy', modes: ['light', 'dark'] }],
   components: [
     '@granum-fixtures/extra-simple:XgQuick',
     '@granum-fixtures/heavy:XhCard',

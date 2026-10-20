@@ -2,7 +2,7 @@ import type { InlineConfig } from 'vite'
 import type { GranumConfig } from '../config'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { build, createBuilder } from 'vite'
@@ -105,15 +105,15 @@ async function buildApp(providerRoot: string, config: Omit<GranumConfig, 'provid
   // По умолчанию скан `src`; `appSources: undefined` — сборка без него.
   const { appSources, ...rest } = config
   const sources = 'appSources' in config ? appSources : { dirs: ['src'] }
-  // Оба режима — только там, где есть каталог тем (`@t/kit`): без темы режимам
-  // некуда лечь, и сборка это называет ошибкой.
+  // Оба режима — только там, где есть каталог тем (`@t/kit`): без каталога тема
+  // по id не найдётся, и сборка это называет ошибкой.
   const themed = (config.providers ?? ['@t/kit']).includes('@t/kit')
   const logs: string[] = []
   await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), ...(themed ? { modes: { names: ['light', 'dark'] } } : {}), ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
+    plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), ...(themed ? { themes: [{ theme: 'kit', modes: ['light', 'dark'] }] } : {}), ...rest, ...(sources ? { appSources: sources } : {}) }, { log: l => logs.push(l) })],
     build: { minify: false, ...vite.build },
     ...(vite.css ? { css: vite.css } : {}),
   })
@@ -300,30 +300,91 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.css).not.toContain('.p-4{')
   })
 
-  describe('css.previews: лист превью отдельно', () => {
-    const PREVIEW = '[data-theme="slab-dark"]'
-    const count = (css: string, text: string): number => css.split(text).length - 1
+  describe('дополнительная тема — своим листом', () => {
+    const THEMES = [{ theme: 'kit', default: true, modes: ['light', 'dark'] }, { theme: 'slab', modes: ['light', 'dark'] }]
 
-    it('по умолчанию превью — в общем листе, модуль превью пуст', async () => {
-      const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'] }, `<template><div/></template>`, `import 'virtual:granum.css'\nimport 'virtual:granum/previews.css'`)
-      expect(count(app.css, PREVIEW)).toBe(1)
-    })
-
-    it('separate: в общем листе превью нет, оно в своём модуле — в слое themes, с порядком слоёв', async () => {
-      const shared = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`)
+    it('в общем листе её нет; модуль листа — в слое themes, с порядком слоёв', async () => {
+      const shared = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES }, `<template><div/></template>`)
       expect(shared.css).not.toContain('slab-')
       expect(shared.css).toContain('[data-theme="kit-dark"]')
 
-      const sheet = await buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`, `import 'virtual:granum/previews/slab.css'`)
+      const sheet = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES }, `<template><div/></template>`, `import 'virtual:granum/themes/slab.css'`)
       expect(sheet.css).toContain('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities')
       expect(sheet.css).toMatch(/@layer granum\.themes \{[\s\S]*\[data-theme="slab-dark"\]/)
       expect(sheet.css).not.toContain('kit-dark')
     })
 
-    it('тема не из previews — ошибка сборки с перечнем превью', async () => {
-      await expect(buildApp(providerRoot, { components: ['@t/kit:Card'], previews: ['slab'], css: { previews: 'separate' } }, `<template><div/></template>`, `import 'virtual:granum/previews/kit.css'`))
+    it('основная тема и тема не из сборки — ошибка с подсказкой', async () => {
+      await expect(buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES }, `<template><div/></template>`, `import 'virtual:granum/themes/kit.css'`))
         .rejects
-        .toThrow(/'kit' is not a preview theme of this build \(previews: slab\)/)
+        .toThrow(/'kit' is the default theme of this build — its blocks are in virtual:granum\.css/)
+      await expect(buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES }, `<template><div/></template>`, `import 'virtual:granum/themes/none.css'`))
+        .rejects
+        .toThrow(/'none' is not an additional theme of this build \(additional themes: slab\)/)
+    })
+
+    it('на сборке лист — ассет с хешем, адрес — в манифесте; в HTML ссылки нет', async () => {
+      const entry = `import 'virtual:granum.css'\nimport manifest from 'virtual:granum/themes'\nconsole.log(JSON.stringify(manifest))`
+      const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES }, `<template><div/></template>`, entry)
+      const asset = app.cssFiles.find(file => /^granum-theme-slab-[\w-]+\.css$/.test(file))
+      expect(asset).toBeDefined()
+      expect(app.js).toContain(`/assets/${asset}`)
+      expect(app.cssOf(asset!)).toMatch(/@layer granum\.themes \{[\s\S]*\[data-theme="slab-dark"\]/)
+      expect(app.cssOf(asset!)).not.toContain('kit-')
+      expect(app.html).not.toContain('granum-theme-')
+      // У основной темы адреса нет: её блоки в общем листе.
+      expect(app.js).not.toMatch(/granum-theme-kit/)
+    })
+
+    /** Сборка со скриптом до первого кадра: страницы — пути HTML-входов. */
+    async function buildWithScript(base: string, pages: readonly string[]): Promise<string> {
+      const root = mkdtempSync(join(tmpdir(), 'granum-script-'))
+      mkdirSync(join(root, 'node_modules/@t'), { recursive: true })
+      symlinkSync(providerRoot, join(root, 'node_modules/@t/kit'), 'dir')
+      symlinkSync(join(process.cwd(), '../../node_modules/vue'), join(root, 'node_modules/vue'), 'dir')
+      for (const page of pages)
+        write(root, page, `<!doctype html><html><head></head><body><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>`)
+      write(root, 'src/main.ts', `import 'virtual:granum.css'\nimport manifest from 'virtual:granum/themes'\nconsole.log(JSON.stringify(manifest))\n`)
+      write(root, 'src/App.vue', `<template><div/></template>`)
+      await build({
+        root,
+        base,
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [vue(), granum({ providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'], themes: THEMES }, { log: () => {}, themeScript: true })],
+        build: { minify: false, rolldownOptions: { input: Object.fromEntries(pages.map(page => [page.replace(/\W/g, '_'), join(root, page)])) } },
+      })
+      return root
+    }
+
+    /** Адрес листа темы из скрипта до первого кадра на странице. */
+    const scriptHref = (html: string, theme: string): string | undefined => new RegExp(`${theme}:"([^"]+)"`).exec(html)?.[1]
+
+    it('скрипт до первого кадра: адрес листа — тот же ассет, что в манифесте', async () => {
+      const root = await buildWithScript('/app/', ['index.html'])
+      const href = scriptHref(readFileSync(join(root, 'dist/index.html'), 'utf8'), 'slab')
+      expect(href).toMatch(/^\/app\/assets\/granum-theme-slab-[\w-]+\.css$/)
+      expect(existsSync(join(root, 'dist', href!.slice('/app/'.length)))).toBe(true)
+      const js = readdirSync(join(root, 'dist/assets')).filter(f => f.endsWith('.js')).map(f => readFileSync(join(root, 'dist/assets', f), 'utf8')).join('\n')
+      expect(js).toContain(href!.slice('/app/'.length))
+    })
+
+    it('относительный base: адрес в скрипте — от страницы, и для страницы в подкаталоге', async () => {
+      const root = await buildWithScript('./', ['index.html', 'docs/page.html'])
+      for (const page of ['index.html', 'docs/page.html']) {
+        const href = scriptHref(readFileSync(join(root, 'dist', page), 'utf8'), 'slab')
+        expect(href, page).toMatch(/^\.{1,2}\/.*granum-theme-slab-[\w-]+\.css$/)
+        expect(existsSync(join(root, 'dist', dirname(page), href!)), `${page}: ${href}`).toBe(true)
+      }
+    })
+
+    it('размеры общего листа в отчёте не зависят от того, выпущен ли лист дополнительной темы', async () => {
+      const report = { file: 'granum-report.json' }
+      const without = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES, report }, `<template><div/></template>`)
+      const withSheet = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: THEMES, report }, `<template><div/></template>`, `import 'virtual:granum.css'\nimport manifest from 'virtual:granum/themes'\nconsole.log(JSON.stringify(manifest))`)
+      expect(withSheet.cssFiles.some(file => file.startsWith('granum-theme-slab-'))).toBe(true)
+      expect(withSheet.report.sizes.themes).toEqual(without.report.sizes.themes)
+      expect(withSheet.report.sizes.total).toEqual(without.report.sizes.total)
     })
   })
 
@@ -339,7 +400,7 @@ describe('granum() с настоящим Vite', async () => {
     it('ассет на каждый непустой слой, ссылки в порядке слоёв, объявление порядка одно', async () => {
       const app = await buildApp(
         providerRoot,
-        { components: ['@t/kit:Card'], modes: { names: ['light', 'dark'] }, css: { split: true } },
+        { components: ['@t/kit:Card'], themes: [{ theme: 'kit', modes: ['light', 'dark'] }], css: { split: true } },
         `<template><div class="p-4"/></template>`,
       )
       const layerFiles = app.cssFiles.filter(f => /^granum\.[a-z]+-/.test(f))
@@ -408,7 +469,7 @@ describe('granum() с настоящим Vite', async () => {
     it('без split — один ассет со всеми слоями', async () => {
       const app = await buildApp(
         providerRoot,
-        { components: ['@t/kit:Card'], modes: { names: ['light', 'dark'] } },
+        { components: ['@t/kit:Card'], themes: [{ theme: 'kit', modes: ['light', 'dark'] }] },
         `<template><div class="p-4"/></template>`,
       )
       expect(app.cssFiles.filter(f => f.startsWith('granum.'))).toEqual([])
@@ -649,6 +710,7 @@ describe('granum() с настоящим Vite', async () => {
       configResolved: (config: unknown) => void
       generateBundle: (this: { environment: { name: string, config: { consumer: 'client' | 'server' } } }, options: unknown, bundle: unknown) => void
       closeBundle: () => Promise<void>
+      transformIndexHtml: { handler: (html: string, ctx: { path?: string, bundle?: Record<string, unknown> }) => Promise<unknown> }
     }
 
     /** Каталог приложения для настоящих сборок: провайдер и vue — симлинками. */
@@ -664,6 +726,19 @@ describe('granum() с настоящим Vite', async () => {
     }
 
     const appConfig = { providers: ['@t/kit'], engine: testEngine(), appSources: { dirs: ['src'] }, components: ['@t/kit:Card'] }
+
+    it('скрипт до первого кадра на сборке без бандла (пререндер хоста): dev-адресов нет, тема без адреса не выбирается', async () => {
+      const root = appRoot()
+      const hooks = granum(
+        { ...appConfig, themes: [{ theme: 'kit', default: true, modes: ['light', 'dark'] }, { theme: 'slab', modes: ['light', 'dark'] }] },
+        { log: () => {}, themeScript: true },
+      ) as unknown as Hooks
+      hooks.configResolved({ root, base: '/', command: 'build', build: { outDir: 'dist' } })
+      const tags = JSON.stringify(await hooks.transformIndexHtml.handler('<!doctype html><html><head></head><body></body></html>', { path: '/index.html' }))
+      expect(tags).toContain('kit-light')
+      expect(tags).not.toContain('@granum-theme')
+      expect(tags).not.toContain('slab')
+    })
 
     /**
      * Инстанс держит состояние одной сборки: резолюцию, эмиссию, «отчёт

@@ -4,7 +4,7 @@
  */
 import type { GranumProviderInput } from './contract'
 import type { ComponentSelection } from './core/resolveSelection'
-import type { GranumModesInput, GranumThemeChoice } from './core/resolveThemes'
+import type { GranumActivation, GranumThemeConfig } from './core/resolveThemes'
 import type { GranumEngine } from './engine/types'
 
 export type GranumPruneMode = 'off' | 'report' | 'on'
@@ -44,14 +44,6 @@ export interface GranumCssOptions {
    * виртуальным модулем — хешированных ассетов там нет вовсе.
    */
   readonly split?: boolean
-  /**
-   * Где лежат блоки тем превью (`previews`). `'inline'` (по умолчанию) — в слое
-   * `themes` общего листа: их платит каждая страница. `'separate'` — только в
-   * `virtual:granum/previews.css` (все темы превью) и
-   * `virtual:granum/previews/<id>.css` (одна): их импортирует страница, которая
-   * превью показывает. Модуль превью при `'inline'` пуст — блоки уже в общем листе.
-   */
-  readonly previews?: 'inline' | 'separate'
 }
 
 export interface GranumJsOptions {
@@ -90,15 +82,17 @@ export interface GranumConfig {
   /** `'all'`, список или `'imports'` — по импортам в `appSources`. По умолчанию `'all'`. */
   readonly components?: ComponentSelection | 'imports'
   /**
-   * Активная тема — одна на сборку: id каталога владельца тем (`'slate'`),
-   * квалифицированный id (`'@acme/tokens:slate'`) или тема-объект приложения.
-   * По умолчанию — `defaultTheme` владельца каталога.
+   * Темы сборки. Запись — тема (id каталога `'slate'`, квалифицированный
+   * `'@acme/tokens:slate'` или тема-объект приложения) или
+   * `{ theme, default?, modes? }`. Основная — ровно одна (`default: true`; у
+   * единственной — без пометки): её блоки в общем листе и под `:root`.
+   * Остальные — каждая своим листом: `virtual:granum/themes/<id>.css`, на
+   * сборке — ассет с адресом в манифесте `virtual:granum/themes`. По умолчанию —
+   * `defaultTheme` владельца каталога.
    */
-  readonly theme?: GranumThemeChoice
-  /** Темы для показа рядом с активной полными блоками пар — дизайн-система, портал. */
-  readonly previews?: readonly GranumThemeChoice[]
-  /** Режимы активной темы: набор, режимы приложения, активация, точечные значения. */
-  readonly modes?: GranumModesInput
+  readonly themes?: readonly GranumThemeConfig[]
+  /** Как корень выбирает пару: атрибут, шаблон значения, системная схема — общие на все темы. */
+  readonly activation?: GranumActivation
   /**
    * Движок утилит — инстанс, а не имя и не опции. Выбор реализации и её
    * настройка принадлежат приложению: `windEngine()` из

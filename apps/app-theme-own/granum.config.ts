@@ -12,11 +12,13 @@ import { loadTheme } from './loadTheme.ts'
 export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/themed-ds', '@granum-fixtures/themed-companion'],
-  theme: loadTheme(new URL('./src/theme/', import.meta.url)),
-  modes: {
-    names: ['light', 'dark', 'sepia'],
-    define: { sepia: { extends: 'light', title: 'Сепия', tokens: { 'th-bg': '#f4ecd8' } } },
-    tokenOverrides: { root: { 'th-font': 'Inter, sans-serif' } },
-  },
+  themes: [{
+    theme: loadTheme(new URL('./src/theme/', import.meta.url)),
+    modes: {
+      names: ['light', 'dark', 'sepia'],
+      define: { sepia: { extends: 'light', title: 'Сепия', tokens: { 'th-bg': '#f4ecd8' } } },
+      tokenOverrides: { root: { 'th-font': 'Inter, sans-serif' } },
+    },
+  }],
   appSources: { dirs: ['src'] },
 })

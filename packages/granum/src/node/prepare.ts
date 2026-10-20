@@ -9,7 +9,7 @@ import type { GranumComponentThemeTokens, GranumProvider, GranumProviderInput, G
 import type { ProviderNode } from '../core/providerNode'
 import type { GranumResolution } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
-import type { GranumModeDefinition, GranumModesInput, ThemePick } from '../core/resolveThemes'
+import type { GranumModeDefinition, GranumThemeConfig, GranumThemeModes, ThemePick } from '../core/resolveThemes'
 import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
 import type { ProviderEngineDecision } from './dialects'
@@ -22,7 +22,7 @@ import { DuplicateProviderIdError, ThemeDataError, ThemeResolutionError, TokenPa
 import { ownerOf, ownsThemes, toProviderNode, uniqueDeclarers } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
-import { APP_THEME_SOURCE, planThemes } from '../core/resolveThemes'
+import { APP_THEME_SOURCE, normalizeThemeEntry, planThemes } from '../core/resolveThemes'
 import { checkThemeData } from '../core/themeData'
 import { scanAppSources } from './appSources'
 import { parseCssTokenBlocks, tokenSetFromCssSync } from './cssTokens'
@@ -219,7 +219,7 @@ export async function scanProviderInputs(inputs: readonly GranumProviderInput[],
  * `modes.define[*].tokensRef` → литеральные `tokens`: относительный путь
  * считается от корня приложения; литеральные `tokens` важнее файла.
  */
-export function materializeAppModes(modes: GranumModesInput | undefined, root: string): GranumModesInput | undefined {
+export function materializeAppModes(modes: GranumThemeModes | undefined, root: string): GranumThemeModes | undefined {
   if (!modes?.define)
     return modes
   let changed = false
@@ -261,8 +261,24 @@ export function materializeAppModes(modes: GranumModesInput | undefined, root: s
   return changed ? { ...modes, define } : modes
 }
 
+/** Записи `themes` с материализованными `tokensRef` режимов; без файлов — как есть. */
+export function materializeThemes(themes: readonly GranumThemeConfig[] | undefined, root: string): readonly GranumThemeConfig[] | undefined {
+  if (!themes)
+    return themes
+  let changed = false
+  const out = themes.map((config) => {
+    const entry = normalizeThemeEntry(config)
+    const modes = materializeAppModes(entry.modes, root)
+    if (modes === entry.modes)
+      return config
+    changed = true
+    return { theme: entry.theme, default: entry.default, modes: modes! }
+  })
+  return changed ? out : themes
+}
+
 /**
- * Данные тем, которые собирает сборка: активная и превью из каталога.
+ * Данные тем, которые собирает сборка: темы каталога из `themes`.
  * Остальные темы каталога не читаются.
  */
 export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], providers: readonly ProviderNode[]): Record<string, Record<string, GranumThemeData>> {
@@ -383,19 +399,15 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
       components = inputs.map(providerIdOf).filter(id => !donors.has(id)).map(provider => ({ provider, names: 'all' as const }))
   }
 
-  const modes = materializeAppModes(config.modes, root)
+  const themes = materializeThemes(config.themes, root)
   const nodes = inputs.map(toProviderNode)
-  const plan = planThemes(nodes, {
-    ...(config.theme !== undefined ? { theme: config.theme } : {}),
-    ...(config.previews !== undefined ? { previews: config.previews } : {}),
-  })
+  const plan = planThemes(nodes, themes !== undefined ? { themes } : {})
   const resolution = resolveGranum({
     providers: inputs,
     ...(components !== undefined ? { components } : {}),
-    ...(config.theme !== undefined ? { theme: config.theme } : {}),
-    ...(config.previews !== undefined ? { previews: config.previews } : {}),
-    ...(modes ? { modes } : {}),
-    themeData: readPlannedThemeData([plan.active, ...plan.previews], nodes),
+    ...(themes !== undefined ? { themes } : {}),
+    ...(config.activation !== undefined ? { activation: config.activation } : {}),
+    themeData: readPlannedThemeData(plan.themes.map(planned => planned.pick), nodes),
     componentThemes: readComponentThemes(inputs),
   })
   for (const w of resolution.warnings) {

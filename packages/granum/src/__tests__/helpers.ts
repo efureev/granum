@@ -1,6 +1,6 @@
 import type { GranumConfig } from '../config'
 import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumLoadedManifest, GranumManifest, GranumManifestComponent, GranumProvider, GranumThemeData } from '../contract'
-import type { GranumModesInput } from '../core/resolveThemes'
+import type { GranumThemeModes } from '../core/resolveThemes'
 import type { GranumEngine } from '../engine/types'
 import type { PreparedApp } from '../node/prepare'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -161,6 +161,6 @@ export function catalogProvider(options: {
  * Все режимы темы и режимы приложения — явным `modes.names`. Без него сборка
  * берёт только режим по умолчанию, а тестам слоёв и эмиссии нужны все.
  */
-export function allModes(theme: GranumThemeData, modes: GranumModesInput = {}): GranumModesInput {
+export function allModes(theme: GranumThemeData, modes: GranumThemeModes = {}): GranumThemeModes {
   return modes.names ? modes : { ...modes, names: [...Object.keys(theme.modes), ...Object.keys(modes.define ?? {})] }
 }

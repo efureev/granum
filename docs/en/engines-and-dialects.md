@@ -191,7 +191,7 @@ What an implementation owes:
   changes — compute it with `vocabularyFingerprint` or guarantee that rule
   yourself;
 - **the dark mode variant from the input**: `input.darkSelector` is the pairs of the
-  active theme's modes with `colorScheme: 'dark'` (`[data-theme="slate-dark"]`); an engine
+  modes of all build themes with `colorScheme: 'dark'` (`[data-theme="slate-dark"], [data-theme="clay-dark"]`); an engine
   with a `dark:` variant builds it from this selector, and without the field — by its own
   default. The fingerprint does not depend on the selector: it comes as input, not as an option.
 

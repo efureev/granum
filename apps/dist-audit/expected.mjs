@@ -43,7 +43,7 @@ export default {
     check(report.selection.map(s => s.key).join(',') === '@granum-fixtures/mini-ds:XxCard', `selection: ${report.selection.map(s => s.key)}`)
     check(report.classes.unmatched.length === 0, `unmatched: ${JSON.stringify(report.classes.unmatched)}`)
     check(report.tokens.undefined.length === 0, `undefined tokens: ${report.tokens.undefined}`)
-    check(report.themes.modes.join(',') === 'light', `modes: ${report.themes.modes}`)
+    check(report.themes.themes[0]?.modes.join(',') === 'light', `modes: ${report.themes.themes[0]?.modes}`)
     check(report.prune?.mode === 'on', `prune mode: ${report.prune?.mode}`)
     // Ровно половина объявленного пакетом: пять токенов из десяти.
     check(report.prune.removable.join(' ') === 'xxx-accent xxx-accent-fg xxx-font-sm xxx-muted xxx-space-1', `removable: ${report.prune.removable}`)

@@ -1,7 +1,7 @@
 /**
- * Активная тема и её режимы: владелец каталога, выбор темы,
- * набор режимов с `define`, активация и превью. Значения токенов считает
- * `tokenLayers` — здесь только то, ЧТО собирается.
+ * Темы сборки и их режимы: владелец каталога, список тем с основной,
+ * набор режимов каждой темы с `define`, общая активация. Значения токенов
+ * считает `tokenLayers` — здесь только то, ЧТО собирается.
  */
 import type { GranumComponentThemeTokens, GranumModeFallback, GranumThemeData, GranumTokenRef } from '../contract'
 import type { ComponentNode, ProviderNode } from './providerNode'
@@ -43,33 +43,45 @@ export interface GranumModeDefinition {
   readonly fallbacks?: readonly GranumModeFallback[]
 }
 
-export interface GranumModeActivation {
-  /** Атрибут на корне. По умолчанию `data-theme`. */
-  readonly attribute?: string
-  /** Шаблон значения с `{theme}` и `{mode}`. По умолчанию `{theme}-{mode}`. */
-  readonly value?: string
-}
-
-export interface GranumModesInput {
+/** Режимы одной темы сборки. */
+export interface GranumThemeModes {
   /** `undefined` — режим по умолчанию темы плюс `define`; `[]` — режимов нет. */
   readonly names?: readonly string[]
   readonly define?: Readonly<Record<string, GranumModeDefinition>>
-  readonly activation?: GranumModeActivation
   /** `root` — режимонезависимые токены, остальные ключи — режимы. Ключи токенов без `--`. */
   readonly tokenOverrides?: Readonly<Record<string, Readonly<Record<string, string>>>>
   /** Override токена, которого нет ни в данных темы, ни в токенах компонентов, отбрасывается. */
   readonly strictTokens?: boolean
-  /** `media` — тёмный режим по `prefers-color-scheme`, пока атрибут не выставлен. */
-  readonly system?: 'none' | 'media'
 }
 
 export type GranumThemeChoice = string | GranumAppTheme
 
-/** Тема и режимы — часть конфига, которую понимает ядро. */
+/** Запись `themes`: тема, отметка основной и её режимы. */
+export interface GranumThemeEntry {
+  readonly theme: GranumThemeChoice
+  /** Основная тема сборки: в общем листе и под `:root`. Ровно одна на сборку. */
+  readonly default?: boolean
+  /** Имена режимов или их полное описание. */
+  readonly modes?: readonly string[] | GranumThemeModes
+}
+
+/** Запись `themes` в краткой форме — сама тема — или полной. */
+export type GranumThemeConfig = GranumThemeChoice | GranumThemeEntry
+
+/** Как корень выбирает пару — общее на все темы сборки: корень у документа один. */
+export interface GranumActivation {
+  /** Атрибут на корне. По умолчанию `data-theme`. */
+  readonly attribute?: string
+  /** Шаблон значения с `{theme}` и `{mode}`. По умолчанию `{theme}-{mode}`. */
+  readonly value?: string
+  /** `media` — тёмный режим основной темы по `prefers-color-scheme`, пока атрибут не выставлен. */
+  readonly system?: 'none' | 'media'
+}
+
+/** Темы и активация — часть конфига, которую понимает ядро. */
 export interface ResolveThemesInput {
-  readonly theme?: GranumThemeChoice
-  readonly previews?: readonly GranumThemeChoice[]
-  readonly modes?: GranumModesInput
+  readonly themes?: readonly GranumThemeConfig[]
+  readonly activation?: GranumActivation
 }
 
 /** Данные тем каталога, прочитанные node-слоем: провайдер → id темы → данные. */
@@ -102,31 +114,37 @@ export interface ResolvedMode {
   readonly extends?: string
 }
 
-export interface ResolvedPreview {
+/** Тема сборки с её режимами. */
+export interface ResolvedBuildTheme {
   readonly theme: ResolvedTheme
+  /** Основная: под `:root` и в общем листе. */
+  readonly isDefault: boolean
+  /** Режимы в порядке эмиссии: режим по умолчанию первым. */
   readonly modes: readonly ResolvedMode[]
+  /** Все режимы `define` темы, включая не вошедшие в набор, — база раньше наследника. */
+  readonly definitions: readonly ResolvedMode[]
+  readonly modesSource: ModesSource
+  readonly defaultMode: string
+  /** `define`, `tokenOverrides` и `strictTokens` записи — вход слоёв токенов. */
+  readonly input: GranumThemeModes
 }
 
 export type ResolvedThemeWarning
   = | { readonly kind: 'component-theme-unknown', readonly providerId: string, readonly component: string, readonly theme: string }
-    | { readonly kind: 'mode-extends-unresolved', readonly mode: string, readonly base: string }
-    | { readonly kind: 'mode-extends-cycle', readonly chain: readonly string[] }
+    | { readonly kind: 'mode-extends-unresolved', readonly theme: string, readonly mode: string, readonly base: string }
+    | { readonly kind: 'mode-extends-cycle', readonly theme: string, readonly chain: readonly string[] }
 
 export interface ResolvedThemes {
-  /** Активная тема; `undefined` — тем нет, слой `themes` пуст. */
-  readonly theme: ResolvedTheme | undefined
+  /** Темы сборки в порядке конфига; пусто — тем нет, слой `themes` пуст. */
+  readonly themes: readonly ResolvedBuildTheme[]
+  /** Основная тема; `undefined` — тем нет. */
+  readonly default: ResolvedBuildTheme | undefined
+  /** Откуда взята основная тема. */
   readonly themeSource: ThemeSource | undefined
   /** Владелец каталога в графе. */
   readonly owner: string | undefined
-  /** Режимы в порядке эмиссии: режим по умолчанию первым. */
-  readonly modes: readonly ResolvedMode[]
-  /** Все режимы `define`, включая не вошедшие в набор, — база раньше наследника. */
-  readonly definitions: readonly ResolvedMode[]
-  readonly modesSource: ModesSource
-  readonly defaultMode: string | undefined
   readonly activation: { readonly attribute: string, readonly value: string }
   readonly system: 'none' | 'media'
-  readonly previews: readonly ResolvedPreview[]
   readonly warnings: readonly ResolvedThemeWarning[]
 }
 
@@ -135,11 +153,24 @@ export type ThemePick
   = | { readonly kind: 'catalog', readonly providerId: string, readonly id: string, readonly data: string }
     | { readonly kind: 'app', readonly theme: GranumAppTheme }
 
+/** Запись `themes` после разбора: тема, основная ли, режимы. */
+export interface PlannedTheme {
+  readonly pick: ThemePick
+  readonly isDefault: boolean
+  readonly modes: GranumThemeModes
+}
+
 export interface ThemePlan {
   readonly owner: ProviderNode | undefined
-  readonly active: ThemePick | undefined
+  /** Темы сборки в порядке конфига. */
+  readonly themes: readonly PlannedTheme[]
+  /** Откуда взята основная тема. */
   readonly source: ThemeSource | undefined
-  readonly previews: readonly ThemePick[]
+}
+
+/** Темы сборки, кроме основной, — каждая своим листом. */
+export function additionalThemes(themes: ResolvedThemes): readonly ResolvedBuildTheme[] {
+  return themes.themes.filter(entry => !entry.isDefault)
 }
 
 /** Владелец каталога: 0 или 1 в графе. */
@@ -149,7 +180,7 @@ export function findThemeOwner(providers: readonly ProviderNode[]): ProviderNode
     throw new ThemeResolutionError(
       'multiple-theme-owners',
       `${owners.map(o => `'${o.id}'`).join(' and ')} both declare a theme catalog; granum 3 supports one catalog owner per application. `
-      + `Pass the extra themes as an application theme object in 'theme' instead.`,
+      + `Pass the extra themes as application theme objects in 'themes' instead.`,
       undefined,
       owners.map(o => o.id),
     )
@@ -163,7 +194,7 @@ export function splitThemeKey(key: string): { providerId?: string, id: string } 
   return at > 0 ? { providerId: key.slice(0, at), id: key.slice(at + 1) } : { id: key }
 }
 
-function pickCatalogTheme(owner: ProviderNode | undefined, key: string, role: 'theme' | 'preview'): ThemePick {
+function pickCatalogTheme(owner: ProviderNode | undefined, key: string): ThemePick {
   const { providerId, id } = splitThemeKey(key)
   const available = owner ? Object.keys(owner.theme.catalog) : []
   const entry = owner && (providerId === undefined || providerId === owner.id) ? owner.theme.catalog[id] : undefined
@@ -171,8 +202,8 @@ function pickCatalogTheme(owner: ProviderNode | undefined, key: string, role: 't
     throw new ThemeResolutionError(
       'unknown-theme',
       owner
-        ? `${role} '${key}' is not in the catalog of '${owner.id}'. Available: ${available.join(', ') || '—'}.`
-        : `${role} '${key}' is requested, but no provider in the graph declares a theme catalog.`,
+        ? `theme '${key}' is not in the catalog of '${owner.id}'. Available: ${available.join(', ') || '—'}.`
+        : `theme '${key}' is requested, but no provider in the graph declares a theme catalog.`,
       key,
       available,
     )
@@ -180,38 +211,81 @@ function pickCatalogTheme(owner: ProviderNode | undefined, key: string, role: 't
   return { kind: 'catalog', providerId: owner.id, id, data: entry.data }
 }
 
+function isEntry(config: GranumThemeConfig): config is GranumThemeEntry {
+  return typeof config === 'object' && config !== null && 'theme' in config
+}
+
+/** Запись `themes` в полной форме: тема, отметка и режимы объектом. */
+export function normalizeThemeEntry(config: GranumThemeConfig): { readonly theme: GranumThemeChoice, readonly default: boolean, readonly modes: GranumThemeModes } {
+  if (!isEntry(config))
+    return { theme: config, default: false, modes: {} }
+  const modes: GranumThemeModes = config.modes === undefined ? {} : Array.isArray(config.modes) ? { names: config.modes } : config.modes as GranumThemeModes
+  return { theme: config.theme, default: config.default === true, modes }
+}
+
+/** Id темы записи до чтения данных — для сообщений. */
+function choiceId(choice: GranumThemeChoice): string {
+  return typeof choice === 'string' ? splitThemeKey(choice).id : choice.id
+}
+
 /**
- * Что собирается: владелец, активная тема и превью — до чтения данных.
+ * Индекс основной темы: единственная запись — она, из нескольких — ровно одна с
+ * `default: true`. Конфиг проверяет то же формой; здесь — для программного входа.
+ */
+export function defaultThemeIndex(entries: readonly { readonly theme: GranumThemeChoice, readonly default: boolean }[]): number {
+  if (entries.length === 1)
+    return 0
+  const marked = entries.flatMap((entry, i) => (entry.default ? [i] : []))
+  if (marked.length !== 1) {
+    const ids = entries.map(entry => choiceId(entry.theme))
+    throw new ThemeResolutionError(
+      'default-theme',
+      marked.length === 0
+        ? `'themes' lists ${entries.length} themes (${ids.join(', ')}) and none is marked 'default: true'; mark the one that goes under ':root'.`
+        : `'themes' marks ${marked.length} themes as default (${marked.map(i => ids[i]).join(', ')}); exactly one goes under ':root'.`,
+      undefined,
+      ids,
+    )
+  }
+  return marked[0]!
+}
+
+/**
+ * Что собирается: владелец и темы сборки с основной — до чтения данных.
  * Node-слой читает по этому плану только нужные файлы.
  */
 export function planThemes(providers: readonly ProviderNode[], input: ResolveThemesInput = {}): ThemePlan {
   const owner = findThemeOwner(providers)
-  let active: ThemePick | undefined
-  let source: ThemeSource | undefined
-  if (typeof input.theme === 'string') {
-    active = pickCatalogTheme(owner, input.theme, 'theme')
-    source = 'provider'
-  }
-  else if (input.theme !== undefined) {
-    active = { kind: 'app', theme: input.theme }
-    source = 'app'
-  }
-  else if (owner) {
+  if (input.themes === undefined) {
+    if (!owner)
+      return { owner, themes: [], source: undefined }
     const ids = Object.keys(owner.theme.catalog)
     const id = owner.theme.defaultTheme ?? (ids.length === 1 ? ids[0] : undefined)
     if (id === undefined) {
       throw new ThemeResolutionError(
         'unknown-theme',
-        `'${owner.id}' declares ${ids.length} themes and no 'defaultTheme'; choose one with 'theme' in granum.config. Available: ${ids.join(', ')}.`,
+        `'${owner.id}' declares ${ids.length} themes and no 'defaultTheme'; list the build themes in 'themes' of granum.config. Available: ${ids.join(', ')}.`,
         undefined,
         ids,
       )
     }
-    active = pickCatalogTheme(owner, id, 'theme')
-    source = 'default'
+    return { owner, themes: [{ pick: pickCatalogTheme(owner, id), isDefault: true, modes: {} }], source: 'default' }
   }
-  const previews = (input.previews ?? []).map(choice => (typeof choice === 'string' ? pickCatalogTheme(owner, choice, 'preview') : { kind: 'app' as const, theme: choice }))
-  return { owner, active, source, previews }
+  if (input.themes.length === 0)
+    throw new ThemeResolutionError('default-theme', `'themes' is empty; omit it to build the default theme of the catalog.`)
+
+  const entries = input.themes.map(normalizeThemeEntry)
+  const defaultIndex = defaultThemeIndex(entries)
+  const seen = new Set<string>()
+  const themes = entries.map((entry, i): PlannedTheme => {
+    const pick: ThemePick = typeof entry.theme === 'string' ? pickCatalogTheme(owner, entry.theme) : { kind: 'app', theme: entry.theme }
+    const id = pick.kind === 'catalog' ? pick.id : pick.theme.id
+    if (seen.has(id))
+      throw new ThemeResolutionError('duplicate-theme', `theme '${id}' is listed twice in 'themes'; both entries would activate with the same pairs.`, id)
+    seen.add(id)
+    return { pick, isDefault: i === defaultIndex, modes: entry.modes }
+  })
+  return { owner, themes, source: themes[defaultIndex]!.pick.kind === 'app' ? 'app' : 'provider' }
 }
 
 function themeChain(owner: ProviderNode | undefined, id: string | undefined): string[] {
@@ -271,6 +345,7 @@ export function planModeDefinitions(
   themeModeNames: readonly string[],
   defaultMode: string,
   define: Readonly<Record<string, GranumModeDefinition>>,
+  theme = '',
 ): { readonly order: readonly string[], readonly bases: ReadonlyMap<string, string>, readonly warnings: readonly ResolvedThemeWarning[] } {
   const order: string[] = []
   const bases = new Map<string, string>()
@@ -285,14 +360,14 @@ export function planModeDefinitions(
     const base = define[name]!.extends
     let resolvedBase = base
     if (state.get(base) === 'visiting') {
-      warnings.push({ kind: 'mode-extends-cycle', chain: [...chain, name, base] })
+      warnings.push({ kind: 'mode-extends-cycle', theme, chain: [...chain, name, base] })
       resolvedBase = defaultMode
     }
     else if (Object.hasOwn(define, base) && !known.has(base)) {
       visit(base, [...chain, name])
     }
     else if (!known.has(base)) {
-      warnings.push({ kind: 'mode-extends-unresolved', mode: name, base })
+      warnings.push({ kind: 'mode-extends-unresolved', theme, mode: name, base })
       resolvedBase = defaultMode
     }
     bases.set(name, resolvedBase)
@@ -307,100 +382,41 @@ export function planModeDefinitions(
   return { order, bases, warnings }
 }
 
-function checkCollisions(modes: readonly ResolvedMode[], previews: readonly ResolvedPreview[], attribute: string): void {
+/** Пары всех тем и режимов сборки различны: иначе две пары включались бы одним значением. */
+function checkCollisions(themes: readonly ResolvedBuildTheme[], attribute: string): void {
   const seen = new Map<string, string>()
-  const entries = [
-    ...modes.map(mode => ({ value: mode.value, label: `mode '${mode.name}'` })),
-    ...previews.flatMap(preview => preview.modes.map(mode => ({ value: mode.value, label: `preview '${preview.theme.id}' mode '${mode.name}'` }))),
-  ]
-  for (const { value, label } of entries) {
-    const other = seen.get(value)
-    if (other !== undefined) {
-      throw new ThemeResolutionError(
-        'activation-collision',
-        `${other} and ${label} both activate with ${attribute}="${value}"; every pair must have its own value (check 'modes.activation.value' and 'modes.define' names).`,
-        value,
-      )
+  for (const entry of themes) {
+    for (const mode of entry.modes) {
+      const label = `theme '${entry.theme.id}' mode '${mode.name}'`
+      const other = seen.get(mode.value)
+      if (other !== undefined) {
+        throw new ThemeResolutionError(
+          'activation-collision',
+          `${other} and ${label} both activate with ${attribute}="${mode.value}"; every pair must have its own value (check 'activation.value' and the 'define' names).`,
+          mode.value,
+        )
+      }
+      seen.set(mode.value, label)
     }
-    seen.set(value, label)
   }
 }
 
-/**
- * Резолюция тем: выбор темы, режимы, активация, превью и предупреждения.
- * Данные тем каталога приносит node-слой (`themeData`): ядро файлов не читает.
- */
-export function resolveThemes(
-  providers: readonly ProviderNode[],
-  input: ResolveThemesInput = {},
-  components: readonly ComponentNode[] = [],
-  themeData: ThemeDataInput = {},
-): ResolvedThemes {
-  const plan = planThemes(providers, input)
-  const modesInput = input.modes ?? {}
-  const attribute = modesInput.activation?.attribute ?? DEFAULT_ACTIVATION_ATTRIBUTE
-  const template = modesInput.activation?.value ?? DEFAULT_ACTIVATION_VALUE
-  const activation = { attribute, value: template }
-  const system = modesInput.system ?? 'none'
-  const warnings: ResolvedThemeWarning[] = []
-
-  const knownThemes = new Set(plan.owner ? Object.keys(plan.owner.theme.catalog) : [])
-  const theme = plan.active ? materializePick(plan.active, plan.owner, themeData) : undefined
-  if (theme)
-    knownThemes.add(theme.id)
-  for (const component of components) {
-    for (const id of Object.keys(component.themeTokens)) {
-      if (!knownThemes.has(id))
-        warnings.push({ kind: 'component-theme-unknown', providerId: component.providerId, component: component.name, theme: id })
-    }
-  }
-
-  if (!theme) {
-    // Без темы режимам и превью некуда лечь: их значения молча не теряются.
-    const carrying = [
-      ...(modesInput.names?.length ? ['modes.names'] : []),
-      ...(Object.keys(modesInput.define ?? {}).length > 0 ? ['modes.define'] : []),
-      ...(Object.keys(modesInput.tokenOverrides ?? {}).length > 0 ? ['modes.tokenOverrides'] : []),
-      ...(plan.previews.length > 0 ? ['previews'] : []),
-    ]
-    if (carrying.length > 0) {
-      throw new ThemeResolutionError(
-        'theme-missing',
-        `${carrying.join(', ')} ${carrying.length > 1 ? 'are' : 'is'} set, but the build has no active theme: no provider in the graph declares a theme catalog and 'theme' is not a theme object — the values would land nowhere.`,
-      )
-    }
-    return {
-      theme: undefined,
-      themeSource: undefined,
-      owner: plan.owner?.id,
-      modes: [],
-      definitions: [],
-      modesSource: modesInput.names !== undefined ? 'explicit' : 'theme',
-      defaultMode: undefined,
-      activation,
-      system,
-      previews: [],
-      warnings,
-    }
-  }
-
-  if (!template.includes('{mode}'))
-    throw new ThemeResolutionError('activation-collision', `'modes.activation.value' must contain '{mode}' (got '${template}'): without it every mode activates with the same value.`, template)
-
+/** Режимы одной темы сборки: набор, `define`, режим по умолчанию. */
+function resolveBuildTheme(theme: ResolvedTheme, isDefault: boolean, input: GranumThemeModes, template: string, attribute: string, warnings: ResolvedThemeWarning[]): ResolvedBuildTheme {
   const defaultMode = theme.data.defaultMode ?? DEFAULT_MODE
   const fromTheme = themeModes(theme, template)
-  const define = modesInput.define ?? {}
-  // Имя `define`, совпавшее с режимом темы, — та же пара: коллизия активации.
+  const define = input.define ?? {}
+  // Имя `define`, совпавшее с режимом своей темы, — та же пара: коллизия активации.
   for (const name of Object.keys(define)) {
     if (fromTheme.some(mode => mode.name === name)) {
       throw new ThemeResolutionError(
         'activation-collision',
-        `'modes.define.${name}' has the name of a mode of theme '${theme.id}', so both activate with ${attribute}="${themePairValue(template, theme.id, name)}"; give the application mode its own name.`,
+        `'modes.define.${name}' of theme '${theme.id}' has the name of a mode of that theme, so both activate with ${attribute}="${themePairValue(template, theme.id, name)}"; give the application mode its own name.`,
         themePairValue(template, theme.id, name),
       )
     }
   }
-  const definitions = planModeDefinitions(fromTheme.map(mode => mode.name), defaultMode, define)
+  const definitions = planModeDefinitions(fromTheme.map(mode => mode.name), defaultMode, define, theme.id)
   warnings.push(...definitions.warnings)
   const all = new Map<string, ResolvedMode>(fromTheme.map(mode => [mode.name, mode]))
   for (const name of definitions.order) {
@@ -417,57 +433,103 @@ export function resolveThemes(
   }
 
   let names: string[]
-  if (modesInput.names !== undefined) {
-    for (const name of modesInput.names) {
+  if (input.names !== undefined) {
+    for (const name of input.names) {
       if (!all.has(name)) {
         throw new ThemeResolutionError(
           'unknown-mode',
-          `mode '${name}' is neither a mode of theme '${theme.id}' nor defined in 'modes.define'. Available: ${[...all.keys()].join(', ')}.`,
+          `mode '${name}' is neither a mode of theme '${theme.id}' nor defined in its 'modes.define'. Available: ${[...all.keys()].join(', ')}.`,
           name,
           [...all.keys()],
         )
       }
     }
-    names = [...new Set(modesInput.names)]
+    names = [...new Set(input.names)]
   }
   else {
-    // Без `modes.names` — режим по умолчанию темы и режимы приложения: тема
+    // Без `names` — режим по умолчанию темы и режимы приложения: тема
     // собирается под приложение, и второй режим темы — решение, а не умолчание.
     names = [defaultMode, ...definitions.order]
   }
-  // Режим по умолчанию — первым, если он в наборе: под `:root` его блок решает позиция.
+  // Режим по умолчанию — первым, если он в наборе.
   if (names.includes(defaultMode))
     names = [defaultMode, ...names.filter(name => name !== defaultMode)]
 
-  for (const key of Object.keys(modesInput.tokenOverrides ?? {})) {
+  for (const key of Object.keys(input.tokenOverrides ?? {})) {
     if (key !== 'root' && !names.includes(key)) {
       throw new ThemeResolutionError(
         'unknown-mode',
-        `'modes.tokenOverrides.${key}' names a mode that is not built. Modes: ${names.join(', ') || '—'}; mode-independent tokens go to 'modes.tokenOverrides.root'.`,
+        `'modes.tokenOverrides.${key}' of theme '${theme.id}' names a mode that is not built. Modes: ${names.join(', ') || '—'}; mode-independent tokens go to 'modes.tokenOverrides.root'.`,
         key,
         names,
       )
     }
   }
 
-  const previews = plan.previews.map((pick) => {
-    const previewTheme = materializePick(pick, plan.owner, themeData)
-    return { theme: previewTheme, modes: themeModes(previewTheme, template) }
-  })
-  const modes = names.map(name => all.get(name)!)
-  checkCollisions(modes, previews, attribute)
-
   return {
     theme,
+    isDefault,
+    modes: names.map(name => all.get(name)!),
+    definitions: definitions.order.map(name => all.get(name)!),
+    modesSource: input.names !== undefined ? 'explicit' : 'theme',
+    defaultMode: names.includes(defaultMode) ? defaultMode : (names[0] ?? defaultMode),
+    input,
+  }
+}
+
+/**
+ * Резолюция тем: темы сборки, их режимы, активация и предупреждения.
+ * Данные тем каталога приносит node-слой (`themeData`): ядро файлов не читает.
+ */
+export function resolveThemes(
+  providers: readonly ProviderNode[],
+  input: ResolveThemesInput = {},
+  components: readonly ComponentNode[] = [],
+  themeData: ThemeDataInput = {},
+): ResolvedThemes {
+  const plan = planThemes(providers, input)
+  const attribute = input.activation?.attribute ?? DEFAULT_ACTIVATION_ATTRIBUTE
+  const template = input.activation?.value ?? DEFAULT_ACTIVATION_VALUE
+  const activation = { attribute, value: template }
+  const system = input.activation?.system ?? 'none'
+  const warnings: ResolvedThemeWarning[] = []
+
+  if (plan.themes.length === 0) {
+    // Без тем активации некуда лечь: заданная, она молча не теряется.
+    if (input.activation !== undefined) {
+      throw new ThemeResolutionError(
+        'theme-missing',
+        `'activation' is set, but the build has no themes: no provider in the graph declares a theme catalog and 'themes' lists no theme object — it would activate nothing.`,
+      )
+    }
+    return { themes: [], default: undefined, themeSource: undefined, owner: plan.owner?.id, activation, system, warnings }
+  }
+
+  if (!template.includes('{mode}'))
+    throw new ThemeResolutionError('activation-collision', `'activation.value' must contain '{mode}' (got '${template}'): without it every mode activates with the same value.`, template)
+
+  const resolved = plan.themes.map(planned => ({ planned, theme: materializePick(planned.pick, plan.owner, themeData) }))
+
+  const knownThemes = new Set(plan.owner ? Object.keys(plan.owner.theme.catalog) : [])
+  for (const { theme } of resolved)
+    knownThemes.add(theme.id)
+  for (const component of components) {
+    for (const id of Object.keys(component.themeTokens)) {
+      if (!knownThemes.has(id))
+        warnings.push({ kind: 'component-theme-unknown', providerId: component.providerId, component: component.name, theme: id })
+    }
+  }
+
+  const themes = resolved.map(({ planned, theme }) => resolveBuildTheme(theme, planned.isDefault, planned.modes, template, attribute, warnings))
+  checkCollisions(themes, attribute)
+
+  return {
+    themes,
+    default: themes.find(entry => entry.isDefault),
     themeSource: plan.source,
     owner: plan.owner?.id,
-    modes,
-    definitions: definitions.order.map(name => all.get(name)!),
-    modesSource: modesInput.names !== undefined ? 'explicit' : 'theme',
-    defaultMode: names.includes(defaultMode) ? defaultMode : names[0],
     activation,
     system,
-    previews,
     warnings,
   }
 }

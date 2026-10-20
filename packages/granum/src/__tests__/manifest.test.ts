@@ -320,12 +320,12 @@ describe('parseManifest — порядок проверок', () => {
     const loaded = parseManifest(ok, BASE)
     const simple = parseManifest(serializeManifest(draft({ id: '@x/simple', dependencies: [], theme: { declares: [] }, components: { XTest1: { ...draft().components.XhCard!, entry: 'components/XTest1/index.js', group: null } } })), 'file:///simple/dist/')
     const paper = { id: 'paper', title: 'Бумага', root: {}, modes: { light: { colorScheme: 'light' as const, tokens: {} }, dark: { colorScheme: 'dark' as const, tokens: {} } } }
-    const r = resolveGranum({ providers: [loaded, simple], components: ['@x/heavy:XhPanel'], modes: { names: ['light', 'dark'] }, themeData: { '@x/heavy': { paper } } })
+    const r = resolveGranum({ providers: [loaded, simple], components: ['@x/heavy:XhPanel'], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'] } }], themeData: { '@x/heavy': { paper } } })
     // Зависимости в манифесте отсортированы, поэтому post-order детерминирован.
     expect(r.selection.order).toEqual(['@x/simple:XTest1', '@x/heavy:XhCard', '@x/heavy:XhPanel'])
     expect(r.classes).toEqual(['flex', 'gap-2', 'p-4'])
-    expect(r.themes.modes.map(m => m.value)).toEqual(['paper-light', 'paper-dark'])
-    expect(r.tokens.active!.modes.get('light')!.get('panel')!.effective).toBe('#fff')
+    expect(r.themes.default!.modes.map(m => m.value)).toEqual(['paper-light', 'paper-dark'])
+    expect(r.tokens.default!.modes.get('light')!.get('panel')!.effective).toBe('#fff')
   })
 })
 

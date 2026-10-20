@@ -10,8 +10,9 @@ import { windEngine } from '@feugene/granum-engine-wind'
 export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/themed-ds', '@granum-fixtures/themed-companion'],
-  theme: 'ink',
-  modes: { names: ['light', 'dark', 'dim'] },
-  previews: ['paper'],
+  themes: [
+    { theme: 'ink', default: true, modes: ['light', 'dark', 'dim'] },
+    { theme: 'paper', modes: ['light', 'dark'] },
+  ],
   appSources: { dirs: ['src'] },
 })

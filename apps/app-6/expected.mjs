@@ -6,7 +6,7 @@ export default {
   purpose: 'собственные режимы приложения вместо light/dark темы',
   css: {
     present: [
-      { what: 'режим emerald — первый в наборе, под :root', css: ':root,[data-theme=paper-emerald]' },
+      { what: 'режим emerald — первый в наборе, под :where(:root)', css: ':where(:root),[data-theme=paper-emerald]' },
       { what: 'режим ocean', css: '[data-theme=paper-ocean]' },
       { what: 'режим crimson', css: '[data-theme=paper-crimson]' },
       { what: 'токен приложения из литерала (emerald)', css: '--app-accent:#10b981' },
@@ -21,7 +21,7 @@ export default {
     ],
   },
   report: (report, check) => {
-    check(report.themes.modes.join(',') === 'emerald,ocean,crimson', `modes: ${report.themes.modes}`)
-    check(report.themes.modesSource === 'explicit', report.themes.modesSource)
+    check(report.themes.themes[0]?.modes.join(',') === 'emerald,ocean,crimson', `modes: ${report.themes.themes[0]?.modes}`)
+    check(report.themes.themes[0]?.modesSource === 'explicit', report.themes.themes[0]?.modesSource)
   },
 }

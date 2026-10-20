@@ -1,43 +1,60 @@
 /**
- * Блоки CSS активной темы и превью из значений резолюции.
+ * Блоки CSS тем сборки из значений резолюции.
  * Селекторы назначает активация: тема — данные, своих селекторов у неё нет.
  *
- * Раскладка:
- *   - слой `tokens`: `:root { литералы root }`;
- *   - слой `themes`: `:root, [attr] { формулы }` — режимонезависимые со ссылкой
- *     `var(` и режимные, одинаковые во всех режимах; затем режим по умолчанию
- *     под `:root, [attr="пара"]`, остальные под `[attr="пара"]`, фолбэки
- *     `@supports` (у режима по умолчанию — под `:root:not([attr])` и парой),
- *     блок `prefers-color-scheme` с фолбэками тёмного режима и превью-темы.
+ * Раскладка основной темы:
+ *   - слой `tokens`: `:root:not([attr]), <её пары> { литералы root }`;
+ *   - слой `themes`: `:where(:root), <её пары> { формулы }` — режимонезависимые
+ *     со ссылкой `var(` и режимные, одинаковые во всех режимах; затем режим по
+ *     умолчанию под `:where(:root), [attr="пара"]`, остальные под
+ *     `[attr="пара"]`, фолбэки `@supports` (у режима по умолчанию — под
+ *     `:root:not([attr])` и парой), блок `prefers-color-scheme`.
  *
- * Формула под `[attr]` пересчитывается на каждом острове: под одним `:root` она
- * вычислилась бы по ролям корня и унаследовалась бы островом готовой.
+ * Дополнительная тема — полные блоки своих пар, без `:root`: они уходят в её лист.
+ *
+ * Формула под парой пересчитывается на каждом острове: под одним `:root` она
+ * вычислилась бы по ролям корня и унаследовалась бы островом готовой. `:root`
+ * основной темы — под `:where()`: пара любой темы на корне перекрывает её
+ * специфичностью, и каскад не зависит от порядка листов.
+ *
+ * Литералы `root` основной темы — в слое `tokens` рядом с `tokensCss` провайдеров
+ * и обязаны перекрывать их, поэтому `:where()` им не годится. Они выходят под
+ * корнем без атрибута и парами основной темы: корень с парой другой темы их не
+ * получает (иначе без слоёв решал бы порядок листов), а остров основной темы
+ * внутри него — получает, а не наследует литералы чужой темы от корня.
  */
 import type { GranumResolution } from '../core/resolve'
-import type { ResolvedMode } from '../core/resolveThemes'
+import type { ResolvedBuildTheme, ResolvedMode } from '../core/resolveThemes'
 import type { ThemeTokenSet, TokenChain } from '../core/tokenLayers'
 
 export interface ThemeCss {
-  /** `:root { … }` с литералами root активной темы — в слой `tokens`. */
+  /** `:root:not([attr]), <пары основной> { … }` с литералами root основной темы — в слой `tokens`. */
   readonly tokens: string | undefined
-  /** CSS режимонезависимого базового уровня тем (`baseCss` данных) — в слой `base`. */
+  /** `baseCss` основной темы — в слой `base` общего листа. */
   readonly base: readonly string[]
-  /** Блоки слоя `themes` по порядку. */
+  /** Блоки слоя `themes` основной темы по порядку. */
   readonly themes: readonly string[]
-  /** Те же блоки без тем превью — общий лист при `css.previews: 'separate'`. */
-  readonly active: readonly string[]
   /**
-   * Те же блоки слоя `themes`, разложенные по владельцу: общий блок активной
-   * темы, режим (его блок, фолбэки, медиазапрос системной схемы) и тема превью.
-   * Порядок слоя от раскладки не меняется.
+   * Те же блоки, разложенные по владельцу: общий блок основной темы и режим
+   * (его блок, фолбэки, медиазапрос системной схемы). Порядок слоя от раскладки
+   * не меняется.
    */
   readonly parts: ThemeCssParts
+  /** Дополнительные темы в порядке `themes`: каждая — своим листом. */
+  readonly additional: readonly AdditionalThemeCss[]
 }
 
 export interface ThemeCssParts {
   readonly shared: readonly string[]
   readonly modes: readonly { readonly name: string, readonly blocks: readonly string[] }[]
-  readonly previews: readonly { readonly id: string, readonly blocks: readonly string[] }[]
+}
+
+/** Лист дополнительной темы: слои `base` и `themes`. */
+export interface AdditionalThemeCss {
+  readonly id: string
+  /** `baseCss` темы, кроме записей, которые уже несёт общий лист. */
+  readonly base: readonly string[]
+  readonly themes: readonly string[]
 }
 
 type Keep = (token: string) => boolean
@@ -116,6 +133,31 @@ function fallbackBlocks(set: ThemeTokenSet, mode: ResolvedMode, selector: string
   return out
 }
 
+/** Пары режимов темы — граница её общего блока. Префикс значения границей служить не может. */
+function pairsSelector(attribute: string, entry: ResolvedBuildTheme): string {
+  return entry.modes.map(mode => attributeSelector(attribute, mode.value)).join(', ')
+}
+
+/** Полные блоки пар дополнительной темы — без `:root`. */
+function additionalBlocks(entry: ResolvedBuildTheme, set: ThemeTokenSet, attribute: string, keep: Keep): string[] {
+  const split = splitSet(set)
+  const blocks: string[] = []
+  // Префикс значения совпал бы и с парами другой темы: `slate-` — с
+  // `slate-hc-light`, статика шаблона перед режимом — со всеми парами.
+  const common = entry.modes.length > 0 ? serializeBlock(pairsSelector(attribute, entry), split.shared, keep) : undefined
+  if (common)
+    blocks.push(common)
+  for (const mode of entry.modes) {
+    const chains = [...split.rootLiterals, ...split.modeChains(mode.name)]
+    const block = serializeBlock(attributeSelector(attribute, mode.value), chains, keep, mode.colorScheme)
+    if (block)
+      blocks.push(block)
+  }
+  for (const mode of entry.modes)
+    blocks.push(...fallbackBlocks(set, mode, attributeSelector(attribute, mode.value), keep))
+  return blocks
+}
+
 export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => true): ThemeCss {
   const { themes, tokens } = resolution
   const attribute = themes.activation.attribute
@@ -123,88 +165,66 @@ export function emitThemeCss(resolution: GranumResolution, keep: Keep = () => tr
   const blocks: string[] = []
   const shared: string[] = []
   const modeParts: { name: string, blocks: string[] }[] = []
-  const previewParts: { id: string, blocks: string[] }[] = []
   let tokensBlock: string | undefined
   const push = (part: string[], ...css: string[]): void => {
     blocks.push(...css)
     part.push(...css)
   }
 
-  const addBase = (css: readonly string[] | undefined): void => {
-    for (const text of css ?? []) {
+  const main = themes.default
+  const mainSet = tokens.default
+  if (main && mainSet) {
+    for (const text of main.theme.data.baseCss ?? []) {
       if (!base.includes(text))
         base.push(text)
     }
-  }
-
-  const active = tokens.active
-  if (themes.theme && active) {
-    addBase(themes.theme.data.baseCss)
-    const split = splitSet(active)
-    tokensBlock = serializeBlock(':root', split.rootLiterals, keep)
-    const common = serializeBlock(`:root, ${attributeSelector(attribute)}`, split.shared, keep)
+    const split = splitSet(mainSet)
+    const bareRoot = `:root:not(${attributeSelector(attribute)})`
+    const pairs = main.modes.length > 0 ? [pairsSelector(attribute, main)] : []
+    tokensBlock = serializeBlock([bareRoot, ...pairs].join(', '), split.rootLiterals, keep)
+    const boundary = [':where(:root)', ...pairs].join(', ')
+    const common = serializeBlock(boundary, split.shared, keep)
     if (common)
       push(shared, common)
-    const bareRoot = `:root:not(${attributeSelector(attribute)})`
     const selectorOf = (mode: ResolvedMode): string => {
       const own = attributeSelector(attribute, mode.value)
-      return mode.name === themes.defaultMode ? `:root, ${own}` : own
+      return mode.name === main.defaultMode ? `:where(:root), ${own}` : own
     }
-    // Фолбэки идут после всех режимов, и под голым `:root` фолбэк режима по
-    // умолчанию перебил бы позицией пару другого режима на корне. Корень без
-    // атрибута — тот же, что у блока системной схемы.
+    // Фолбэки идут после всех режимов: под голым `:root` фолбэк режима по
+    // умолчанию достал бы корень с другой парой. Корень без атрибута — тот же,
+    // что у блока системной схемы.
     const fallbackSelectorOf = (mode: ResolvedMode): string => {
       const own = attributeSelector(attribute, mode.value)
-      return mode.name === themes.defaultMode ? `${bareRoot}, ${own}` : own
+      return mode.name === main.defaultMode ? `${bareRoot}, ${own}` : own
     }
     const partOf = (name: string): string[] => modeParts.find(part => part.name === name)!.blocks
-    for (const mode of themes.modes)
+    for (const mode of main.modes)
       modeParts.push({ name: mode.name, blocks: [] })
-    for (const mode of themes.modes) {
+    for (const mode of main.modes) {
       const block = serializeBlock(selectorOf(mode), split.modeChains(mode.name), keep, mode.colorScheme)
       if (block)
         push(partOf(mode.name), block)
     }
-    for (const mode of themes.modes)
-      push(partOf(mode.name), ...fallbackBlocks(active, mode, fallbackSelectorOf(mode), keep))
-    const dark = themes.system === 'media' ? themes.modes.find(mode => mode.colorScheme === 'dark') : undefined
+    for (const mode of main.modes)
+      push(partOf(mode.name), ...fallbackBlocks(mainSet, mode, fallbackSelectorOf(mode), keep))
+    const dark = themes.system === 'media' ? main.modes.find(mode => mode.colorScheme === 'dark') : undefined
     if (dark) {
       // Фолбэки тёмного режима — внутри того же медиазапроса: под парой они
       // корень без атрибута не достают, а блок схемы перебивает фолбэк корня.
       const inner = [
         serializeBlock(bareRoot, split.modeChains(dark.name), keep, 'dark', '  ')!,
-        ...fallbackBlocks(active, dark, bareRoot, keep, '  '),
+        ...fallbackBlocks(mainSet, dark, bareRoot, keep, '  '),
       ]
       push(partOf(dark.name), `@media (prefers-color-scheme: dark) {\n${inner.join('\n')}\n}`)
     }
   }
 
-  // Превью идут последними: всё, что выведено до них, — активная тема.
-  const activeBlocks = [...blocks]
+  const additional = themes.themes.flatMap((entry, i): AdditionalThemeCss[] => {
+    if (entry.isDefault)
+      return []
+    const own = (entry.theme.data.baseCss ?? []).filter((text, at, all) => !base.includes(text) && all.indexOf(text) === at)
+    return [{ id: entry.theme.id, base: own, themes: additionalBlocks(entry, tokens.themes[i]!, attribute, keep) }]
+  })
 
-  // Превью — полные блоки пар и никогда под `:root`.
-  for (const [i, preview] of themes.previews.entries()) {
-    const set = tokens.previews[i]!
-    addBase(preview.theme.data.baseCss)
-    const split = splitSet(set)
-    const part: string[] = []
-    previewParts.push({ id: preview.theme.id, blocks: part })
-    // Общая граница превью — список её пар. Префикс значения совпал бы и с
-    // парами активной темы: `slate-` — с `slate-hc-light`, статика шаблона
-    // перед режимом — со всеми парами.
-    const pairs = preview.modes.map(mode => attributeSelector(attribute, mode.value)).join(', ')
-    const common = serializeBlock(pairs, split.shared, keep)
-    if (common)
-      push(part, common)
-    for (const mode of preview.modes) {
-      const chains = [...split.rootLiterals, ...split.modeChains(mode.name)]
-      const block = serializeBlock(attributeSelector(attribute, mode.value), chains, keep, mode.colorScheme)
-      if (block)
-        push(part, block)
-    }
-    for (const mode of preview.modes)
-      push(part, ...fallbackBlocks(set, mode, attributeSelector(attribute, mode.value), keep))
-  }
-
-  return { tokens: tokensBlock, base, themes: blocks, active: activeBlocks, parts: { shared, modes: modeParts, previews: previewParts } }
+  return { tokens: tokensBlock, base, themes: blocks, parts: { shared, modes: modeParts }, additional }
 }

@@ -35,7 +35,7 @@ function plan(input: Partial<Parameters<typeof planTokenPrune>[0]> & { component
     providers: [manifest],
     components: input.components ?? 'all',
     themeData: { pkg: { paper: PAPER } },
-    modes: { names: ['light', 'dark', ...Object.keys(input.define ?? {})], ...(input.overrides ? { tokenOverrides: input.overrides } : {}), ...(input.define ? { define: input.define } : {}) },
+    themes: [{ theme: 'paper', modes: { names: ['light', 'dark', ...Object.keys(input.define ?? {})], ...(input.overrides ? { tokenOverrides: input.overrides } : {}), ...(input.define ? { define: input.define } : {}) } }],
   })
   return planTokenPrune({
     resolution,

@@ -46,8 +46,8 @@ generation error.
 ## `doctor`
 
 A full report on the configuration: providers and their form, the selection
-in dependency order, the active theme and its source, the modes with their pairs, previews,
-checked files and diagnostics. Levels: `error` — the build must break, `warn` —
+in dependency order, the default theme and its source, the build themes with their modes and
+pairs, checked files and diagnostics. Levels: `error` — the build must break, `warn` —
 legal but suspicious.
 
 | Code | Level | Meaning |
@@ -61,12 +61,13 @@ legal but suspicious.
 | `safelist-dead` | warn | a safelist entry without a rule in the engine |
 | `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself (including a `v-bind()` variable from `<style>`) and `dynamicTokens` are not findings |
 | `token-fallback-only` | warn | a component reads a token only through `var(--x, fallback)` and no layer declares it: the component always renders the fallback — the token was renamed, say. Declare an intentional hook in the descriptor's `hookTokens`; `dynamicTokens` are not findings |
+| `theme-base-global` | warn | an additional theme's `baseCss` has a style rule: once loaded, its sheet stays in the document, and the rule applies to the whole page — also after switching back to the default theme. Only `@font-face`, `@property` and `@keyframes` belong there |
 | `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
 | `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
 | `component-mode-missing` | warn | a component has no file for a mode of the build or its ancestors: the literals come from the default mode — a forgotten `dark.json`, say; a value that is the same in every mode belongs in `root.json` |
-| `theme-mode-missing` | warn | the same for the active theme's data: a mode of the build and its `extends` ancestors have no value for the token, and the literal comes from the default mode. A value that is the same in every mode belongs in the theme's `root` |
-| `mode-extends-unresolved` | warn | the base of a `modes.define` is neither a theme mode nor another `define`; the mode inherits the default mode |
-| `mode-extends-cycle` | warn | `modes.define` entries extend each other in a circle; the chain is cut at the default mode |
+| `theme-mode-missing` | warn | the same for a build theme's data: a mode of the build and its `extends` ancestors have no value for the token, and the literal comes from the default mode. A value that is the same in every mode belongs in the theme's `root` |
+| `mode-extends-unresolved` | warn | the base of a theme entry's `modes.define` is neither a mode of that theme nor another of its `define`; the mode inherits the default mode. The subject is `<theme>/<mode>` |
+| `mode-extends-cycle` | warn | a theme's `modes.define` entries extend each other in a circle; the chain is cut at the default mode |
 | `override-skipped` | warn | `strictTokens` dropped an override of a token present neither in the theme data nor in component tokens |
 | `provider-without-manifest` | warn | the provider is passed as an object and its `baseUrl` is not a directory on disk: classes and consumption are unknown |
 | `provider-scanned` | warn | the provider is passed as an object: classes and tokens were scanned from its `dist` by the application (slow path, no bundle graph) |
@@ -89,7 +90,7 @@ Selected components (5, order = deps → dependents) — classes 41, safelist 14
   …
 
 Theme: heavy (source: defaultTheme of the catalog owner, catalog of @granum-fixtures/heavy)
-Modes: [light, dark] (source: modes.names)
+heavy (default, main sheet) — modes: [light, dark] (source: modes.names)
   • light → heavy-light (light, 64 token(s))
   • dark → heavy-dark (dark, 65 token(s))
 
@@ -234,7 +235,7 @@ the two ways out: an engine of the same dialect, or your own factory rule.
 
 What a component declares and consumes; for every token — where the value
 comes from (`own`, `component`, `theme`, `provider`, `app`, `none`) and the chain of
-layers for every mode of the active theme: the theme and mode the value came from
+layers for every mode of the default theme: the theme and mode the value came from
 (`component @acme/ui:XhButton (paper/dark)` for mode `ink-dim`). `--deep` includes the
 component's dependencies. `provider` means an inlined file of the provider (`tokensCss`)
 declares the token; a token only another catalog theme has is `none`, as in `doctor`.
@@ -243,7 +244,7 @@ declares the token; a token only another catalog theme has is `none`, as in `doc
 
 The graph's theme catalog from the owner's manifest index, without reading theme data: id,
 title, parent, modes with the default mode, a link to the design system.
-The active theme and the previews are marked.
+The build themes are marked: `default` — the default one, `built` — an additional one.
 
 ```
 granum themes
@@ -251,9 +252,9 @@ granum themes
 
 Catalog: @acme/tokens (2 theme(s), default: slate)
 
-  • clay — Clay (extends slate)
+  • clay — Clay (extends slate) [built]
       modes: light, dark (default: light)
-  • slate — Slate [active]
+  • slate — Slate [default]
       modes: light, dark (default: light)
       docs: https://example.com/themes/slate
 ```
@@ -266,7 +267,7 @@ after" per file.
 
 ## `report`
 
-Reads `granum-report.json`: selection, the theme, modes and previews, classes without a rule with
+Reads `granum-report.json`: selection, the build themes and their modes, classes without a rule with
 sources, safelist covered by statics, the prune plan, layer sizes
 raw/gzip/brotli, warnings.
 

@@ -78,7 +78,7 @@ function appDir(patch: { config?: string, reportExtra?: string } = {}): string {
   writeFileSync(join(root, 'dist/granum-report.json'), JSON.stringify({
     generatedBy: '@feugene/granum@test',
     selection: [{ key: '@x/kit:Card', dependencies: [] }],
-    themes: { theme: 'kit', themeSource: 'default', modes: ['light'], modesSource: 'theme', previews: [] },
+    themes: { defaultTheme: 'kit', themeSource: 'default', themes: [{ id: 'kit', default: true, modes: ['light'], modesSource: 'theme' }] },
     classes: { input: 2, matched: 1, unmatched: [{ className: 'no-such-rule', sources: ['safelist:@x/kit:Card'] }], safelistRedundant: [] },
     tokens: { undefined: [] },
     prune: null,
@@ -266,24 +266,28 @@ describe('granum cli: вызов и коды выхода', () => {
     expect(await runGranumCli(['themes', 'granum.config.mjs'], t.io)).toBe(0)
     const text = t.out.join('\n')
     expect(text).toContain('Catalog: @x/kit (2 theme(s), default: kit)')
-    expect(text).toContain('• kit — Kit [active]')
+    expect(text).toContain('• kit — Kit [default]')
     expect(text).toContain('• night — Night (extends kit)')
     expect(text).toContain('modes: light, dark (default: light)')
     expect(text).toContain('docs: https://example.com/kit')
     const json = io(root)
     expect(await runGranumCli(['themes', 'granum.config.mjs', '--json'], json.io)).toBe(0)
-    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ owner: '@x/kit', defaultTheme: 'kit', active: 'kit', themes: [{ id: 'kit' }, { id: 'night', extends: 'kit' }] })
+    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ owner: '@x/kit', defaultTheme: 'kit', main: 'kit', built: [], themes: [{ id: 'kit' }, { id: 'night', extends: 'kit' }] })
   })
 
-  it('themes: квалифицированный ключ темы и превью сводится к id', async () => {
-    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), theme: '@x/kit:night', previews: ['@x/kit:kit'] }\n` })
+  it('themes: квалифицированный ключ темы сводится к id; основная и дополнительные отмечены', async () => {
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), themes: [{ theme: '@x/kit:night', default: true }, '@x/kit:kit'] }\n` })
     const json = io(root)
     expect(await runGranumCli(['themes', 'granum.config.mjs', '--json'], json.io)).toBe(0)
-    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ active: 'night', previews: ['kit'] })
+    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ main: 'night', built: ['kit'] })
+    const text = io(root)
+    expect(await runGranumCli(['themes', 'granum.config.mjs'], text.io)).toBe(0)
+    expect(text.out.join('\n')).toContain('• night — Night (extends kit) [default]')
+    expect(text.out.join('\n')).toContain('• kit — Kit [built]')
   })
 
   it('prune: 0 всегда, 1 с --strict при наличии удаляемых', async () => {
-    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], modes: { tokenOverrides: { light: { extra: '1' } } } }\n` })
+    const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], themes: [{ theme: 'kit', modes: { tokenOverrides: { light: { extra: '1' } } } }] }\n` })
     const t = io(root)
     expect(await runGranumCli(['prune', 'granum.config.mjs', '--json'], t.io)).toBe(0)
     expect(JSON.parse(t.out[0]!).mode).toBe('off')

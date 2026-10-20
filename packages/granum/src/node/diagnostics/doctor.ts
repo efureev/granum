@@ -14,6 +14,7 @@ import { sortedUnique } from '../../core/dedupe'
 import { DEFAULT_MODE, modeChain } from '../../core/themeData'
 import { allTokenChains, describeLayer } from '../../core/tokenLayers'
 import { stripCssComments } from '../../engine/extract'
+import { scanCssBlocks } from '../cssDeclarations'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { packageSubcomponents } from '../subcomponents'
@@ -48,8 +49,25 @@ export interface DoctorComponentInfo {
   readonly group?: string
 }
 
+/** At-правила, которые сами ничего на странице не красят: шрифты, свойства, анимации. */
+const INERT_AT_RULES = new Set(['@font-face', '@property', '@keyframes', '@counter-style', '@font-feature-values', '@font-palette-values'])
+
+/** Правила `baseCss` верхнего уровня, которые красят страницу: селекторы и at-правила с ними. */
+function globalBaseRules(css: string): string[] {
+  const preludes = scanCssBlocks(stripCssComments(css, 'space')).blocks.map(block => block.prelude.trim().replace(/\s+/g, ' '))
+  return preludes.filter(prelude => !INERT_AT_RULES.has(prelude.split(/[\s(]/, 1)[0]!.toLowerCase().replace(/^@-[a-z]+-/, '@')))
+}
+
+/** Область конфликта для человека: у дополнительной темы — с её именем, `root` — режимонезависимые токены. */
+function conflictScope(scope: string): string {
+  const at = scope.indexOf('/')
+  const mode = at >= 0 ? scope.slice(at + 1) : scope
+  const where = mode === 'root' ? 'the mode-independent tokens' : `mode '${mode}'`
+  return at >= 0 ? `${where} of theme '${scope.slice(0, at)}'` : where
+}
+
 export interface DoctorTokenConflict {
-  /** Режим или `root`. */
+  /** Режим или `root`; у дополнительной темы — `<тема>/<режим>` и `<тема>/root`. */
   readonly mode: string
   readonly token: string
   readonly sources: readonly string[]
@@ -66,6 +84,7 @@ export type DoctorDiagnosticCode
     | 'mode-extends-unresolved'
     | 'mode-extends-cycle'
     | 'token-conflict'
+    | 'theme-base-global'
     | 'token-undefined'
     | 'token-fallback-only'
     | 'safelist-redundant'
@@ -96,6 +115,13 @@ export interface DoctorDiagnostic {
   readonly items?: readonly string[]
 }
 
+export interface DoctorThemeInfo {
+  readonly id: string
+  readonly default: boolean
+  readonly modes: readonly { readonly name: string, readonly value: string, readonly colorScheme: 'light' | 'dark', readonly origin: 'theme' | 'define', readonly tokens: number }[]
+  readonly modesSource: ModesSource
+}
+
 export interface DoctorReport {
   /** Движок приложения: реализация, словарь и его отпечаток. */
   readonly engine: {
@@ -106,14 +132,13 @@ export interface DoctorReport {
   }
   readonly providers: readonly DoctorProviderInfo[]
   readonly components: readonly DoctorComponentInfo[]
-  /** Тема и режимы: что собрано и откуда. */
+  /** Темы сборки и их режимы: что собрано и откуда. */
   readonly themes: {
-    readonly theme: string | null
+    /** Основная тема. */
+    readonly defaultTheme: string | null
     readonly themeSource: ThemeSource | null
     readonly owner: string | null
-    readonly modes: readonly { readonly name: string, readonly value: string, readonly colorScheme: 'light' | 'dark', readonly origin: 'theme' | 'define', readonly tokens: number }[]
-    readonly modesSource: ModesSource
-    readonly previews: readonly string[]
+    readonly themes: readonly DoctorThemeInfo[]
     readonly warnings: readonly ResolvedThemeWarning[]
   }
   readonly tokenConflicts: readonly DoctorTokenConflict[]
@@ -130,8 +155,8 @@ export interface DoctorReport {
 function themeWarningSubject(w: ResolvedThemeWarning): string {
   switch (w.kind) {
     case 'component-theme-unknown': return `${w.providerId}:${w.component}`
-    case 'mode-extends-unresolved': return w.mode
-    case 'mode-extends-cycle': return w.chain.join(' → ')
+    case 'mode-extends-unresolved': return `${w.theme}/${w.mode}`
+    case 'mode-extends-cycle': return `${w.theme}/${w.chain.join(' → ')}`
   }
 }
 
@@ -140,9 +165,9 @@ export function formatThemeWarning(w: ResolvedThemeWarning): string {
     case 'component-theme-unknown':
       return `component ${w.providerId}:${w.component} ships tokens for theme "${w.theme}", which no catalog in the graph declares — they are not used`
     case 'mode-extends-unresolved':
-      return `modes.define.${w.mode} extends "${w.base}", which is neither a theme mode nor a defined mode — it inherits the default mode instead`
+      return `modes.define.${w.mode} of theme '${w.theme}' extends "${w.base}", which is neither a mode of that theme nor a defined mode — it inherits the default mode instead`
     case 'mode-extends-cycle':
-      return `cycle in modes.define[].extends: ${w.chain.join(' → ')} — the chain is cut at the default mode`
+      return `cycle in modes.define[].extends of theme '${w.theme}': ${w.chain.join(' → ')} — the chain is cut at the default mode`
   }
 }
 
@@ -233,56 +258,59 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   // пакетных слоя на один токен: значения приложения перекрывают пакет
   // намеренно. Режимы `define` — копии своей базы, их не считаем повторно.
   const tokenConflicts: DoctorTokenConflict[] = []
-  const definedModes = new Set(resolution.themes.definitions.map(mode => mode.name))
-  for (const chain of allTokenChains(resolution.tokens.active)) {
-    if (definedModes.has(chain.scope))
-      continue
-    const emitted = chain.layers.filter(l => l.skipped === undefined && (l.source === 'theme' || l.source === 'component'))
-    if (emitted.length >= 2)
-      tokenConflicts.push({ mode: chain.scope, token: chain.token, sources: chain.layers.filter(l => l.skipped === undefined).map(describeLayer), finalValue: chain.effective! })
-  }
-
-  // Литералы компонента в режиме сборки, взятые из режима по умолчанию: у
-  // компонента нет файла ни этого режима, ни его предков по `extends`, и,
-  // например, забытый `dark.json` молча даёт тёмному режиму светлые значения.
-  // Формула с `var(` сама следует ролям режима — её не считаем. Режимы
-  // `define` наследуют свою базу — их не считаем повторно.
-  const activeTheme = resolution.themes.theme
-  if (activeTheme) {
-    const defaultMode = activeTheme.data.defaultMode ?? DEFAULT_MODE
-    const fellBack = new Map<string, { mode: string, component: string, tokens: string[] }>()
-    for (const mode of resolution.themes.modes) {
-      if (definedModes.has(mode.name) || modeChain(activeTheme.data, mode.name).names.includes(defaultMode))
+  for (const [i, entry] of resolution.themes.themes.entries()) {
+    const set = resolution.tokens.themes[i]
+    const theme = entry.theme
+    const definedModes = new Set(entry.definitions.map(mode => mode.name))
+    // У основной темы режим пишется как раньше, у дополнительной — с темой.
+    const scopeOf = (mode: string): string => (entry.isDefault ? mode : `${theme.id}/${mode}`)
+    for (const chain of allTokenChains(set)) {
+      if (definedModes.has(chain.scope))
         continue
-      for (const chain of resolution.tokens.active?.modes.get(mode.name)?.values() ?? []) {
+      const emitted = chain.layers.filter(l => l.skipped === undefined && (l.source === 'theme' || l.source === 'component'))
+      if (emitted.length >= 2)
+        tokenConflicts.push({ mode: scopeOf(chain.scope), token: chain.token, sources: chain.layers.filter(l => l.skipped === undefined).map(describeLayer), finalValue: chain.effective! })
+    }
+
+    // Литералы компонента в режиме сборки, взятые из режима по умолчанию: у
+    // компонента нет файла ни этого режима, ни его предков по `extends`, и,
+    // например, забытый `dark.json` молча даёт тёмному режиму светлые значения.
+    // Формула с `var(` сама следует ролям режима — её не считаем. Режимы
+    // `define` наследуют свою базу — их не считаем повторно.
+    const defaultMode = theme.data.defaultMode ?? DEFAULT_MODE
+    const fellBack = new Map<string, { mode: string, component: string, tokens: string[] }>()
+    for (const mode of entry.modes) {
+      if (definedModes.has(mode.name) || modeChain(theme.data, mode.name).names.includes(defaultMode))
+        continue
+      for (const chain of set?.modes.get(mode.name)?.values() ?? []) {
         const layer = chain.layers.find(l => l.source === 'component' && l.mode === defaultMode && l.componentKey !== undefined)
         if (!layer?.componentKey || layer.value.includes('var('))
           continue
-        const entry = fellBack.get(`${layer.componentKey} ${mode.name}`)
+        const found = fellBack.get(`${layer.componentKey} ${mode.name}`)
           ?? { mode: mode.name, component: layer.componentKey, tokens: [] }
-        entry.tokens.push(`--${chain.token}`)
-        fellBack.set(`${layer.componentKey} ${mode.name}`, entry)
+        found.tokens.push(`--${chain.token}`)
+        fellBack.set(`${layer.componentKey} ${mode.name}`, found)
       }
     }
     for (const { mode, component, tokens } of fellBack.values()) {
-      warn('component-mode-missing', component, `no values for mode '${mode}' of theme '${activeTheme.id}' in its themesDir — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root.json`, tokens.sort())
+      warn('component-mode-missing', component, `no values for mode '${mode}' of theme '${theme.id}' in its themesDir — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root.json`, tokens.sort())
     }
 
     // То же для данных самой темы: ни у режима, ни у его предков по `extends`
     // значения нет, и в CSS уходит литерал режима по умолчанию. Судится итог
     // токена: значение, которое режиму дал другой слой, находкой не считается.
-    for (const mode of resolution.themes.modes) {
+    for (const mode of entry.modes) {
       if (definedModes.has(mode.name))
         continue
-      const names = modeChain(activeTheme.data, mode.name).names
+      const names = modeChain(theme.data, mode.name).names
       const tokens: string[] = []
-      for (const chain of resolution.tokens.active?.modes.get(mode.name)?.values() ?? []) {
+      for (const chain of set?.modes.get(mode.name)?.values() ?? []) {
         const layer = chain.layers.findLast(l => l.skipped === undefined)
         if (layer && (layer.source === 'theme' || layer.source === 'app-theme') && layer.mode !== undefined && !names.includes(layer.mode) && !layer.value.includes('var('))
           tokens.push(`--${chain.token}`)
       }
       if (tokens.length > 0)
-        warn('theme-mode-missing', `${activeTheme.id}/${mode.name}`, `mode '${mode.name}' of theme '${activeTheme.id}' has no value for these tokens along its extends chain — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root`, tokens.sort())
+        warn('theme-mode-missing', `${theme.id}/${mode.name}`, `mode '${mode.name}' of theme '${theme.id}' has no value for these tokens along its extends chain — takes the literals of the default mode '${defaultMode}'; a value that is the same in every mode belongs in root`, tokens.sort())
     }
   }
 
@@ -387,11 +415,22 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
 
   for (const w of resolution.themes.warnings)
     warn(w.kind, themeWarningSubject(w), formatThemeWarning(w))
+  // `baseCss` дополнительной темы лежит в её листе, а лист, однажды загруженный,
+  // остаётся в документе: правило стиля оттуда действует на всю страницу и после
+  // возврата к основной теме и спорит с базой общего листа порядком листов.
+  // Безвредны только at-правила, которые сами ничего не красят. Запись, которую
+  // несёт общий лист (вся база основной темы), не судится: она общая по определению.
+  const mainBase = new Set(resolution.themes.default?.theme.data.baseCss ?? [])
+  for (const entry of resolution.themes.themes) {
+    const rules = [...new Set((entry.theme.data.baseCss ?? []).filter(text => !mainBase.has(text)).flatMap(globalBaseRules))]
+    if (rules.length > 0)
+      warn('theme-base-global', entry.theme.id, `baseCss of additional theme '${entry.theme.id}' has rules that style the page: they apply everywhere while its sheet is loaded — also after switching back to the default theme — and compete with the shared sheet's base by sheet order; keep only @font-face, @property and @keyframes there, move the rules to the default theme`, rules)
+  }
   for (const c of tokenConflicts)
-    warn('token-conflict', `${c.mode}:${c.token}`, `--${c.token} in ${c.mode === 'root' ? 'the mode-independent tokens' : `mode '${c.mode}'`} is written by several layers (${c.sources.join(' → ')}), final value: ${c.finalValue}`)
+    warn('token-conflict', `${c.mode}:${c.token}`, `--${c.token} in ${conflictScope(c.mode)} is written by several layers (${c.sources.join(' → ')}), final value: ${c.finalValue}`)
   for (const w of resolution.warnings) {
     if (w.kind === 'override-skipped')
-      warn('override-skipped', `${w.mode}:${w.token}`, `strictTokens dropped the override of '--${w.token}' in ${w.mode === 'root' ? 'root' : `mode '${w.mode}'`}: neither the theme data nor the component tokens declare it`)
+      warn('override-skipped', `${w.theme}/${w.mode}:${w.token}`, `strictTokens dropped the override of '--${w.token}' in ${w.mode === 'root' ? 'root' : `mode '${w.mode}'`} of theme '${w.theme}': neither the theme data nor the component tokens declare it`)
   }
   for (const w of app.warnings) {
     if (w.kind === 'provider-without-manifest')
@@ -427,18 +466,21 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
     providers,
     components,
     themes: {
-      theme: resolution.themes.theme?.id ?? null,
+      defaultTheme: resolution.themes.default?.theme.id ?? null,
       themeSource: resolution.themes.themeSource ?? null,
       owner: resolution.themes.owner ?? null,
-      modes: resolution.themes.modes.map(mode => ({
-        name: mode.name,
-        value: mode.value,
-        colorScheme: mode.colorScheme,
-        origin: mode.origin,
-        tokens: resolution.tokens.active?.modes.get(mode.name)?.size ?? 0,
+      themes: resolution.themes.themes.map((entry, i) => ({
+        id: entry.theme.id,
+        default: entry.isDefault,
+        modes: entry.modes.map(mode => ({
+          name: mode.name,
+          value: mode.value,
+          colorScheme: mode.colorScheme,
+          origin: mode.origin,
+          tokens: resolution.tokens.themes[i]?.modes.get(mode.name)?.size ?? 0,
+        })),
+        modesSource: entry.modesSource,
       })),
-      modesSource: resolution.themes.modesSource,
-      previews: resolution.themes.previews.map(preview => preview.theme.id),
       warnings: resolution.themes.warnings,
     },
     tokenConflicts,
@@ -501,6 +543,7 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'token-undefined',
   'token-fallback-only',
   'token-conflict',
+  'theme-base-global',
   'override-skipped',
   'css-double-delivery',
   'important-in-provider-css',
@@ -619,12 +662,13 @@ export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOp
   push()
 
   const t = report.themes
-  push(`Theme: ${t.theme ?? '—'}${t.themeSource ? ` (source: ${THEME_SOURCE_TEXT[t.themeSource]}${t.owner ? `, catalog of ${t.owner}` : ''})` : ''}`)
-  push(`Modes: [${t.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[t.modesSource]})`)
-  for (const m of t.modes)
-    push(`  • ${m.name} → ${m.value} (${m.colorScheme}${m.origin === 'define' ? ', modes.define' : ''}, ${m.tokens} token(s))`)
-  if (t.previews.length > 0)
-    push(`Previews: ${t.previews.join(', ')}`)
+  push(`Theme: ${t.defaultTheme ?? '—'}${t.themeSource ? ` (source: ${THEME_SOURCE_TEXT[t.themeSource]}${t.owner ? `, catalog of ${t.owner}` : ''})` : ''}`)
+  for (const theme of t.themes) {
+    const role = theme.default ? 'default, main sheet' : 'own sheet'
+    push(`${theme.id} (${role}) — modes: [${theme.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[theme.modesSource]})`)
+    for (const m of theme.modes)
+      push(`  • ${m.name} → ${m.value} (${m.colorScheme}${m.origin === 'define' ? ', modes.define' : ''}, ${m.tokens} token(s))`)
+  }
   push()
   push(`Files checked: ${report.files.checked}${report.files.missing.length ? `, missing: ${report.files.missing.length}` : ''}`)
   push()

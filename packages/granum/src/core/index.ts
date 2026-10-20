@@ -7,19 +7,22 @@ export { ownsThemes, toProviderNode } from './providerNode'
 export type { ComponentKey, ComponentRegistry, RegistryEntry } from './registry'
 export { buildRegistry, resolveComponentTarget, splitComponentKey, toComponentKey } from './registry'
 export type { GranumResolution, GranumResolveInput, ResolutionWarning } from './resolve'
-export { resolveGranum, resolveTokenValue } from './resolve'
+export { resolveGranum, resolveTokenValue, themeTokenSet } from './resolve'
 export type { ComponentCssRef, ComponentSelection, ComponentSelectionItem, ResolvedSelection } from './resolveSelection'
 export { collectClasses, collectComponentCss, collectDependencyClosure, collectSafelist, normalizeDependency, normalizeSelection, resolveSelection } from './resolveSelection'
 export type {
   ComponentThemesInput,
+  GranumActivation,
   GranumAppTheme,
-  GranumModeActivation,
   GranumModeDefinition,
-  GranumModesInput,
   GranumThemeChoice,
+  GranumThemeConfig,
+  GranumThemeEntry,
+  GranumThemeModes,
   ModesSource,
+  PlannedTheme,
+  ResolvedBuildTheme,
   ResolvedMode,
-  ResolvedPreview,
   ResolvedTheme,
   ResolvedThemes,
   ResolvedThemeWarning,
@@ -30,9 +33,12 @@ export type {
   ThemeSource,
 } from './resolveThemes'
 export {
+  additionalThemes,
   APP_THEME_SOURCE,
   componentModeSequence,
+  defaultThemeIndex,
   findThemeOwner,
+  normalizeThemeEntry,
   planModeDefinitions,
   planThemes,
   resolveThemes,

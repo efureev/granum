@@ -89,7 +89,7 @@ export default {
       report.selection.map(s => s.key.split(':').pop()).join(',') === 'XTest1,XgQuick,XhCard,XTokenized',
       `селекция: ${report.selection.map(s => s.key)}`,
     )
-    check(report.themes.theme === 'heavy' && report.themes.modes.join(',') === 'light,dark', `тема и режимы: ${report.themes.theme}, ${report.themes.modes}`)
+    check(report.themes.defaultTheme === 'heavy' && report.themes.themes[0]?.modes.join(',') === 'light,dark', `тема и режимы: ${report.themes.defaultTheme}, ${report.themes.themes[0]?.modes}`)
     check(report.classes.unmatched.length === 0, `классы без правила: ${JSON.stringify(report.classes.unmatched)}`)
     // Обрезка включена и что-то сняла, но токен, до которого достаёт только
     // разметка приложения, остался: серверный рендер её не обманывает.

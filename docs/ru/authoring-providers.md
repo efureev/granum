@@ -165,7 +165,7 @@ components/XhButton/themes/
 Имя папки — id темы, имя файла — режим; файл — JSON или CSS с одним плоским блоком
 (селектор не важен). Иное содержимое — `invalid-theme-dir`; `README.md` и скрытые
 файлы пропускаются. Темы чужого каталога законны: спутник кладёт токены для тем
-дизайн-системы, и приложение применяет их, когда тема активна. Объектная форма
+дизайн-системы, и приложение применяет их, когда тема есть в сборке. Объектная форма
 провайдера (тесты, локальная разработка) данных не сливает: её `data` обязаны быть
 полными. Примеры — фикстуры [`themes-package`](../../fixtures/themes-package/README.md),
 [`themed-ds-package`](../../fixtures/themed-ds-package/README.md) и
@@ -198,7 +198,7 @@ components/XhButton/themes/
 import { emitThemeStylesheet } from '@feugene/granum/node'
 import { provider } from './src/granum-provider/index.ts'
 
-const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate', root: process.cwd() })
+const { css } = await emitThemeStylesheet({ providers: [provider], themes: [{ theme: 'slate', modes: ['light', 'dark'] }], root: process.cwd() })
 ```
 
 Тот же лист по частям — `parts`: `root` (всё, что от режима не зависит) и
@@ -207,7 +207,9 @@ const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate
 только свои режимы; его бандлер склеит их в один файл. `root` подключается
 первым. Каждый режим самодостаточен — наследование по `extends` в нём уже
 раскрыто, — а `:root` несёт только режим по умолчанию: приложению без него пару
-на `<html>` ставит скрипт режима или разметка.
+на `<html>` ставит скрипт режима или разметка. Дополнительные записи `themes` дают
+листы других тем — `sheets.<тема>`: полные блоки пар без `:root`, рядом с основной
+темой их можно подключать в любом порядке.
 
 Токенов пакетов-спутников в таком файле нет: все манифесты знает только сборка
 приложения. Ключ с `$` в JSON папки `themesDir` — пояснение для читателя
@@ -221,9 +223,12 @@ const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate
 import { createThemeManifest } from '@feugene/granum/runtime'
 
 const manifest = createThemeManifest({
-  theme: { id: 'slate', title: 'Сланец' },
-  modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
-  defaultMode: 'light',
+  themes: [{
+    id: 'slate',
+    title: 'Сланец',
+    modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
+    defaultMode: 'light',
+  }],
 })
 ```
 

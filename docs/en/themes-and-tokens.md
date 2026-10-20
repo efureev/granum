@@ -4,11 +4,13 @@
 
 A token is a CSS custom property (`--th-accent`). A **theme** is a design language:
 a complete set of token values without selectors, mode-independent (`root`) and per
-**mode** (`light`, `dark`, then anything). An application build has exactly one active
-theme; all of its modes go into CSS at once and switch at runtime by an attribute on the root.
-Every name in data, configs and token files is written **without** `--`: the
-generator adds the prefix; a key with `--` is an error (`InvalidTokenKeyError` in a
-provider, `InvalidConfigError` with the field path in an application).
+**mode** (`light`, `dark`, then anything). The application lists the build themes:
+one **default** theme — in the shared sheet and under `:root`, the other ones are
+**additional** — each in a sheet of its own. A theme and a mode are switched on by a
+pair in an attribute on the root and switch at runtime. Every name in data, configs
+and token files is written **without** `--`: the generator adds the prefix; a key
+with `--` is an error (`InvalidTokenKeyError` in a provider, `InvalidConfigError`
+with the field path in an application).
 
 ## Theme, mode, pair
 
@@ -19,195 +21,247 @@ provider, `InvalidConfigError` with the field path in an application).
 | pair | the value of the activation attribute: `<theme>-<mode>` (`slate-light`, `ink-dim`) |
 | catalog | the themes a provider declares; there is one catalog owner in the graph |
 | registry | the owner's dictionary: token → `root` or `mode`; the build checks a theme's completeness against it |
+| default theme | the build theme under `:root`: its blocks are in the shared sheet, its default mode applies without the attribute |
+| additional theme | a build theme in a sheet of its own: full pair blocks, never under `:root` |
 
 A mode's `extends` names a mode of the same theme: its final tokens are the
 ancestors along the chain, then its own. granum does not interpret `extensions`: the
 field goes to `virtual:granum/themes` as is — that is how a design system hands the
 application, for example, the default props of its components.
 
-## Catalog and choosing the theme
+## Build themes
 
 The catalog is declared by a provider — usually a separate token package without
 components ([for provider authors](./authoring-providers.md#themes-catalog-registry-data)).
-The application picks the theme in its config:
+The application lists the build themes in `themes`:
 
 ```ts
 export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@acme/ui'],
-  theme: 'ink',          // catalog id; '@acme/tokens:ink' is the qualified id
-  previews: ['paper'],   // themes shown next to the active one
-  modes: { names: ['light', 'dark', 'dim'] },
+  themes: [
+    { theme: 'ink', default: true, modes: ['light', 'dark', 'dim'] }, // default
+    { theme: 'paper', modes: ['light', 'dark'] },                     // additional
+    '@acme/tokens:clay',                                              // qualified id, its default mode only
+  ],
 })
 ```
 
-Without `theme`, the catalog owner's `defaultTheme` is used (or the catalog's only
-theme). The report and `doctor` show the source as `themeSource`: `provider` —
+An entry is a theme (a catalog id, `'@acme/tokens:ink'` or an application theme
+object) or `{ theme, default?, modes? }`. There is exactly one default theme: in a
+list of one entry it is that entry, in a longer list — the one marked
+`default: true`; no mark or two marks are `InvalidConfigError('themes')`. An empty
+list is an error too: a build without themes is a graph without a catalog owner.
+Without `themes`, the catalog owner's `defaultTheme` is used (or the catalog's only
+theme). The order of entries is the order of themes in the manifest.
+
+The report and `doctor` show the default theme's source as `themeSource`: `provider` —
 an id from the config, `default` — the owner's default theme, `app` — an
 application theme object. The owner need not be listed in `providers`: a string
 dependency of a manifest (`dependencies: ['@acme/tokens']`) loads the donor from
 the directory of the dependent package, and the `'all'` selection does not pick its components.
 
-Data is read only for the active theme and the previews; the other themes of the
-catalog do not reach the build and are not opened. An unknown id is a `ThemeResolutionError`
-(`unknown-theme`) with the list of available themes; two catalog owners in the graph are
-`multiple-theme-owners`.
+Data is read only for the themes in `themes`; the other themes of the catalog do not
+reach the build and are not opened. An unknown id is a `ThemeResolutionError`
+(`unknown-theme`) with the list of available themes; one theme listed twice is
+`duplicate-theme`; two catalog owners in the graph are `multiple-theme-owners`.
 
 ## Mode set and application modes
 
-Without `modes.names` CSS gets the theme's default mode (`light`) and the keys of
-`modes.define`: the theme is built for the application, and a second mode is the
-application's decision, not a default. Need dark — name it: `modes: { names: ['light', 'dark'] }`.
-The default mode always comes first; if `modes.names` does not name it, the first mode of the set
-becomes the build's default mode. A mode that a mode of the set extends (`extends`) does not have
-to be in the set itself: its values are taken along the chain, and it gets no block. A name outside
-the theme and `define` is `unknown-mode`.
+Every theme has modes of its own, in the `modes` of its entry: an array of names or
+an object `{ names, define, tokenOverrides, strictTokens }`. Without `names` CSS gets
+the theme's default mode (`light`) and the keys of its `define`: the theme is built
+for the application, and a second mode is the application's decision, not a default.
+The rule is the same for the default and the additional themes. The default mode
+always comes first; if `names` does not name it, the first mode of the set becomes the
+theme's default mode in the build. A mode that a mode of the set extends (`extends`)
+does not have to be in the set itself: its values are taken along the chain, and it
+gets no block. A name outside the theme and its `define` is `unknown-mode`.
 
 ```ts
-modes: {
-  define: {
-    ocean: { extends: 'dark', tokens: { 'th-accent': '#0ea5e9' }, title: 'Ocean', colorScheme: 'dark' },
-    sepia: { extends: 'light', tokensRef: new URL('./src/sepia.css', import.meta.url).href },
+themes: [{
+  theme: 'ink',
+  modes: {
+    names: ['light', 'dark'],
+    define: {
+      ocean: { extends: 'dark', tokens: { 'th-accent': '#0ea5e9' }, title: 'Ocean', colorScheme: 'dark' },
+      sepia: { extends: 'light', tokensRef: new URL('./src/sepia.css', import.meta.url).href },
+    },
+    tokenOverrides: { root: { 'th-radius': '4px' }, dark: { 'th-bg': '#050505' } },
+    strictTokens: true,
   },
-  tokenOverrides: { root: { 'th-radius': '4px' }, dark: { 'th-bg': '#050505' } },
-  strictTokens: true,
-  system: 'media',
-}
+}]
 ```
 
-`define` is an application mode on top of a theme mode or another `define`: it takes
-the base's final values (component tokens included) and adds its own. The base hands
-over its `@supports` fallbacks computed from its own values; a mode that changes roles
-needs its own — `fallbacks: [{ supports, tokens }]`, which come after the inherited ones
-and override them token by token. An unknown
+`define` is an application mode on top of a mode of its theme or another of its
+`define`: it takes the base's final values (component tokens included) and adds its
+own. The base hands over its `@supports` fallbacks computed from its own values; a
+mode that changes roles needs its own — `fallbacks: [{ supports, tokens }]`, which
+come after the inherited ones and override them token by token. An unknown
 base and a cycle are warnings `mode-extends-unresolved` and `mode-extends-cycle`;
-such a mode inherits the default mode. A `define` named like a mode of the
-theme is the same pair — error `activation-collision`. `tokensRef` is an
+such a mode inherits the default mode. A `define` named like a mode of its theme is
+the same pair — error `activation-collision`. `tokensRef` is an
 application CSS file with one flat block of tokens; literal `tokens` win. A file with
 several blocks is the error `multiple-blocks` unless `selector` names the block
 wanted.
 
-`tokenOverrides.root` goes into the mode-independent values, `tokenOverrides.<mode>` —
-into the mode; a mode outside the set is `unknown-mode`. With `strictTokens: true` an
-override of a token present neither in the theme data nor in component tokens is dropped,
-and the report gets `override-skipped`. `system: 'media'` adds the dark mode by
-`prefers-color-scheme` for a page whose root has no attribute yet.
+`tokenOverrides.root` goes into the mode-independent values of its theme,
+`tokenOverrides.<mode>` — into its mode; a mode outside the set is `unknown-mode`.
+With `strictTokens: true` an override of a token present neither in the theme data
+nor in component tokens is dropped, and the report gets `override-skipped`. The
+values of one theme never touch another.
 
 ## Activation
 
-A mode is switched on by an attribute on the root: `data-theme="<theme>-<mode>"` by default.
-The attribute and the value template are changed in `modes.activation`:
+A theme and a mode are switched on by an attribute on the root:
+`data-theme="<theme>-<mode>"` by default. The attribute, the value template and the
+system scheme are shared by all build themes, in `activation`: a document has one root.
 
 ```ts
-modes: { activation: { attribute: 'data-theme', value: '{theme}-{mode}' } }
+activation: { attribute: 'data-theme', value: '{theme}-{mode}', system: 'media' }
 ```
 
-The template must contain `{mode}`, and the values of all pairs of the active theme,
-`define` and the previews must differ; otherwise `activation-collision`. granum emits
-no `.light`/`.dark` classes. The engine's `dark:` variant is built from the pairs of modes
-with `colorScheme: 'dark'` (`[data-theme="ink-dark"] .dark\:…`): it is a descendant
-selector, and a light island inside a dark page matches it too — islands are served
-by mode tokens, not by the variant.
+The template must contain `{mode}`, and the values of all pairs of all build themes
+and their `define` must differ; otherwise `activation-collision`. `system: 'media'`
+adds the default theme's dark mode by `prefers-color-scheme` for a page whose root
+has no attribute yet: a root without the attribute is always the default theme.
+granum emits no `.light`/`.dark` classes. The engine's `dark:` variant is built from
+the pairs with `colorScheme: 'dark'` of **all** build themes
+(`[data-theme="ink-dark"] .dark\:…`): utilities live in the shared sheet, and a pair
+of an additional theme can be dark too. It is a descendant selector, and a light
+island inside a dark page matches it too — islands are served by mode tokens, not
+by the variant.
 
 ## Value layers
 
-A token's value in a mode is assembled from layers, each overriding the previous:
+A build theme token's value in a mode is assembled from layers, each overriding the
+previous:
 
 1. theme data — `root`, then the mode chain;
-2. component tokens for the active theme — in selection order;
+2. component tokens for that theme — in selection order;
 3. the application theme object;
-4. `modes.define`;
-5. `modes.tokenOverrides`.
+4. `modes.define` of the theme's entry;
+5. `modes.tokenOverrides` of the theme's entry.
 
 A token declared in at least one mode gets a value in every mode: along the mode's
 `extends` chain, otherwise from the default mode. Such a value is a fallback: it does
 not override what another layer already gave the mode. A value taken from the default
 mode brings that mode's `@supports` fallbacks for the token along, ahead of the mode's
 own. One function computes the value
-for CSS, the report and the CLI: `granum tokens <id:Name> --deep` shows the layer chain for
-each mode together with the theme and mode the value came from.
+for CSS, the report and the CLI: `granum tokens <id:Name> --deep` shows the layer chain
+for each mode of the default theme together with the theme and mode the value came from.
 
 ## Component tokens per theme
 
 Component tokens live next to the component, in the `themesDir` folder: `<theme>/root.json`
 and `<theme>/modes/<mode>.json` (or `.css` with one flat block). The provider build puts them
-into the manifest. For the active theme a token's value is looked up as follows: the mode, its
-ancestors by `extends`, the default mode — and in each of them the theme first, then its
+into the manifest. For every build theme a token's value is looked up as follows: the mode,
+its ancestors by `extends`, the default mode — and in each of them the theme first, then its
 ancestors in the catalog. So in theme `ink`, which extends `paper`, mode `dim`
 (extends `dark`) takes the button token from `paper/modes/dark.json` when `ink` has none.
+Every theme has its own chain: an additional theme does not take tokens from the default
+one unless that is its ancestor.
 
 A component may ship tokens for themes of a foreign catalog — a companion for a theme
-of the design system: they apply when that theme is active. A theme folder that no
+of the design system: they apply when that theme is in the build. A theme folder that no
 catalog of the graph declares is a `component-theme-unknown` warning, not an error.
 
 ## CSS layout
 
 ```css
+/* shared sheet — the default theme ink */
 @layer granum.tokens {
-  :root { --th-radius: 2px; }                        /* root literals */
+  :root:not([data-theme]), [data-theme="ink-light"], [data-theme="ink-dark"], [data-theme="ink-dim"] { --th-radius: 2px; }  /* root literals */
 }
 @layer granum.themes {
-  :root, [data-theme] { --th-ring: 0 0 0 2px var(--th-accent); }
-  :root, [data-theme="ink-light"] { color-scheme: light; --th-bg: #ffffff; }
+  :where(:root), [data-theme="ink-light"], [data-theme="ink-dark"], [data-theme="ink-dim"] { --th-ring: 0 0 0 2px var(--th-accent); }
+  :where(:root), [data-theme="ink-light"] { color-scheme: light; --th-bg: #ffffff; }
   [data-theme="ink-dark"] { color-scheme: dark; --th-bg: #0f172a; }
   [data-theme="ink-dim"] { color-scheme: dark; --th-bg: #1e293b; }
   @supports not (color: color-mix(in oklab, red, red)) {
     :root:not([data-theme]), [data-theme="ink-light"] { … }
   }
-  [data-theme="paper-light"], [data-theme="paper-dark"] { … }  /* preview: formulas */
-  [data-theme="paper-light"] { … }                   /* preview: full block */
+}
+/* sheet of the additional theme paper */
+@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;
+@layer granum.themes {
+  [data-theme="paper-light"], [data-theme="paper-dark"] { … }  /* formulas */
+  [data-theme="paper-light"] { … }                              /* full block */
 }
 ```
 
 A formula referencing `var(` — in `root` or identical in every mode — sits under the
-shared boundary `:root, [data-theme]`: it is recomputed on every mode island
-instead of being inherited ready-made from the root. The default mode comes first under
-`:root` and its own pair, the others follow the set order; with equal specificity
-position decides. Then come the `@supports` fallbacks in the same order: the default
-mode's one goes under `:root:not([data-theme])` and its pair rather than under `:root`,
-otherwise it would override another mode's pair on the root by position. With
-`system: 'media'` the `prefers-color-scheme` block closes the list and carries the dark
-mode's fallbacks inside the same media query. A mode's `colorScheme` is a
-`color-scheme` declaration in its block. The theme data's `baseCss` goes to the `base` layer.
+default theme's shared boundary — `:where(:root)` and the list of its pairs: it is
+recomputed on every mode island instead of being inherited ready-made from the root.
+The boundary is exactly the list of pairs, not `[data-theme]`: it does not reach a
+pair of another theme. The default mode comes first under `:where(:root)` and its own
+pair, the others follow the set order. The default theme's `:root` sits under
+`:where()` and weighs zero: a pair of any mode and any theme on the root overrides it
+by specificity rather than by position — so the cascade does not depend on the order
+of the sheets in the document. Then come the `@supports` fallbacks in the same order:
+the default mode's one goes under `:root:not([data-theme])` and its pair, otherwise it
+would reach a root with another pair. With `system: 'media'` the
+`prefers-color-scheme` block closes the list and carries the dark mode's fallbacks
+inside the same media query. A mode's `colorScheme` is a `color-scheme` declaration
+in its block. The default theme's `baseCss` goes to the `base` layer of the shared sheet.
 
-## Previews
+## Additional themes
 
-`previews` show other catalog themes next to the active one — on a design
-system page or a portal. Every preview pair gets a full block: its own
-`root` literals, the mode, the component tokens of the selection and the fallbacks;
-formulas go once under the list of its pairs (`[data-theme="paper-light"], [data-theme="paper-dark"]`).
-A value prefix would also match the active theme's pairs (`slate-` matches
-`slate-hc-light`). A preview never
-goes under `:root`, and token pruning cuts it the same way as the active theme.
+Every build theme except the default one is additional. Every pair of it gets a full
+block: its own `root` literals, the mode, the component tokens of the selection and
+the fallbacks; formulas go once under the list of its pairs (`[data-theme="paper-light"],
+[data-theme="paper-dark"]`). A value prefix would also match the pairs of another
+theme (`slate-` matches `slate-hc-light`). An additional theme never goes under
+`:root`, and token pruning cuts it the same way as the default one.
 
-By default the preview blocks sit in the shared sheet, and every page pays for them.
-`css: { previews: 'separate' }` moves them into the modules
-`virtual:granum/previews.css` (all preview themes) and
-`virtual:granum/previews/<id>.css` (one) — imported only by the page that shows the
-preview:
+The shared sheet has no blocks of an additional theme — they live only in its sheet.
+The sheet is self-sufficient: the shared sheet and it alone give the whole theme,
+without the sheets of other themes. It starts with the layer order declaration and
+puts the blocks into the `themes` layer and its own `baseCss` into the `base` layer
+(except the entries the shared sheet already has), so linked before the shared sheet
+it does not change the cascade. Once loaded, the sheet stays in the document, and its
+`base` applies to the whole page — an additional theme's `baseCss` is the place only
+for `@font-face`, `@property` and `@keyframes`; `doctor` reports a style rule there as
+`theme-base-global`. The sheet comes two ways:
+
+- as a module — a page that always shows the theme imports it statically:
 
 ```ts
 // src/pages/themes/[slug].astro — and nowhere else
-import 'virtual:granum/previews.css'
+import 'virtual:granum/themes/paper.css' // one theme; 'virtual:granum/themes.css' — all additional ones
 ```
 
-The stand is `apps/app-theme-previews`: two pages, only one gets the preview sheet.
+- by the address in the manifest — for switching at runtime: the manifest module
+  imports the sheet `?url` as the file `/@granum-theme/granum-theme-<id>.css`. At
+  build time Vite runs it through the same CSS pipeline as the shared sheet, emits it
+  as an asset with a hash and puts the address, `base` included, into the theme entry's
+  `href`; in dev the dev server serves that address. The plugin puts no `<link>` into
+  HTML — the runtime loads the sheet.
 
-A preview module carries the layer order declaration and puts the blocks into the
-`themes` layer, so the cascade is the same as with the shared sheet.
+The two ways combine: the sheet ends with a marker, `@property --granum-sheet-<id>`
+outside the layers and without a selector, so the loader recognises a sheet already
+imported statically and inserts no second `<link>` — the page downloads it once.
+
+A module of the default theme is an error pointing out that its blocks are in
+`virtual:granum.css`; a theme outside the build is an error listing the additional themes.
+
+The stand is `apps/app-theme-sheets`: two pages, only one gets the additional theme's
+sheet as a module, and the manifest carries the asset address.
 
 ## An application's own theme
 
-`theme` also accepts a `GranumThemeData` object — complete data. Inheriting from a
-catalog theme is resolved by the application itself, before the config, and `extends`
-tells granum whose component tokens to build on:
+A `themes` entry also accepts a `GranumThemeData` object — complete data. Inheriting
+from a catalog theme is resolved by the application itself, before the config, and
+`extends` tells granum whose component tokens to build on:
 
 ```ts
-theme: {
-  ...brandData,          // complete data: id, title, root, modes
-  extends: 'paper',      // component tokens for modes where the theme sets none
-  sources: ['src/theme'],
-}
+themes: [{
+  theme: {
+    ...brandData,          // complete data: id, title, root, modes
+    extends: 'paper',      // component tokens for modes where the theme sets none
+    sources: ['src/theme'],
+  },
+}]
 ```
 
 An `extends` absent from the catalog is the error `unknown-theme` listing the available
@@ -227,7 +281,7 @@ minus what the component assigns itself (`--x:` in its own CSS, `v-bind()`
 variables from `<style>`). The application merges consumption with `appSources` — those
 are the pruning roots. `token-undefined` in the report and in `doctor` is one set: a token
 a selected component requires from outside (except `dynamicTokens`) that got no
-value in any mode of the active theme and is not declared by inlined
+value in any mode of any build theme and is not declared by inlined
 files. Tokens of the application's own markup are not part of it.
 
 A token a component reads **only** through `var(--x, fallback)` is not required
@@ -244,10 +298,11 @@ pruneTokens: { mode: 'on', keep: ['th-brand-*'] }
 ```
 
 Pruning removes declarations unreachable from the roots from the `tokens` and
-`themes` layers; `base` is untouched. Theme data and component tokens are the package layer and
-are cut by reachability. Roots: consumption in the CSS of selected components and in the
-engine output, `consumes` and `dynamic` from the manifests, `appSources`, the application's
-values (`modes.define`, `modes.tokenOverrides`, the theme object), `keep`.
+`themes` layers; `base` is untouched. Theme data and component tokens are the package
+layer and are cut by reachability for every build theme. Roots: consumption in the CSS
+of selected components and in the engine output, `consumes` and `dynamic` from the
+manifests, `appSources`, the application's values (`define` and `tokenOverrides` of
+the theme entries, theme objects), `keep`.
 Reachability follows the "token → tokens in its value" graph, so
 `--soft: color-mix(…, var(--danger))` keeps `--danger`. A token needed by one
 mode is kept in all of them.
@@ -263,17 +318,42 @@ import { createThemeController } from '@feugene/granum/runtime'
 import manifest from 'virtual:granum/themes'
 
 const themes = createThemeController(manifest)
-themes.theme              // { id: 'ink', title: 'Ink' } — read-only
-themes.modes()            // [{ name: 'light', value: 'ink-light', colorScheme: 'light' }, …]
-themes.setMode('dim')     // <html data-theme="ink-dim">
-themes.mode               // 'dim'
+themes.themes()            // [{ id: 'ink', modes, defaultMode }, { id: 'paper', …, href: '/assets/granum-theme-paper-….css' }]
+themes.theme.id            // 'ink'
+themes.modes()             // modes of the current theme: [{ name: 'light', value: 'ink-light', colorScheme: 'light' }, …]
+themes.setMode('dim')      // <html data-theme="ink-dim">
+await themes.setTheme('paper') // the paper sheet, then <html data-theme="paper-dark">
+themes.subscribe(({ theme, mode }) => {})
 ```
 
-The manifest is the active theme, its modes with their pairs in CSS order, the default mode,
-the activation attribute and `extensions`; it does not depend on the component selection.
-The controller stores the **mode** name, not the pair (key `granum-theme`): changing the theme
-at build time does not reset the user's choice. On start, `initial: 'auto'` takes the pair
-already set on the root — and leaves the root alone; otherwise the stored mode,
-the system scheme (the first mode with a matching `colorScheme`) and the default mode.
+The manifest is the build themes in config order (each with its modes and their pairs
+in CSS order, the default mode, the sheet's `href` for an additional theme and
+`extensions`), `defaultTheme` and the activation attribute; apart from the sheet
+addresses it does not depend on the component selection. `setTheme` loads the theme's
+sheet first (`loadThemeSheet`) and only then sets the pair: the theme's values without
+its sheet would be someone else's. While the sheet of an additional theme chosen at
+start is loading, `setMode` does not set the pair either — it only remembers the mode;
+if the sheet fails, the controller stays in the default theme. The outcome of a link
+inserted by the early script is marked on it (`data-granum-state`), so a sheet that
+failed before the controller is not awaited forever, and the next `setTheme` loads it
+again. The mode on a theme change is the given `mode`,
+otherwise the one named like the current one, otherwise the first of the same scheme,
+otherwise the theme's default mode.
+
+The controller stores not the pair but a selection key (key `granum-theme`): the mode
+name for the default theme, `<theme>-<mode>` for an additional one
+(`themeSelectionKey`). A default-theme mode stored without the theme name survives a
+change of the default theme at build time; a key that names no mode of a selectable
+build theme gives no choice. On start, `initial: 'auto'` takes the pair already set
+on the root — and leaves the root alone, finding and awaiting the sheet of its theme;
+otherwise the stored choice, the system scheme (the first mode of the default theme
+with a matching `colorScheme`) and the default mode. A stored additional theme is set
+once its sheet has loaded — `ready`; if the sheet fails, the controller stays on the
+default theme. `initial` may also name the choice outright — a mode of the default
+theme or `{ theme?, mode? }`, the shape `themeRootAttributes` takes: a server that read
+the choice from a cookie hands the same selection to the app it renders.
+
 The pair is set before the first frame by `createThemeScript` or the plugin option
-`themeScript` ([server rendering](./ssr.md)).
+`themeScript` ([server rendering](./ssr.md)): for an additional theme the script first
+inserts its sheet's `<link rel="stylesheet" blocking="render">`, and it does not pick a
+theme without a sheet address (a manifest built before the bundle).

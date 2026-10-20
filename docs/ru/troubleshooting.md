@@ -90,30 +90,37 @@
 
 ## Режим не применяется
 
-- `granum doctor` → разделы `Theme` и `Modes`: та ли тема активна и есть ли режим в
-  наборе? Тема — `theme` конфига, без него — `defaultTheme` владельца каталога;
-  режимы — `modes.names`, без них — режим по умолчанию темы и `modes.define`: тёмный
-  режим без `modes.names: ['light', 'dark']` в сборку не попадает.
+- `granum doctor` → раздел `Theme` и строки тем сборки: та ли тема основная, есть ли
+  нужная тема в сборке и режим в её наборе? Темы — `themes` конфига, без него —
+  `defaultTheme` владельца каталога; режимы — `modes` записи темы, без них — режим по
+  умолчанию темы и её `define`: тёмный режим без `modes: ['light', 'dark']` в сборку
+  не попадает — ни у основной темы, ни у дополнительной.
+- Пара дополнительной темы без её листа даёт значения основной: лист грузит
+  `setTheme` контроллера (`loadThemeSheet`), ранний скрипт или страница импортом
+  `virtual:granum/themes/<id>.css`. В общем листе блоков дополнительной темы нет.
 - На корне стоит пара `data-theme="<тема>-<режим>"`, а не имя режима: `dark` без
   темы не совпадёт ни с одним блоком. Пары перечисляет `virtual:granum/themes`;
   контроллер и `createThemeScript` пишут их сами.
 - Классов `.light`/`.dark` granum не выводит: CSS, который на них рассчитывает,
   переводится на атрибут, а утилиты `dark:` строятся по парам тёмных режимов.
-- `mode-extends-unresolved`: база `modes.define` — ни режим темы, ни другой
-  `define`; режим наследует режим по умолчанию. `mode-extends-cycle` — `define`
-  ссылаются друг на друга по кругу.
+- `mode-extends-unresolved`: база `modes.define` записи темы — ни режим этой темы,
+  ни другой её `define`; режим наследует режим по умолчанию. `mode-extends-cycle` —
+  `define` ссылаются друг на друга по кругу.
 
 ## Ошибки тем и режимов
 
 | Ошибка | Причина и что делать |
 |---|---|
-| `ThemeResolutionError (unknown-theme)` | `theme` или `previews` называют тему, которой нет в каталоге; в ошибке — список доступных. Без `theme` и без `defaultTheme` у каталога из нескольких тем — та же ошибка; и `extends` темы-объекта, которого нет в каталоге |
-| `ThemeResolutionError (unknown-mode)` | имя в `modes.names` или ключ `modes.tokenOverrides` — не режим темы и не `define` |
-| `ThemeResolutionError (multiple-theme-owners)` | каталог тем объявляют два провайдера графа; лишние темы отдайте приложению объектом в `theme` |
+| `InvalidConfigError (themes)` | в `themes` несколько тем и ни одна не помечена `default: true` (или помечены две), либо список пуст. Отметьте ту, что встаёт под `:root`; сборка без тем — это отсутствие `themes` у графа без владельца каталога |
+| `InvalidConfigError (theme, previews, modes, css.previews)` | ключи прежних форм конфига: темы сборки перечисляются в `themes`, режимы — в `modes` записи темы, атрибут и системная схема — в `activation`; дополнительная тема всегда своим листом |
+| `ThemeResolutionError (unknown-theme)` | запись `themes` называет тему, которой нет в каталоге; в ошибке — список доступных. Без `themes` и без `defaultTheme` у каталога из нескольких тем — та же ошибка; и `extends` темы-объекта, которого нет в каталоге |
+| `ThemeResolutionError (duplicate-theme)` | одна тема дважды в `themes` (в том числе тема-объект с id темы каталога): у записей были бы одни пары |
+| `ThemeResolutionError (unknown-mode)` | имя в `modes` или ключ `modes.tokenOverrides` записи — не режим этой темы и не её `define` |
+| `ThemeResolutionError (multiple-theme-owners)` | каталог тем объявляют два провайдера графа; лишние темы отдайте приложению объектами в `themes` |
 | `ThemeResolutionError (theme-owner-missing)` | у пакета есть токены компонентов по темам, а его зависимость-владелец тем не разрешается из каталога пакета; установите её или добавьте в `providers` |
-| `ThemeResolutionError (theme-missing)` | заданы `modes.names`, `modes.define`, `modes.tokenOverrides` или `previews`, а активной темы нет: ни один провайдер графа не объявляет каталог, и `theme` — не объект. Значениям некуда лечь; добавьте владельца тем или уберите эти опции |
-| `ThemeResolutionError (activation-collision)` | две пары совпали: имя `define` равно режиму темы, шаблон `modes.activation.value` без `{mode}` или пары превью совпали с активной |
-| `ThemeDataError` | JSON данных активной темы или превью не читается или не проходит схему; путь до поля — в сообщении. Пересоберите провайдер |
+| `ThemeResolutionError (theme-missing)` | задана `activation`, а тем в сборке нет: ни один провайдер графа не объявляет каталог, и в `themes` нет темы-объекта. Активировать нечего; добавьте владельца тем или уберите опцию |
+| `ThemeResolutionError (activation-collision)` | две пары совпали: имя `define` равно режиму своей темы, шаблон `activation.value` без `{mode}` или без `{theme}` у сборки из нескольких тем с одноимёнными режимами |
+| `ThemeDataError` | JSON данных темы сборки не читается или не проходит схему; путь до поля — в сообщении. Пересоберите провайдер |
 | `InvalidProviderError (theme-incomplete)` | на сборке провайдера: тема не задаёт токены реестра; перечень — `dark:xh-bg`, `root:xh-radius` |
 | `InvalidProviderError (invalid-theme-dir)` | папка `themesDir` названа не id темы, файл — не именем режима, лишний файл или `.json` и `.css` одного режима сразу |
 | `InvalidProviderError (legacy-token-definitions)` | в провайдере остались ключи тем контракта 1: `theme.themes`, `defaultThemes`, `tokenDefinitions`, `tokenDefinitionsRef` |
@@ -132,7 +139,7 @@
 слоёв по каждому режиму. Частые причины: `strictTokens: true` и токена нет ни в
 данных темы, ни в токенах компонентов (`override-skipped`); имя с `--` в конфиге
 (ошибка формы); режимонезависимый токен переопределён в режиме, а не в
-`modes.tokenOverrides.root`, или наоборот.
+`modes.tokenOverrides.root` записи темы, или наоборот; override записан у другой темы сборки.
 
 ## После обрезки переменная разрешается в пустоту
 

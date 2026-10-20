@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatThemeWarning, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
+import { ThemeResolutionError } from '../core/errors'
+import { countDoctorDiagnostics, formatDoctorReport, formatExplainReport, formatThemeWarning, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumDoctor, granumExplain, granumThemes, granumTokenPrune, granumTokens, granumWhyCss } from '../node/diagnostics/index'
 import { emitCss } from '../node/emit'
 import { buildReport } from '../node/report'
-import { catalogProvider, makeManifest, prepareTestApp, TEST_ENGINE, themeData } from './helpers'
+import { catalogProvider, INK, makeManifest, PAPER, prepareTestApp, TEST_ENGINE, themeData } from './helpers'
 import { testEngine } from './testEngine'
 
 interface Fixture {
@@ -125,14 +126,14 @@ describe('granum doctor', () => {
     const card = f.manifest.manifest.components.Card as unknown as { tokens: Record<string, unknown> }
     // `--bg` объявлен темой, `--hook-a` — хук, `--dyn-q` — dynamicTokens, `--un-x` — переменная движка.
     card.tokens = { ...card.tokens, requires: [], optional: ['--bg', '--dyn-q', '--hook-a', '--lost', '--un-x'], hooks: ['--hook-*'], dynamic: ['--dyn-*'] }
-    const report = await granumDoctor(await app(f, { modes: BOTH }))
+    const report = await granumDoctor(await app(f, { themes: [{ theme: 'kit', modes: BOTH }] }))
     const found = report.diagnostics.filter(d => d.code === 'token-fallback-only')
     expect(found.map(d => [d.level, d.subject, d.items])).toEqual([['warn', '@x/kit:Card', ['--lost']]])
     expect(found[0]!.message).toContain('hookTokens')
   })
 
   it('token-fallback-only: манифест без tokens.optional находки не даёт', async () => {
-    const report = await granumDoctor(await app(fixture(), { modes: BOTH }))
+    const report = await granumDoctor(await app(fixture(), { themes: [{ theme: 'kit', modes: BOTH }] }))
     expect(report.diagnostics.some(d => d.code === 'token-fallback-only')).toBe(false)
   })
 
@@ -163,11 +164,12 @@ describe('granum doctor', () => {
     }])
     expect(report.engine).toEqual({ name: TEST_ENGINE.name, dialect: TEST_ENGINE.dialect, vocabulary: TEST_ENGINE.vocabulary })
     expect(report.components.map(c => c.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
-    expect(report.themes).toMatchObject({ theme: 'kit', themeSource: 'default', owner: '@x/kit', modesSource: 'theme', previews: [] })
-    // Без `modes.names` — только режим по умолчанию темы.
-    expect(report.themes.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light'])
+    expect(report.themes).toMatchObject({ defaultTheme: 'kit', themeSource: 'default', owner: '@x/kit' })
+    expect(report.themes.themes.map(theme => `${theme.id}:${theme.default}:${theme.modesSource}`)).toEqual(['kit:true:theme'])
+    // Без `modes` — только режим по умолчанию темы.
+    expect(report.themes.themes[0]!.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=kit-light'])
     expect(formatDoctorReport(report)).toContain('Theme: kit (source: defaultTheme of the catalog owner, catalog of @x/kit)')
-    expect(formatDoctorReport(report)).toContain('Modes: [light] (source: default mode of the theme and modes.define)')
+    expect(formatDoctorReport(report)).toContain('kit (default, main sheet) — modes: [light] (source: default mode of the theme and modes.define)')
     expect(report.files.missing).toEqual([])
     const codes = report.diagnostics.map(d => d.code)
     // `--nowhere` никем не объявлен; `shadow-legacy` — без правила движка.
@@ -218,15 +220,15 @@ describe('granum doctor', () => {
   })
 
   it('тексты предупреждений тем и режимов', () => {
-    expect(formatThemeWarning({ kind: 'mode-extends-unresolved', mode: 'ocean', base: 'abyss' }))
-      .toBe('modes.define.ocean extends "abyss", which is neither a theme mode nor a defined mode — it inherits the default mode instead')
+    expect(formatThemeWarning({ kind: 'mode-extends-unresolved', theme: 'kit', mode: 'ocean', base: 'abyss' }))
+      .toBe(`modes.define.ocean of theme 'kit' extends "abyss", which is neither a mode of that theme nor a defined mode — it inherits the default mode instead`)
     expect(formatThemeWarning({ kind: 'component-theme-unknown', providerId: '@p/ui', component: 'Chart', theme: 'neon' }))
       .toContain('ships tokens for theme "neon", which no catalog in the graph declares')
   })
 
   it('предупреждения тем — своими кодами, а не одним общим', async () => {
-    const report = await granumDoctor(await app(fixture(), { modes: { define: { ocean: { extends: 'abyss' } } } }))
-    expect(report.diagnostics.find(d => d.code === 'mode-extends-unresolved')?.subject).toBe('ocean')
+    const report = await granumDoctor(await app(fixture(), { themes: [{ theme: 'kit', modes: { define: { ocean: { extends: 'abyss' } } } }] }))
+    expect(report.diagnostics.find(d => d.code === 'mode-extends-unresolved')?.subject).toBe('kit/ocean')
   })
 
   it('предупреждение манифеста о невыбранном компоненте не показывается', async () => {
@@ -257,7 +259,7 @@ describe('granum doctor', () => {
     // Override приложения — намеренное значение, а не конфликт; компонент поверх данных темы — конфликт.
     const card = f.manifest.manifest.components.Card!
     const clash = { ...f.manifest, manifest: { ...f.manifest.manifest, components: { ...f.manifest.manifest.components, Card: { ...card, tokens: { ...card.tokens, themes: { kit: { modes: { light: { bg: '#fefefe' } } } } } } } } }
-    const report = await granumDoctor(await app({ ...f, manifest: clash }, { modes: { ...BOTH, tokenOverrides: { root: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }))
+    const report = await granumDoctor(await app({ ...f, manifest: clash }, { themes: [{ theme: 'kit', modes: { ...BOTH, tokenOverrides: { root: { 'accent': 'blue', 'not-declared': '1' } }, strictTokens: true } }] }))
     // Токен компонента из режима по умолчанию доходит и до тёмного — там он тоже поверх данных темы.
     expect(report.tokenConflicts).toEqual([
       expect.objectContaining({ mode: 'light', token: 'bg', sources: ['theme kit/light', 'component @x/kit:Card (kit/light)'], finalValue: '#fefefe' }),
@@ -297,7 +299,7 @@ describe('doctor: части составных компонентов, кото
 
 describe('granum explain', () => {
   it('корень селекции, зависимость и невыбранный компонент', async () => {
-    const a = await app(fixture(), { modes: BOTH })
+    const a = await app(fixture(), { themes: [{ theme: 'kit', modes: BOTH }] })
     const panel = granumExplain(a, 'Panel')
     expect(panel).toMatchObject({ key: '@x/kit:Panel', reason: 'selected', included: true, chain: ['@x/kit:Panel'], dependencies: ['@x/kit:Card'], requiredBy: [] })
     const card = granumExplain(a, '@x/kit:Card')
@@ -366,7 +368,7 @@ describe('granum why-css', () => {
 
 describe('granum tokens', () => {
   it('own и deep: объявления, цепочки значений, потребители за пределами scope', async () => {
-    const a = await app(fixture(), { modes: { ...BOTH, tokenOverrides: { light: { 'card-pad': '4px' } } } })
+    const a = await app(fixture(), { themes: [{ theme: 'kit', modes: { ...BOTH, tokenOverrides: { light: { 'card-pad': '4px' } } } }] })
     const own = granumTokens(a, 'Panel')
     expect(own.components).toEqual(['@x/kit:Panel'])
     expect(own.uses).toEqual([])
@@ -396,7 +398,7 @@ describe('granum tokens', () => {
     theme.declares = [...theme.declares, '--ink-only']
     const card = f.manifest.manifest.components.Card as unknown as { tokens: { consumes: string[] } }
     card.tokens = { ...card.tokens, consumes: [...card.tokens.consumes, '--ink-only'] }
-    const a = await app(f, { modes: BOTH })
+    const a = await app(f, { themes: [{ theme: 'kit', modes: BOTH }] })
     expect(granumTokens(a, 'Card').uses.find(u => u.token === 'ink-only')?.origin).toBe('none')
     expect((await granumDoctor(a)).undefinedTokens.map(u => u.token)).toContain('--ink-only')
   })
@@ -427,7 +429,7 @@ describe('token-undefined: доктор и отчёт сборки', () => {
 describe('granum prune', () => {
   it('токен из вывода движка сохраняется по той же причине, что в сборке', async () => {
     const engine = testEngine({ vocabulary: TEST_ENGINE.vocabulary, extra: { 'gap-2': 'gap:var(--unused);' } })
-    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine, modes: BOTH })
+    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, engine, themes: [{ theme: 'kit', modes: BOTH }] })
     const report = await granumTokenPrune(a)
     // Данные темы и токены компонентов — пакетный слой: никем не потребляемые режутся.
     expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused'])
@@ -436,7 +438,7 @@ describe('granum prune', () => {
   })
 
   it('план совпадает с planTokenPrune, base не режется, размеры считаются', async () => {
-    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, modes: BOTH })
+    const a = await app(fixture(), { pruneTokens: { mode: 'on' }, themes: [{ theme: 'kit', modes: BOTH }] })
     const report = await granumTokenPrune(a)
     expect(report.mode).toBe('on')
     expect(report.removed).toEqual(['accent', 'card-pad', 'dark-unused', 'unused'])
@@ -479,7 +481,7 @@ describe('formatDoctorReport: сводка и детали по требован
         safelist: 1,
         css: 0,
       })),
-      themes: { theme: 'kit', themeSource: 'default', owner: '@x/kit', modes: [], modesSource: 'theme', previews: [], warnings: [] },
+      themes: { defaultTheme: 'kit', themeSource: 'default', owner: '@x/kit', themes: [{ id: 'kit', default: true, modes: [], modesSource: 'theme' }], warnings: [] },
       tokenConflicts: [],
       undefinedTokens: [],
       files: { checked: 1, missing: [] },
@@ -543,7 +545,7 @@ describe('doctor: режим без файла у компонента', () => {
 
   it('литералы компонента для dark взяты из light — предупреждение с именами токенов', async () => {
     const { root, provider } = catalogProvider({ components: card({ light: { 'c-shade': '#fff', 'c-edge': '#eee' } }) })
-    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'], define: { ocean: { extends: 'dark' } } } }, root))
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'], define: { ocean: { extends: 'dark' } } } }] }, root))
     const found = report.diagnostics.filter(d => d.code === 'component-mode-missing')
     // Один раз на режим темы: `ocean` наследует `dark` и повторно не считается.
     expect(found.map(d => [d.subject, d.items])).toEqual([['@p/ds:Card', ['--c-edge', '--c-shade']]])
@@ -552,12 +554,12 @@ describe('doctor: режим без файла у компонента', () => {
 
   it('файл режима есть, значение — формула или режим один — молчит', async () => {
     const both = catalogProvider({ components: card({ light: { 'c-shade': '#fff' }, dark: { 'c-shade': '#000' } }) })
-    const ok = await granumDoctor(await prepareTestApp({ providers: [both.provider], modes: { names: ['light', 'dark'] } }, both.root))
+    const ok = await granumDoctor(await prepareTestApp({ providers: [both.provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'] } }] }, both.root))
     expect(ok.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
 
     // Формула через роль одинакова во всех режимах и сама следует их ролям.
     const formula = catalogProvider({ components: card({ light: { 'c-shade': 'var(--p-bg)' } }) })
-    const shared = await granumDoctor(await prepareTestApp({ providers: [formula.provider], modes: { names: ['light', 'dark'] } }, formula.root))
+    const shared = await granumDoctor(await prepareTestApp({ providers: [formula.provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'] } }] }, formula.root))
     expect(shared.diagnostics.some(d => d.code === 'component-mode-missing')).toBe(false)
 
     const lightOnly = catalogProvider({ components: card({ light: { 'c-shade': '#fff' } }) })
@@ -569,7 +571,7 @@ describe('doctor: режим без файла у компонента', () => {
 describe('doctor: режим без значения в данных темы', () => {
   const findings = async (theme: ReturnType<typeof themeData>, names: string[], define?: Record<string, { extends: string }>): Promise<[string, readonly string[] | undefined][]> => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names, ...(define ? { define } : {}) } }, root))
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: { names, ...(define ? { define } : {}) } }] }, root))
     return report.diagnostics.filter(d => d.code === 'theme-mode-missing').map(d => [d.subject, d.items])
   }
 
@@ -600,7 +602,37 @@ describe('doctor: режим без значения в данных темы', 
   it('значение, которое режиму дал токен компонента, находкой не считается', async () => {
     const theme = themeData('t', { light: { 'p-bg': '#fff', 'p-edge': '#eee' }, dark: {} })
     const { root, provider } = catalogProvider({ themes: { t: theme }, components: { Card: { themes: { t: { modes: { dark: { 'p-bg': '#000' } } } } } } })
-    const report = await granumDoctor(await prepareTestApp({ providers: [provider], modes: { names: ['light', 'dark'] } }, root))
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: { names: ['light', 'dark'] } }] }, root))
     expect(report.diagnostics.filter(d => d.code === 'theme-mode-missing').map(d => d.items)).toEqual([['--p-edge']])
+  })
+})
+
+describe('дополнительные темы в диагностике', () => {
+  it('конфликт режимонезависимого токена дополнительной темы назван как токены темы, а не режим', async () => {
+    const { root, provider } = catalogProvider({ components: { Card: { themes: { ink: { root: { 'p-radius': '1px' }, modes: {} } } } } })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', default: true }, 'ink'] }, root))
+    const conflict = report.diagnostics.find(d => d.code === 'token-conflict' && d.subject.endsWith(':p-radius'))
+    expect(conflict?.message).toContain(`the mode-independent tokens of theme 'ink'`)
+    expect(conflict?.message).not.toContain(`mode 'ink/root'`)
+  })
+
+  it('granum themes выбирает основную тему той же функцией, что резолвер: без пометки или с двумя — ошибка', async () => {
+    const { root, provider } = catalogProvider()
+    const config = (themes: GranumConfig['themes']): GranumConfig => ({ providers: [provider], engine: TEST_ENGINE, themes } as GranumConfig)
+    expect(granumThemes(config([{ theme: 'paper', default: true }, 'ink']), root).main).toBe('paper')
+    expect(() => granumThemes(config(['paper', 'ink']), root)).toThrow(ThemeResolutionError)
+    expect(() => granumThemes(config([{ theme: 'paper', default: true }, { theme: 'ink', default: true }]), root)).toThrow(/exactly one goes under/)
+  })
+
+  it('theme-base-global: правила стиля в baseCss дополнительной темы действуют на всю страницу — находка', async () => {
+    const font = '@font-face { font-family: Ink; src: url(ink.woff2); }'
+    const { root, provider } = catalogProvider({
+      themes: { paper: { ...PAPER, baseCss: ['body { font-family: Paper }', 'html { color: black }'] }, ink: { ...INK, extends: 'paper', baseCss: [font, 'html { color: black }', 'body { font-family: Ink }', '@media print { .x { color: red } }'] } },
+    })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', default: true }, 'ink'] }, root))
+    const found = report.diagnostics.filter(d => d.code === 'theme-base-global')
+    // У основной темы база общая по определению — находки нет; запись, которую
+    // дополнительная тема делит с основной, лежит в общем листе — тоже.
+    expect(found.map(d => [d.level, d.subject, d.items])).toEqual([['warn', 'ink', ['body', '@media print']]])
   })
 })

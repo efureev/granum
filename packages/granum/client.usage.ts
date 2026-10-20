@@ -20,10 +20,13 @@ import 'virtual:granum/layers/components.css'
 import 'virtual:granum/layers/themes.css'
 import 'virtual:granum/layers/tokens.css'
 import 'virtual:granum/layers/utilities.css'
+import 'virtual:granum/themes.css'
+import 'virtual:granum/themes/clay.css'
 
 /** Манифест тем типизирован по-настоящему: поля читаются, а не `any`. */
-export const themeId: string = manifest.theme.id
-export const defaultMode: string = manifest.defaultMode
-export const firstModeValue: string | undefined = manifest.modes[0]?.value
+export const themeId: string = manifest.defaultTheme
+export const defaultMode: string | undefined = manifest.themes[0]?.defaultMode
+export const firstModeValue: string | undefined = manifest.themes[0]?.modes[0]?.value
+export const sheet: string | undefined = manifest.themes[1]?.href
 export const attribute: string = manifest.activation.attribute
 export const anyComponent: unknown = XhPanel

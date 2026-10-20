@@ -1,6 +1,6 @@
 import type { GranumThemeManifest } from '@feugene/granum/runtime'
 import type { InjectionKey } from 'vue'
-import { modeFromCookie, resolveThemeActivation, themeRootAttributes } from '@feugene/granum/runtime'
+import { defaultTheme, resolveThemeActivation, themeFromCookie, themeRootAttributes } from '@feugene/granum/runtime'
 
 /**
  * Активный режим, который разметка получает одинаково на сервере и в браузере.
@@ -25,9 +25,10 @@ export const activeModeKey = Symbol('granum:active-mode') as InjectionKey<Granum
  * режимов сборки, и неизвестное имя не должно дать страницу без токенов.
  */
 export function pickMode(manifest: GranumThemeManifest, requested: string | null | undefined, cookieHeader?: string | null): string {
-  if (requested && manifest.modes.some(mode => mode.name === requested))
+  const main = defaultTheme(manifest)
+  if (requested && main.modes.some(mode => mode.name === requested))
     return requested
-  return modeFromCookie(manifest, cookieHeader)?.name ?? manifest.defaultMode
+  return themeFromCookie(manifest, cookieHeader)?.mode.name ?? main.defaultMode
 }
 
 /** Минимум от корневого элемента, нужный для чтения режима. */
@@ -40,10 +41,10 @@ export interface GranumModeRoot {
  * {@link rootAttributes}: сервер записал пару, браузер читает её обратно.
  */
 export function readActiveMode(manifest: GranumThemeManifest, root: GranumModeRoot): string {
-  return resolveThemeActivation(manifest, root.getAttribute(manifest.activation.attribute))?.name ?? manifest.defaultMode
+  return resolveThemeActivation(manifest, root.getAttribute(manifest.activation.attribute))?.mode.name ?? defaultTheme(manifest).defaultMode
 }
 
 /** Атрибуты корневого элемента для режима — строкой для серверного шаблона. */
 export function rootAttributes(manifest: GranumThemeManifest, name: string): string {
-  return Object.entries(themeRootAttributes(manifest, name)).map(([attribute, value]) => ` ${attribute}="${value}"`).join('')
+  return Object.entries(themeRootAttributes(manifest, { mode: name })).map(([attribute, value]) => ` ${attribute}="${value}"`).join('')
 }

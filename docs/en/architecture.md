@@ -38,7 +38,7 @@ Three principles from which everything else follows:
 | `.` | browser + node | contract and resolver: `resolveGranum`, `GranumResolution` types, errors |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | the `GranumEngine` interface, rule types, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createThemeManifest`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createThemeManifest`, `createCookieStorage`, `themeFromCookie`, `themeRootAttributes`, `loadThemeSheet`, `themeSheetLink`, `resolveThemeActivation`, `readThemeSelection`, `themeSelectionKey`, `themeModeValue`, `findTheme`, `defaultTheme` |
 | `./build` | node, peer `vite` | the `granumProvider()` plugin |
 | `./vite` | node, peer `vite` | the `granum()` plugin, `defineGranumConfig` |
 | `./node` | node | manifest reading, `prepareApp`, `emitCss`, `buildReport`, diagnostics as functions |
@@ -52,12 +52,12 @@ provider browser code — the provider build catches a violation
 
 ## Resolution
 
-`resolveGranum({ providers, components, theme, previews, modes, themeData })` is a pure
+`resolveGranum({ providers, components, themes, activation, themeData })` is a pure
 function: no FS, network or global state. The input is manifests (`{ manifest, baseUrl }`)
 or contract objects; both forms are normalised into provider nodes. Theme data is
-brought by the application preparation — only for the active theme and the previews. The result
+brought by the application preparation — only for the themes in `themes`. The result
 is the ordered provider graph, the component registry, the selection after
-transitive closure, the active theme and modes with their sources, token values per mode with
+transitive closure, the build themes (default and additional) with their modes and sources, each theme's token values per mode with
 effective values, classes and safelist of the selection, the CSS list in
 emission order, warnings. Exactly one resolution exists per build: memoised
 by config identity.

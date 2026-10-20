@@ -1,5 +1,5 @@
 /**
- * Точка входа `./runtime`: режимы активной темы в браузере. Только типы,
+ * Точка входа `./runtime`: темы и режимы сборки в браузере. Только типы,
  * чистые функции и контроллер над DOM: ни FS, ни зависимостей.
  * Пара к нему — `virtual:granum/themes` плагина приложения.
  */
@@ -8,18 +8,27 @@ export {
   DEFAULT_THEME_STORAGE_KEY,
   type GranumThemeController,
   type GranumThemeControllerOptions,
+  type GranumThemeState,
   type GranumThemeStorage,
   type GranumThemeTarget,
 } from './runtime/controller'
 export {
+  carryThemeMode,
   createThemeManifest,
+  defaultTheme,
+  findTheme,
   type GranumModeEntry,
-  type GranumPreviewEntry,
   type GranumThemeManifest,
+  type GranumThemeManifestEntry,
   type GranumThemeManifestInput,
+  type GranumThemeSelection,
+  type GranumThemeSelectionInput,
+  isSelectableTheme,
+  readThemeSelection,
   resolveThemeActivation,
   themeModeValue,
   themePairValue,
+  themeSelectionKey,
 } from './runtime/manifest'
 export {
   createCookieStorage,
@@ -28,6 +37,13 @@ export {
   type GranumCookieStorageOptions,
   type GranumThemeScriptCodeOptions,
   type GranumThemeScriptOptions,
-  modeFromCookie,
+  themeFromCookie,
   themeRootAttributes,
 } from './runtime/script'
+export {
+  type GranumSheetDocument,
+  loadThemeSheet,
+  THEME_SHEET_ATTRIBUTE,
+  themeSheetLink,
+  themeSheetMarker,
+} from './runtime/sheets'

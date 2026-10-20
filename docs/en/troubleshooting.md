@@ -92,30 +92,37 @@ manifest is produced only by the build.
 
 ## The mode is not applied
 
-- `granum doctor` → the `Theme` and `Modes` sections: is the right theme active and is the
-  mode in the set? The theme is the config's `theme`, without it the catalog owner's
-  `defaultTheme`; the modes are `modes.names`, without it the theme's default mode and `modes.define`:
-  a dark mode does not reach the build without `modes.names: ['light', 'dark']`.
+- `granum doctor` → the `Theme` section and the build theme lines: is the right theme the
+  default one, is the needed theme in the build and the mode in its set? The themes are the
+  config's `themes`, without it the catalog owner's `defaultTheme`; the modes are the theme
+  entry's `modes`, without them the theme's default mode and its `define`: a dark mode does not
+  reach the build without `modes: ['light', 'dark']` — for the default theme or an additional one.
+- A pair of an additional theme without its sheet gives the default theme's values: the sheet
+  is loaded by the controller's `setTheme` (`loadThemeSheet`), the early script or a page
+  importing `virtual:granum/themes/<id>.css`. The shared sheet has no blocks of additional themes.
 - The root carries the pair `data-theme="<theme>-<mode>"`, not the mode name: `dark` without
   the theme matches no block. `virtual:granum/themes` lists the pairs;
   the controller and `createThemeScript` write them themselves.
 - granum emits no `.light`/`.dark` classes: CSS relying on them moves
   to the attribute, and `dark:` utilities are built from the pairs of dark modes.
-- `mode-extends-unresolved`: the base of a `modes.define` is neither a theme mode nor another
-  `define`; the mode inherits the default mode. `mode-extends-cycle` — `define`
-  entries refer to each other in a circle.
+- `mode-extends-unresolved`: the base of a theme entry's `modes.define` is neither a mode of
+  that theme nor another of its `define`; the mode inherits the default mode.
+  `mode-extends-cycle` — `define` entries refer to each other in a circle.
 
 ## Theme and mode errors
 
 | Error | Cause and what to do |
 |---|---|
-| `ThemeResolutionError (unknown-theme)` | `theme` or `previews` name a theme absent from the catalog; the error lists the available ones. Without `theme` and without a `defaultTheme` in a catalog of several themes — the same error; so is a theme object's `extends` absent from the catalog |
-| `ThemeResolutionError (unknown-mode)` | a name in `modes.names` or a `modes.tokenOverrides` key is neither a theme mode nor a `define` |
-| `ThemeResolutionError (multiple-theme-owners)` | two providers of the graph declare a theme catalog; hand the extra themes to the application as an object in `theme` |
+| `InvalidConfigError (themes)` | `themes` lists several themes and none is marked `default: true` (or two are), or the list is empty. Mark the one that goes under `:root`; a build without themes is a graph without a catalog owner and no `themes` |
+| `InvalidConfigError (theme, previews, modes, css.previews)` | keys of earlier config forms: the build themes are listed in `themes`, modes in the theme entry's `modes`, the attribute and the system scheme in `activation`; an additional theme always has its own sheet |
+| `ThemeResolutionError (unknown-theme)` | a `themes` entry names a theme absent from the catalog; the error lists the available ones. Without `themes` and without a `defaultTheme` in a catalog of several themes — the same error; so is a theme object's `extends` absent from the catalog |
+| `ThemeResolutionError (duplicate-theme)` | one theme listed twice in `themes` (a theme object with a catalog theme's id included): the entries would have the same pairs |
+| `ThemeResolutionError (unknown-mode)` | a name in an entry's `modes` or a `modes.tokenOverrides` key is neither a mode of that theme nor its `define` |
+| `ThemeResolutionError (multiple-theme-owners)` | two providers of the graph declare a theme catalog; hand the extra themes to the application as objects in `themes` |
 | `ThemeResolutionError (theme-owner-missing)` | a package has component tokens per theme, and its theme-owner dependency does not resolve from the package directory; install it or add it to `providers` |
-| `ThemeResolutionError (theme-missing)` | `modes.names`, `modes.define`, `modes.tokenOverrides` or `previews` are set, but there is no active theme: no provider of the graph declares a catalog and `theme` is not an object. The values have nowhere to go; add the theme owner or drop those options |
-| `ThemeResolutionError (activation-collision)` | two pairs coincide: a `define` named like a theme mode, a `modes.activation.value` template without `{mode}`, or preview pairs equal to active ones |
-| `ThemeDataError` | the data JSON of the active theme or a preview cannot be read or fails the schema; the field path is in the message. Rebuild the provider |
+| `ThemeResolutionError (theme-missing)` | `activation` is set, but the build has no themes: no provider of the graph declares a catalog and `themes` has no theme object. There is nothing to activate; add the theme owner or drop the option |
+| `ThemeResolutionError (activation-collision)` | two pairs coincide: a `define` named like a mode of its theme, an `activation.value` template without `{mode}`, or without `{theme}` in a build of several themes with same-named modes |
+| `ThemeDataError` | the data JSON of a build theme cannot be read or fails the schema; the field path is in the message. Rebuild the provider |
 | `InvalidProviderError (theme-incomplete)` | at provider build: a theme does not set registry tokens; the list looks like `dark:xh-bg`, `root:xh-radius` |
 | `InvalidProviderError (invalid-theme-dir)` | a `themesDir` folder is not named by a theme id, a file is not named by a mode, an extra file, or both `.json` and `.css` for one mode |
 | `InvalidProviderError (legacy-token-definitions)` | contract 1 theme keys are left in the provider: `theme.themes`, `defaultThemes`, `tokenDefinitions`, `tokenDefinitionsRef` |
@@ -134,7 +141,7 @@ normal, for a typo in a folder name it is a reason to fix it.
 layers for every mode. Common causes: `strictTokens: true` and the token is present neither
 in the theme data nor in component tokens (`override-skipped`); a name with `--` in the config
 (a shape error); a mode-independent token overridden in a mode instead of
-`modes.tokenOverrides.root`, or the other way round.
+the theme entry's `modes.tokenOverrides.root`, or the other way round; the override is written on another build theme.
 
 ## After pruning a variable resolves to nothing
 

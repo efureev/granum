@@ -16,11 +16,11 @@ export default defineGranumConfig({
   engine: windEngine({ rules: [['x-app-only', { 'outline-style': 'dotted' }]] }),
   providers: ['@granum-fixtures/simple'],
   components: [{ provider: '@granum-fixtures/simple', names: ['XTestStyled'] }],
-  theme: {
+  themes: [{
     id: 'app',
     title: 'App',
     root: { 'brd': '#02f8fa', 'card-fg': '#af172a' },
     modes: { light: { colorScheme: 'light', tokens: {} } },
-  },
+  }],
   appSources: { dirs: ['src'] },
 })

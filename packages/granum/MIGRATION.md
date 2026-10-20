@@ -10,6 +10,81 @@ Step-by-step guides, mirrored in two languages:
 - English: [`docs/en/migration.md`](../../docs/en/migration.md)
 - Русский: [`docs/ru/migration.md`](../../docs/ru/migration.md)
 
+## From 3.7 to 3.8
+
+3.8 builds several themes at once. One **default** theme goes into the shared sheet
+and under `:root`, as the single theme did before; every other build theme is
+**additional** and gets a sheet of its own, loaded by the runtime when the
+application switches to it. The config, the virtual modules, the theme manifest
+and the runtime change shape — inside 3.x, by the owner's decision: the consumers
+of granum 3 are the owner's own packages and applications, all moved at once. The provider
+contract and the provider manifest do not change, so packages need no rebuild. The
+reasoning is ADR-12 in `docs/decisions.md`.
+
+Application:
+
+| 3.7 | 3.8 |
+|---|---|
+| `theme: 'slate'` | `themes: ['slate']` |
+| `previews: ['clay']` | another `themes` entry: `themes: [{ theme: 'slate', default: true }, 'clay']` |
+| `modes: { names, define, tokenOverrides, strictTokens }` | `modes` of the theme's entry: `{ theme: 'slate', modes: { names, define, tokenOverrides, strictTokens } }`, or `modes: ['light', 'dark']` for names only |
+| `modes.activation`, `modes.system` | `activation: { attribute, value, system }` — shared by all themes |
+| `css.previews: 'separate'` | removed: an additional theme always has its own sheet |
+| `import 'virtual:granum/previews.css'` | `import 'virtual:granum/themes.css'` |
+| `import 'virtual:granum/previews/clay.css'` | `import 'virtual:granum/themes/clay.css'` |
+
+- With several entries exactly one is marked `default: true`; no mark, two marks or
+  an empty list are `InvalidConfigError('themes')`. One theme listed twice is
+  `ThemeResolutionError('duplicate-theme')`.
+- A theme without `modes` builds its default mode only — the default theme and an
+  additional one alike. A preview used to bring all of its modes: list them.
+- The old keys are `InvalidConfigError` with a hint to the new place, so a forgotten
+  one fails the build instead of being ignored.
+
+Theme manifest (`virtual:granum/themes`, `resolveThemeManifest`, `createThemeManifest`):
+
+| 3.7 | 3.8 |
+|---|---|
+| `manifest.theme` | `manifest.defaultTheme` (id) and `findTheme(manifest)` / `defaultTheme(manifest)` (the entry) |
+| `manifest.modes`, `manifest.defaultMode`, `manifest.extensions` | `manifest.themes[i].modes`, `.defaultMode`, `.extensions` |
+| `manifest.previews[i].theme`, `.modes`, `.extensions` | `manifest.themes[i]` — same shape for every build theme |
+| — | `manifest.themes[i].href` — the sheet address of an additional theme (none at config time) |
+| `createThemeManifest({ theme, modes, defaultMode })` | `createThemeManifest({ themes: [{ id, title, modes, defaultMode, href? }], defaultTheme? })` |
+
+Runtime:
+
+| 3.7 | 3.8 |
+|---|---|
+| `controller.theme` — `{ id, title }` of the build | `controller.theme` — the current theme's manifest entry; `controller.themes()` lists them |
+| — | `await controller.setTheme(id, { mode?, persist? })` — loads the sheet, then sets the pair; `controller.ready` |
+| `subscribe(listener(mode))` | `subscribe(listener({ theme, mode }))` |
+| `modeFromCookie(manifest, header)` → mode entry | `themeFromCookie(manifest, header)` → `{ theme, mode }` |
+| `themeRootAttributes(manifest, mode)` | `themeRootAttributes(manifest, { theme?, mode? })` |
+| `resolveThemeActivation(manifest, value)` → mode entry | → `{ theme, mode }` |
+| — | `loadThemeSheet`, `themeSheetLink`, `readThemeSelection`, `themeSelectionKey` |
+
+- The stored value stays compatible: the default theme's mode is still stored as the
+  bare mode name; an additional theme is stored as `<theme>-<mode>`.
+- The early script inserts `<link rel="stylesheet" blocking="render">` for an
+  additional theme before setting its pair. A manifest built at config time has no
+  sheet addresses, so such a script never picks an additional theme — the server
+  sets that pair together with the `<link>` (`themeSheetLink`).
+- An island of an additional theme needs its sheet: the page imports the module, or
+  the application calls `loadThemeSheet` before showing it.
+
+CSS:
+
+- The default theme's `:root` goes under `:where(:root)` and its shared-formula
+  boundary is the list of its pairs instead of `[data-theme]`: a pair of any theme on
+  the root wins by specificity, and the cascade no longer depends on the order of the
+  sheets. Own CSS that matched `:root, [data-theme]` from the granum output by text
+  needs a look; values do not change.
+- The engine's `dark:` variant covers the dark pairs of every build theme.
+- Report fields: `themes { defaultTheme, themeSource, themes: [{ id, default, modes, modesSource }] }`
+  instead of `themes { theme, themeSource, modes, modesSource, previews }`.
+
+Provider: nothing to change.
+
 ## From 2.x to 3.0
 
 3.0 turns a theme into data. A **theme** is a design language — the full set of

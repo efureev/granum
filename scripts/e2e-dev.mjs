@@ -22,12 +22,12 @@
  * Третий сценарий — тема и её режимы (`@granum-fixtures/themed-ds` поверх
  * владельца тем, которого приложение не перечисляет): собранный
  * `createThemeController` переключает пары, остров режима и вложенный остров
- * пересчитывают значения и формулы на своём элементе, превью другой темы не
+ * пересчитывают значения и формулы на своём элементе, дополнительная тема не
  * задевает корень, а значение в браузере совпадает с `granum tokens`.
  *
  * Четвёртый — ветка фолбэков `@supports`, которую браузер разработчика не
  * видит никогда: условие фолбэков здесь истинное в Chromium, и страница видит
- * каскад браузера без фичи. Рядом — формулы превью: префикс значения пары не
+ * каскад браузера без фичи. Рядом — формулы дополнительной темы: префикс значения пары не
  * должен доставать корень активной темы.
  *
  * Пятый — собранный лист настоящих стендов (`app-theme-ink`, `app-5`):
@@ -226,7 +226,7 @@ finally {
 
 /*
  * Каскад тем и режимов: одна тема на `:root`, режимы — пары в атрибуте, остров
- * режима и превью другой темы пересчитывают значения на своём элементе.
+ * режима и дополнительной темы пересчитывают значения на своём элементе.
  * Страница — один CSS сборки, без dev-сервера: проверяется каскад, а не HMR.
  */
 const OVERRIDE = '#4fd1e0'
@@ -235,17 +235,20 @@ try {
   const app = await prepareApp({
     engine: windEngine(),
     providers: ['@granum-fixtures/themed-ds'],
-    theme: 'ink',
-    previews: ['paper'],
-    modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } },
+    themes: [
+      { theme: 'ink', default: true, modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } } },
+      { theme: 'paper', modes: ['light', 'dark'] },
+    ],
   }, appsRoot)
-  const { css } = await emitCss(app)
+  const emitted = await emitCss(app)
+  // Лист дополнительной темы — раньше общего: каскад от порядка листов не зависит.
+  const css = `${Object.values(emitted.themeSheets).join('\n')}\n${emitted.css}`
 
-  // Манифест — пары активной темы; от селекции компонентов он не зависит.
-  const pairsOf = manifest => manifest.modes.map(mode => mode.value).join(',')
+  // Манифест — пары тем сборки; от селекции компонентов он не зависит.
+  const pairsOf = manifest => manifest.themes.map(theme => theme.modes.map(mode => mode.value).join(',')).join(';')
   const manifest = getThemeManifest(app.resolution)
-  check(pairsOf(manifest) === 'ink-light,ink-dark,ink-dim,ink-ocean', `пары манифеста: ${pairsOf(manifest)}`)
-  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], theme: 'ink', modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark' } } } }, appsRoot)
+  check(pairsOf(manifest) === 'ink-light,ink-dark,ink-dim,ink-ocean;paper-light,paper-dark', `пары манифеста: ${pairsOf(manifest)}`)
+  const bare = await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], themes: [{ theme: 'ink', default: true, modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark' } } } }, { theme: 'paper', modes: ['light', 'dark'] }] }, appsRoot)
   check(pairsOf(getThemeManifest(bare.resolution)) === pairsOf(manifest), `пары манифеста при селекции []: ${pairsOf(getThemeManifest(bare.resolution))}`)
 
   // Страница с CSS сборки и собранным `@feugene/granum/runtime`: файлы `dist` отдаёт route.
@@ -253,7 +256,8 @@ try {
   const body = '<div id="island" data-theme="ink-dark"><div id="nested" data-theme="ink-dim"></div></div>'
     + '<div id="preview" data-theme="paper-dark"></div>'
   const html = `<!doctype html><html><head><style>${css}</style></head><body>${body}<script type="module">`
-    + `import { createThemeController } from '/runtime.js';`
+    + `import { createThemeController, loadThemeSheet } from '/runtime.js';`
+    + `window.loadThemeSheet = loadThemeSheet;`
     + `window.themes = createThemeController(${JSON.stringify(manifest)}, { storage: null, prefersDark: () => false })</script></body></html>`
   browser = await chromium.launch()
   const page = await browser.newPage()
@@ -296,10 +300,25 @@ try {
   }, sel)
   check(await resolvedShade('#island') !== await resolvedShade('body'), `--th-shade острова посчитана по его ролям: ${await resolvedShade('#island')} vs ${await resolvedShade('body')}`)
 
-  // Превью другой темы: полный блок своей пары, корень не задет.
-  check(await read('#preview', '--th-radius') === '6px', `превью paper-dark: свой --th-radius: ${await read('#preview', '--th-radius')}`)
-  check(await read('#preview', '--th-accent') === '#60a5fa', `превью paper-dark: --th-accent: ${await read('#preview', '--th-accent')}`)
+  // Остров дополнительной темы: полный блок своей пары, корень не задет.
+  check(await read('#preview', '--th-radius') === '6px', `остров paper-dark: свой --th-radius: ${await read('#preview', '--th-radius')}`)
+  check(await read('#preview', '--th-accent') === '#60a5fa', `остров paper-dark: --th-accent: ${await read('#preview', '--th-accent')}`)
   check(await read('html', '--th-radius') === '2px', `корень остался ink: --th-radius: ${await read('html', '--th-radius')}`)
+
+  // Лист, подключённый статически, загрузчик узнаёт по метке `@property` — второй ссылки нет.
+  check(await read('html', '--granum-sheet-paper') === '1', `метка статического листа paper: ${await read('html', '--granum-sheet-paper')}`)
+  const withHref = { ...manifest, themes: manifest.themes.map(theme => theme.id === 'paper' ? { ...theme, href: '/never.css' } : theme) }
+  const links = await page.evaluate(async (built) => {
+    await window.loadThemeSheet(built, 'paper')
+    return document.querySelectorAll('link[data-granum-theme]').length
+  }, withHref)
+  check(links === 0, `загрузчик не поставил ссылку на статически подключённый лист: ${links}`)
+
+  // Дополнительная тема на корне: её пара перекрывает основную, хотя лист стоит раньше общего.
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'paper-dark'))
+  check(await read('html', '--th-radius') === '6px', `paper-dark на корне: --th-radius: ${await read('html', '--th-radius')}`)
+  check(await read('html', '--th-accent') === '#60a5fa', `paper-dark на корне: --th-accent: ${await read('html', '--th-accent')}`)
+  await page.evaluate(() => window.themes.setMode('light'))
 
   // Режим приложения: наследует dark и дописывает своё.
   await page.evaluate(() => window.themes.setMode('ocean'))
@@ -329,7 +348,10 @@ try {
   const darkOwn = { colorScheme: 'dark', tokens: { 'fb-bg': '#000000', 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' } }
   const darkInherits = { colorScheme: 'dark', tokens: { 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' } }
   const darkWithFallback = { colorScheme: 'dark', tokens: { 'fb-bg': 'oklch(20% 0 0)', 'fb-fg': '#eeeeee', 'fb-accent': '#60a5fa' }, fallbacks: [{ supports: NEEDS_FALLBACK, tokens: { 'fb-bg': '#111111' } }] }
-  const cssOf = async config => (await emitCss(await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], ...config }, appsRoot))).css
+  const cssOf = async (config) => {
+    const emitted = await emitCss(await prepareApp({ engine: windEngine(), providers: ['@granum-fixtures/themed-ds'], components: [], ...config }, appsRoot))
+    return `${emitted.css}\n${Object.values(emitted.themeSheets).join('\n')}`
+  }
 
   browser = await chromium.launch()
   const page = await browser.newPage()
@@ -344,24 +366,25 @@ try {
     check(want instanceof RegExp ? want.test(got) : got === want, `${what}: ${token}: ${got}`)
   }
 
-  const own = await cssOf({ theme: theme('t', '2px', { light, dark: darkOwn }), modes: { names: ['light', 'dark'] } })
+  const own = await cssOf({ themes: [{ theme: theme('t', '2px', { light, dark: darkOwn }), modes: ['light', 'dark'] }] })
   await expectValue(own, { root: 't-dark' }, '--fb-bg', '#000000', 'фолбэк режима по умолчанию не перебивает тёмную пару на корне')
   await expectValue(own, {}, '--fb-bg', '#fafafa', 'корень без атрибута берёт фолбэк режима по умолчанию')
 
-  const inherited = await cssOf({ theme: theme('t', '2px', { light, dark: darkInherits }), modes: { names: ['light', 'dark'], system: 'media' } })
+  const inherited = await cssOf({ themes: [{ theme: theme('t', '2px', { light, dark: darkInherits }), modes: ['light', 'dark'] }], activation: { system: 'media' } })
   await expectValue(inherited, { root: 't-dark' }, '--fb-bg', '#fafafa', 'токен, взятый из режима по умолчанию, — с его фолбэком на корне')
   await expectValue(inherited, { root: 't-light', island: 't-dark' }, '--fb-bg', '#fafafa', 'и на острове режима')
   await expectValue(inherited, { scheme: 'dark' }, '--fb-bg', '#fafafa', 'и по системной тёмной схеме')
 
-  const media = await cssOf({ theme: theme('t', '2px', { light, dark: darkWithFallback }), modes: { names: ['light', 'dark'], system: 'media' } })
+  const media = await cssOf({ themes: [{ theme: theme('t', '2px', { light, dark: darkWithFallback }), modes: ['light', 'dark'] }], activation: { system: 'media' } })
   await expectValue(media, { scheme: 'dark' }, '--fb-bg', '#111111', 'system: media — корень без атрибута берёт фолбэк тёмного режима')
 
   const modes = { light, dark: darkOwn }
-  const slate = await cssOf({ theme: theme('slate-hc', '3px', modes), previews: [theme('slate', '1px', modes)] })
-  await expectValue(slate, { root: 'slate-hc-light' }, '--fb-ring', /\b3px\b/, 'формулы превью slate не достают корень slate-hc')
-  await expectValue(slate, { root: 'slate-hc-light', island: 'slate-dark' }, '--fb-ring', /\b1px\b/, 'остров превью slate — свои формулы')
-  const prefixed = await cssOf({ theme: theme('paper', '3px', modes), previews: [theme('ink', '1px', modes)], modes: { activation: { attribute: 'data-theme', value: 'x-{mode}-{theme}' } } })
-  await expectValue(prefixed, { root: 'x-light-paper' }, '--fb-ring', /\b3px\b/, 'шаблон со статикой перед режимом: формулы превью не достают корень')
+  const slate = await cssOf({ themes: [{ theme: theme('slate-hc', '3px', modes), default: true }, { theme: theme('slate', '1px', modes), modes: ['light', 'dark'] }] })
+  await expectValue(slate, { root: 'slate-hc-light' }, '--fb-ring', /\b3px\b/, 'формулы дополнительной slate не достают корень slate-hc')
+  await expectValue(slate, { root: 'slate-hc-light', island: 'slate-dark' }, '--fb-ring', /\b1px\b/, 'остров дополнительной slate — свои формулы')
+  await expectValue(slate, { root: 'slate-dark' }, '--fb-ring', /\b1px\b/, 'дополнительная slate на корне — свои формулы')
+  const prefixed = await cssOf({ themes: [{ theme: theme('paper', '3px', modes), default: true }, { theme: theme('ink', '1px', modes), modes: ['light', 'dark'] }], activation: { attribute: 'data-theme', value: 'x-{mode}-{theme}' } })
+  await expectValue(prefixed, { root: 'x-light-paper' }, '--fb-ring', /\b3px\b/, 'шаблон со статикой перед режимом: формулы дополнительной темы не достают корень')
 }
 catch (error) {
   failures.push(`ветка фолбэков: прогон упал: ${error?.message ?? error}`)
@@ -386,7 +409,8 @@ for (const stand of ['app-theme-ink', 'app-5']) {
   try {
     const { config } = await loadGranumConfigFile('granum.config.ts', standRoot)
     const app = await prepareApp(config, standRoot)
-    const emitted = (await emitCss(app)).css
+    const out = await emitCss(app)
+    const emitted = `${out.css}\n${Object.values(out.themeSheets).join('\n')}`
     await build({ root: standRoot, configFile: join(standRoot, 'vite.config.ts'), logLevel: 'silent', build: { outDir, emptyOutDir: true } })
     const assets = join(outDir, 'assets')
     const built = readdirSync(assets).filter(f => f.endsWith('.css')).map(f => readFileSync(join(assets, f), 'utf8')).join('\n')
@@ -394,9 +418,9 @@ for (const stand of ['app-theme-ink', 'app-5']) {
     check(fallbackOn(emitted) !== emitted && fallbackOn(built) !== built, `${stand}: условие фолбэков найдено и в emitCss, и в собранном листе`)
 
     const tokens = [...new Set([...emitted.matchAll(/(--[a-z][\w-]*)\s*:/g)].map(m => m[1]))].filter(t => !t.startsWith('--un-'))
-    const { modes, previews, system } = app.resolution.themes
-    const pairs = modes.map(mode => mode.value)
-    const islands = [...pairs, ...previews.flatMap(preview => preview.modes.map(mode => mode.value))]
+    const { themes, system } = app.resolution.themes
+    const pairs = themes.find(entry => entry.isDefault).modes.map(mode => mode.value)
+    const islands = themes.flatMap(entry => entry.modes.map(mode => mode.value))
     const states = [{}, ...pairs.map(root => ({ root })), ...islands.map(island => ({ root: pairs[0], island }))]
 
     browser = await chromium.launch()
@@ -442,7 +466,7 @@ for (const stand of ['app-theme-ink', 'app-5']) {
 
     // Системная схема: корень без атрибута при тёмной схеме — тот же тёмный режим, что парой.
     if (system === 'media') {
-      const dark = modes.find(mode => mode.colorScheme === 'dark')
+      const dark = themes.find(entry => entry.isDefault).modes.find(mode => mode.colorScheme === 'dark')
       for (const withFallback of [false, true]) {
         const css = withFallback ? fallbackOn(built) : built
         const bySystem = await signatures(css, { scheme: 'dark' })
@@ -462,8 +486,8 @@ for (const stand of ['app-theme-ink', 'app-5']) {
   }
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и превью paper, ветка фолбэков, собранные листы app-theme-ink и app-5)\n  ${steps.join('\n  ')}\n`)
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
-  ? '✓ слои, HMR, режимы, превью, фолбэки и собранные листы подтверждены в браузере\n'
+  ? '✓ слои, HMR, режимы, дополнительные темы, фолбэки и собранные листы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
 process.exitCode = failures.length === 0 ? 0 : 1

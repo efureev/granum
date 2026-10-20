@@ -35,12 +35,12 @@ describe('данные тем, которые читает подготовка'
     expect(themeReads()).toEqual(['themes/paper.json'])
   })
 
-  it('активная и превью; родитель по каталогу не читается — данные полные', async () => {
+  it('темы сборки — и только они; родитель по каталогу не читается — данные полные', async () => {
     const { root, provider } = catalogProvider()
-    await prepareTestApp({ providers: [provider], theme: 'ink' }, root)
+    await prepareTestApp({ providers: [provider], themes: ['ink'] }, root)
     expect(themeReads()).toEqual(['themes/ink.json'])
     reads.length = 0
-    await prepareTestApp({ providers: [provider], theme: 'ink', previews: ['paper'] }, root)
+    await prepareTestApp({ providers: [provider], themes: [{ theme: 'ink', default: true }, 'paper'] }, root)
     expect(themeReads()).toEqual(['themes/ink.json', 'themes/paper.json'])
   })
 
@@ -48,6 +48,6 @@ describe('данные тем, которые читает подготовка'
     const { root, dist, provider } = catalogProvider()
     rmSync(join(dist, 'themes/ink.json'))
     await expect(prepareTestApp({ providers: [provider] }, root)).resolves.toBeDefined()
-    await expect(prepareTestApp({ providers: [provider], theme: 'ink' }, root)).rejects.toBeInstanceOf(ThemeDataError)
+    await expect(prepareTestApp({ providers: [provider], themes: ['ink'] }, root)).rejects.toBeInstanceOf(ThemeDataError)
   })
 })

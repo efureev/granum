@@ -39,9 +39,9 @@ describe('resolveGranum', () => {
       { providerId: 'ds', componentName: 'DsButton', path: 'components/DsButton/styles.css' },
       { providerId: '@x/heavy', componentName: 'XhPanel', path: 'components/XhPanel/styles.css' },
     ])
-    expect(r.themes.theme?.id).toBe('paper')
+    expect(r.themes.default?.theme.id).toBe('paper')
     expect(r.themes.themeSource).toBe('default')
-    expect(r.themes.modes.map(m => m.name)).toEqual(['light'])
+    expect(r.themes.default?.modes.map(m => m.name)).toEqual(['light'])
     expect(resolveTokenValue(r, 'light', 'card')).toBe('#eee')
     expect(resolveTokenValue(r, 'light', 'bg')).toBe('#fff')
     expect(resolveTokenValue(r, 'light', 'radius')).toBe('4px')
@@ -59,12 +59,12 @@ describe('resolveGranum', () => {
     const r = resolveGranum({
       providers: [ds],
       ...THEMES,
-      modes: { strictTokens: true, tokenOverrides: { light: { bg: '#000', ghost: '#123' } } },
+      themes: [{ theme: 'paper', modes: { strictTokens: true, tokenOverrides: { light: { bg: '#000', ghost: '#123' } } } }],
     })
-    expect(r.warnings).toContainEqual({ kind: 'override-skipped', mode: 'light', token: 'ghost' })
+    expect(r.warnings).toContainEqual({ kind: 'override-skipped', theme: 'paper', mode: 'light', token: 'ghost' })
     expect(resolveTokenValue(r, 'light', 'bg')).toBe('#000')
     expect(resolveTokenValue(r, 'light', 'ghost')).toBeUndefined()
-    const loose = resolveGranum({ providers: [ds], ...THEMES, modes: { tokenOverrides: { light: { ghost: '#123' } } } })
+    const loose = resolveGranum({ providers: [ds], ...THEMES, themes: [{ theme: 'paper', modes: { tokenOverrides: { light: { ghost: '#123' } } } }] })
     expect(resolveTokenValue(loose, 'light', 'ghost')).toBe('#123')
   })
 
@@ -78,7 +78,7 @@ describe('resolveGranum', () => {
       providers: [makeProvider('ds', { components: ds.components, theme: ds.theme! }), makeManifest('@x/heavy', { XhPanel: heavy.manifest.components.XhPanel! }, { dependencies: ['ds'] })],
       components: ['@x/heavy:XhPanel'],
       ...THEMES,
-      modes: { tokenOverrides: { light: { bg: '#000' } } },
+      themes: [{ theme: 'paper', modes: { tokenOverrides: { light: { bg: '#000' } } } }],
     })
     const input = make()
     const snapshot = JSON.stringify(input)
@@ -88,7 +88,7 @@ describe('resolveGranum', () => {
     expect(b.selection.order).toEqual(a.selection.order)
     expect(b.classes).toEqual(a.classes)
     expect(b.themes).toEqual(a.themes)
-    expect([...b.tokens.active!.modes.keys()]).toEqual([...a.tokens.active!.modes.keys()])
+    expect([...b.tokens.default!.modes.keys()]).toEqual([...a.tokens.default!.modes.keys()])
   })
 
   it('порядок providers во входе не меняет ни классы, ни safelist, ни CSS при одинаковом графе', () => {

@@ -8,35 +8,37 @@
 import type { GranumCssOptions } from '../config'
 import type { GranumProviderInput } from '../contract'
 import type { GranumResolution } from '../core/resolve'
-import type { GranumModesInput, GranumThemeChoice } from '../core/resolveThemes'
+import type { GranumActivation, GranumThemeConfig } from '../core/resolveThemes'
 import type { LayerName } from './emit'
 import { CssReadError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { resolveGranum } from '../core/resolve'
 import { planThemes } from '../core/resolveThemes'
 import { readCss } from './css'
-import { wrapLayers } from './emit'
+import { wrapLayers, wrapThemeSheet } from './emit'
 import { resolveInlinedCssSources } from './inlinedCss'
-import { loadProviderInputs, materializeAppModes, readComponentThemes, readPlannedThemeData } from './prepare'
+import { loadProviderInputs, materializeThemes, readComponentThemes, readPlannedThemeData } from './prepare'
 import { emitThemeCss } from './themeCss'
 
 export interface ThemeStylesheetOptions {
   /** Имена пакетов (манифест через `exports`), объекты контракта или прочитанные манифесты. */
   readonly providers: readonly (string | GranumProviderInput)[]
-  readonly theme?: GranumThemeChoice
-  readonly previews?: readonly GranumThemeChoice[]
-  readonly modes?: GranumModesInput
+  /** Темы: основная — слоями листа, дополнительные — своими листами (`themes`). */
+  readonly themes?: readonly GranumThemeConfig[]
+  readonly activation?: GranumActivation
   /** Каталог, от которого разрешаются пакеты провайдеров. */
   readonly root: string
   readonly css?: Pick<GranumCssOptions, 'layers' | 'layerPrefix'>
 }
 
 export interface ThemeStylesheet {
-  /** Слои `tokens`, `base`, `themes` в обёртках `@layer` (или плоско при `css.layers: false`). */
+  /** Слои `tokens`, `base`, `themes` основной темы в обёртках `@layer` (или плоско при `css.layers: false`). */
   readonly css: string
   readonly layers: Readonly<Record<'tokens' | 'base' | 'themes', string>>
   /** Слои `tokens` и `themes` по частям — для раздачи темы файлом на режим. */
   readonly parts: ThemeStylesheetParts
+  /** Листы дополнительных тем по id — те же, что у сборки приложения. */
+  readonly sheets: Readonly<Record<string, string>>
   readonly resolution: GranumResolution
 }
 
@@ -52,8 +54,8 @@ export interface ThemeStylesheetParts {
   readonly root: string
   /** По режиму сборки, в порядке режимов: блок пары, фолбэки `@supports`, медиазапрос системной схемы. */
   readonly modes: Readonly<Record<string, string>>
-  /** По теме превью: её пары целиком. */
-  readonly previews: Readonly<Record<string, string>>
+  /** По дополнительной теме: слой `themes` её листа — пары целиком. */
+  readonly themes: Readonly<Record<string, string>>
 }
 
 export type ThemeResolutionOptions = Omit<ThemeStylesheetOptions, 'css'>
@@ -68,18 +70,14 @@ export function resolveThemeOnly(options: ThemeResolutionOptions): GranumResolut
   const donors = new Set<string>()
   const inputs = loadProviderInputs({ providers: options.providers }, options.root, donors)
   const nodes = inputs.map(toProviderNode)
-  const choice = {
-    ...(options.theme !== undefined ? { theme: options.theme } : {}),
-    ...(options.previews !== undefined ? { previews: options.previews } : {}),
-  }
-  const plan = planThemes(nodes, choice)
-  const modes = materializeAppModes(options.modes, options.root)
+  const themes = materializeThemes(options.themes, options.root)
+  const plan = planThemes(nodes, themes !== undefined ? { themes } : {})
   return resolveGranum({
     providers: inputs,
     components: nodes.filter(node => !donors.has(node.id)).map(node => ({ provider: node.id, names: 'all' as const })),
-    ...choice,
-    ...(modes !== undefined ? { modes } : {}),
-    themeData: readPlannedThemeData([plan.active, ...plan.previews], nodes),
+    ...(themes !== undefined ? { themes } : {}),
+    ...(options.activation !== undefined ? { activation: options.activation } : {}),
+    themeData: readPlannedThemeData(plan.themes.map(planned => planned.pick), nodes),
     componentThemes: readComponentThemes(inputs),
   })
 }
@@ -105,7 +103,8 @@ export async function emitThemeStylesheet(options: ThemeStylesheetOptions): Prom
   const parts: ThemeStylesheetParts = {
     root: [layers.tokens, ...theme.parts.shared].filter(Boolean).join('\n'),
     modes: Object.fromEntries(theme.parts.modes.map(part => [part.name, part.blocks.join('\n')])),
-    previews: Object.fromEntries(theme.parts.previews.map(part => [part.id, part.blocks.join('\n')])),
+    themes: Object.fromEntries(theme.additional.map(sheet => [sheet.id, sheet.themes.join('\n')])),
   }
-  return { css: wrapLayers(all, options.css ?? {}), layers, parts, resolution }
+  const sheets = Object.fromEntries(theme.additional.map(sheet => [sheet.id, wrapThemeSheet(sheet, options.css ?? {})]))
+  return { css: wrapLayers(all, options.css ?? {}), layers, parts, sheets, resolution }
 }

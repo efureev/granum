@@ -10,6 +10,7 @@ import type { PreparedApp } from './prepare'
 import type { PrunableSection, TokenPrunePlan } from './tokenPrune'
 import { sortedUnique } from '../core/dedupe'
 import { CssReadError } from '../core/errors'
+import { themeSheetMarker } from '../runtime/sheets'
 import { readCss } from './css'
 import { resolveInlinedCssSources, resolveProviderPath } from './inlinedCss'
 import { pruneCssDeclarations } from './pruneCssDeclarations'
@@ -28,10 +29,10 @@ export interface EmittedCss {
   /** План обрезки — при `mode: 'report' | 'on'`. */
   readonly prune: TokenPrunePlan | undefined
   /**
-   * Слой `themes` каждой темы превью без обёрток, по id. При
-   * `css.previews: 'separate'` этих блоков нет в `layers.themes`.
+   * Лист каждой дополнительной темы по id, готовый к отдаче: объявление порядка
+   * слоёв, затем её `base` и `themes` в обёртках. В общем листе их блоков нет.
    */
-  readonly previews: Readonly<Record<string, string>>
+  readonly themeSheets: Readonly<Record<string, string>>
   /** Классы, поданные движку: манифесты + safelist + приложение. */
   readonly engineInput: readonly string[]
   /** Записи safelist, покрытые статикой манифестов: та же находка, что у сборки провайдера. */
@@ -127,11 +128,26 @@ export async function generateEngineCss(app: PreparedApp): Promise<{ engineInput
   return { engineInput, generated }
 }
 
-/** Пары режимов активной темы с `colorScheme: 'dark'` — селектор варианта `dark:` движка. */
+/**
+ * Пары с `colorScheme: 'dark'` всех тем сборки — селектор варианта `dark:`
+ * движка: утилиты в общем листе, а тёмной бывает и пара дополнительной темы.
+ */
 export function darkModesSelector(resolution: PreparedApp['resolution']): string | undefined {
   const { attribute } = resolution.themes.activation
-  const dark = resolution.themes.modes.filter(mode => mode.colorScheme === 'dark')
+  const dark = resolution.themes.themes.flatMap(entry => entry.modes.filter(mode => mode.colorScheme === 'dark'))
   return dark.length > 0 ? dark.map(mode => `[${attribute}="${mode.value}"]`).join(', ') : undefined
+}
+
+/**
+ * Лист дополнительной темы: объявление порядка слоёв первым — лист, подключённый
+ * раньше общего, не меняет каскад, — затем `base` и `themes`, последней — метка
+ * листа (A-34): по ней загрузчик узнаёт лист, подключённый статически.
+ */
+export function wrapThemeSheet(sheet: { readonly id: string, readonly base: readonly string[], readonly themes: readonly string[] }, options: LayerWrapOptions): string {
+  const layers: Record<LayerName, string> = { tokens: '', base: sheet.base.join('\n'), themes: sheet.themes.join('\n'), components: '', utilities: '' }
+  if (!layers.base.trim() && !layers.themes.trim())
+    return ''
+  return `${wrapLayers(layers, options)}\n@property ${themeSheetMarker(sheet.id)} { syntax: '<integer>'; inherits: false; initial-value: 1; }\n`
 }
 
 export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
@@ -182,7 +198,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
       tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => pruneCssDeclarations(s.css, prune!.isKept).css)
   }
 
-  // 5. Темы: блоки активной темы и превью из резолюции; при `on` — без обрезанных токенов.
+  // 5. Темы: блоки основной темы и листы дополнительных из резолюции; при `on` — без обрезанных токенов.
   const themeCss = emitThemeCss(resolution, mode === 'on' && prune ? prune.isKept : undefined)
 
   // Preflight движка — базового уровня, поэтому уезжает в `base` и **первым**:
@@ -191,13 +207,10 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const enginePreflight = generated.preflight?.trim()
   const baseSections = [...sections.filter(s => s.source.kind === 'base').map(s => s.css), ...themeCss.base]
 
-  // Блоки превью уходят из общего листа целиком — по владельцу, а не по селектору.
-  const themes = config.css?.previews === 'separate' ? themeCss.active : themeCss.themes
-
   const layers: Record<LayerName, string> = {
     tokens: [...tokensSections, ...(themeCss.tokens !== undefined ? [themeCss.tokens] : [])].join('\n'),
     base: (enginePreflight ? [enginePreflight, ...baseSections] : baseSections).join('\n'),
-    themes: themes.join('\n'),
+    themes: themeCss.themes.join('\n'),
     components: componentCss.join('\n'),
     utilities: generated.css,
   }
@@ -207,7 +220,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
     css: wrapLayers(layers, config.css ?? {}),
     engine: generated,
     prune,
-    previews: Object.fromEntries(themeCss.parts.previews.map(part => [part.id, part.blocks.join('\n')])),
+    themeSheets: Object.fromEntries(themeCss.additional.map(sheet => [sheet.id, wrapThemeSheet(sheet, config.css ?? {})])),
     engineInput,
     safelistRedundant,
   }

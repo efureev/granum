@@ -87,12 +87,12 @@ export function granumTokens(app: PreparedApp, target: string, scope: 'own' | 'd
   const scopeSet = new Set<string>(scopeKeys)
   const included = resolution.selection.order.includes(key)
 
-  // Чей токен: по слоям значений активной темы; иначе — по инлайнимым файлам
+  // Чей токен: по слоям значений основной темы; иначе — по инлайнимым файлам
   // провайдеров, как у доктора: `declares` манифеста знает и чужие темы каталога.
   const declaredByProvider = new Map<string, string>()
   for (const [token, providerId] of inlinedTokenDeclarations(resolution))
     declaredByProvider.set(token.replace(/^--/, ''), `provider:${providerId}`)
-  const active = resolution.tokens.active
+  const active = resolution.tokens.default
   const scopes: [string, ReadonlyMap<string, TokenChain>][] = active ? [['root', active.root], ...active.modes] : []
   const chainsOf = (token: string): TokensValueChain[] => {
     const out: TokensValueChain[] = []

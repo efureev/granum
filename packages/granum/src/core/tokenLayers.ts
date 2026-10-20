@@ -5,7 +5,7 @@
  * обрезка — расходиться им негде.
  */
 import type { ComponentNode } from './providerNode'
-import type { GranumModesInput, ResolvedMode, ResolvedTheme, ResolvedThemes } from './resolveThemes'
+import type { ResolvedBuildTheme, ResolvedMode, ResolvedTheme, ResolvedThemes } from './resolveThemes'
 import { APP_THEME_SOURCE, componentModeSequence } from './resolveThemes'
 import { DEFAULT_MODE, modeChain } from './themeData'
 
@@ -55,15 +55,14 @@ export interface ThemeTokenSet {
 }
 
 export interface ResolvedTokens {
-  readonly active: ThemeTokenSet | undefined
-  readonly previews: readonly ThemeTokenSet[]
+  /** Значения основной темы; `undefined` — тем нет. */
+  readonly default: ThemeTokenSet | undefined
+  /** Значения каждой темы сборки в порядке `ResolvedThemes.themes`. */
+  readonly themes: readonly ThemeTokenSet[]
 }
 
 export interface CollectTokenLayersOptions {
-  readonly tokenOverrides?: GranumModesInput['tokenOverrides']
-  readonly define?: GranumModesInput['define']
-  readonly strictTokens?: boolean
-  readonly onSkippedOverride?: (scope: string, token: string) => void
+  readonly onSkippedOverride?: (theme: string, scope: string, token: string) => void
 }
 
 function push(map: Map<string, TokenChain>, scope: string, token: string, layer: TokenLayerValue): void {
@@ -230,16 +229,13 @@ function selectModes(set: ThemeTokenSet, modes: readonly ResolvedMode[]): ThemeT
   return { themeId: set.themeId, root: set.root, modes: ordered, fallbacks }
 }
 
-export function collectTokenLayers(
-  themes: ResolvedThemes,
-  components: readonly ComponentNode[],
-  options: CollectTokenLayersOptions = {},
-): ResolvedTokens {
-  const previews = themes.previews.map(preview => selectModes(collectThemeTokens(preview.theme, components), preview.modes))
-  if (!themes.theme)
-    return { active: undefined, previews }
-
-  const set = collectThemeTokens(themes.theme, components)
+/**
+ * Значения одной темы сборки: данные, компоненты, тема-объект, затем `define`
+ * и `tokenOverrides` её записи — каждая тема со своими.
+ */
+function collectBuildTheme(entry: ResolvedBuildTheme, components: readonly ComponentNode[], options: CollectTokenLayersOptions): ThemeTokenSet {
+  const set = collectThemeTokens(entry.theme, components)
+  const { define, tokenOverrides, strictTokens } = entry.input
 
   // Известное для `strictTokens` — данные темы и токены компонентов, до режимов
   // `define`: токен, который задаёт только режим приложения, известным не считается.
@@ -249,10 +245,10 @@ export function collectTokenLayers(
       known.add(token)
   }
 
-  for (const mode of themes.definitions) {
+  for (const mode of entry.definitions) {
     const base = set.modes.get(mode.extends!) ?? new Map()
     const target = copyChains(base, mode.name)
-    const definition = options.define?.[mode.name]
+    const definition = define?.[mode.name]
     for (const [token, value] of Object.entries(definition?.tokens ?? {}))
       push(target, mode.name, token, { source: 'app-mode', value, mode: mode.name })
     set.modes.set(mode.name, target)
@@ -267,19 +263,29 @@ export function collectTokenLayers(
       set.fallbacks.set(mode.name, blocks)
   }
 
-  for (const [scope, tokens] of Object.entries(options.tokenOverrides ?? {})) {
+  for (const [scope, tokens] of Object.entries(tokenOverrides ?? {})) {
     const target = scope === 'root' ? set.root : set.modes.get(scope)
     if (!target)
       continue
     for (const [token, value] of Object.entries(tokens)) {
-      const dropped = options.strictTokens === true && !known.has(token)
+      const dropped = strictTokens === true && !known.has(token)
       push(target, scope, token, dropped ? { source: 'app-override', value, mode: scope, skipped: 'strict-tokens' } : { source: 'app-override', value, mode: scope })
       if (dropped)
-        options.onSkippedOverride?.(scope, token)
+        options.onSkippedOverride?.(entry.theme.id, scope, token)
     }
   }
 
-  return { active: selectModes(set, themes.modes), previews }
+  return selectModes(set, entry.modes)
+}
+
+export function collectTokenLayers(
+  themes: ResolvedThemes,
+  components: readonly ComponentNode[],
+  options: CollectTokenLayersOptions = {},
+): ResolvedTokens {
+  const sets = themes.themes.map(entry => collectBuildTheme(entry, components, options))
+  const index = themes.themes.findIndex(entry => entry.isDefault)
+  return { default: index < 0 ? undefined : sets[index], themes: sets }
 }
 
 /** Значение токена в режиме темы: режимное, иначе режимонезависимое. */

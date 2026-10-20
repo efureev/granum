@@ -34,10 +34,10 @@ function uiProvider(): ReturnType<typeof defineGranumProvider> {
 describe('emitThemeStylesheet', () => {
   it('слои tokens и themes темы с токенами компонентов; ни утилит, ни CSS компонентов', async () => {
     const { root, provider } = catalogProvider({ tokensCss: ':root { --p-space: 4px; }\n' })
-    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'paper', modes: { names: ['light', 'dark'] }, root })
+    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], themes: [{ theme: 'paper', modes: ['light', 'dark'] }], root })
     expect(sheet.layers.tokens).toContain('--p-space: 4px;')
     expect(sheet.layers.tokens).toContain('--p-radius: 6px;')
-    expect(sheet.layers.themes).toContain(':root, [data-theme="paper-light"] {')
+    expect(sheet.layers.themes).toContain(':where(:root), [data-theme="paper-light"] {')
     expect(sheet.layers.themes).toContain('--b-shadow: soft;')
     expect(sheet.layers.themes).toContain('[data-theme="paper-dark"] {')
     expect(sheet.css).toContain('@layer granum.tokens, granum.base, granum.themes, granum.components, granum.utilities;')
@@ -47,40 +47,47 @@ describe('emitThemeStylesheet', () => {
 
   it('без modes — только режим по умолчанию темы, как у сборки приложения', async () => {
     const { root, provider } = catalogProvider()
-    const sheet = await emitThemeStylesheet({ providers: [provider], theme: 'paper', root })
-    expect(sheet.layers.themes).toContain(':root, [data-theme="paper-light"] {')
+    const sheet = await emitThemeStylesheet({ providers: [provider], themes: ['paper'], root })
+    expect(sheet.layers.themes).toContain(':where(:root), [data-theme="paper-light"] {')
     expect(sheet.layers.themes).not.toContain('paper-dark')
   })
 
-  it('режимы и превью — как у приложения; плоский вывод без @layer', async () => {
+  it('режимы и дополнительные темы — как у приложения; плоский вывод без @layer', async () => {
     const { root, provider } = catalogProvider()
-    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'ink', previews: ['paper'], modes: { names: ['light', 'dim'] }, root, css: { layers: false } })
+    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], themes: [{ theme: 'ink', default: true, modes: ['light', 'dim'] }, { theme: 'paper', modes: ['light', 'dark'] }], root, css: { layers: false } })
     expect(sheet.css).not.toContain('@layer')
     expect(sheet.layers.themes).toContain('[data-theme="ink-dim"] {')
     expect(sheet.layers.themes).not.toContain('[data-theme="ink-dark"] {')
-    expect(sheet.layers.themes).toContain('[data-theme="paper-light"] {')
+    // Дополнительная тема — своим листом, в слоях основной её нет.
+    expect(sheet.layers.themes).not.toContain('paper-light')
+    expect(Object.keys(sheet.sheets)).toEqual(['paper'])
+    expect(sheet.sheets.paper).toContain('[data-theme="paper-light"] {')
+    expect(sheet.sheets.paper).toContain('[data-theme="paper-dark"] {')
+    expect(sheet.sheets.paper).not.toContain('@layer')
   })
 
   it('части: root без режимов, режим — его пара и фолбэки, :root — только у режима по умолчанию', async () => {
     const { root, provider } = catalogProvider()
-    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], theme: 'paper', previews: ['ink'], modes: { names: ['light', 'dark'], system: 'media' }, root })
+    const sheet = await emitThemeStylesheet({ providers: [provider, uiProvider()], themes: [{ theme: 'paper', default: true, modes: ['light', 'dark'] }, 'ink'], activation: { system: 'media' }, root })
     const { parts } = sheet
 
     expect(Object.keys(parts.modes)).toEqual(['light', 'dark'])
     expect(parts.root).toContain('--p-radius: 6px;')
-    expect(parts.root).not.toMatch(/paper-(?:light|dark)/)
-    expect(parts.modes.light).toContain(':root, [data-theme="paper-light"] {')
+    // Пары в root — только граница общих формул, блоков режимов там нет.
+    expect(parts.root).toContain(':where(:root), [data-theme="paper-light"], [data-theme="paper-dark"] {')
+    expect(parts.root).not.toMatch(/^\[data-theme="paper-(?:light|dark)"\] \{/m)
+    expect(parts.modes.light).toContain(':where(:root), [data-theme="paper-light"] {')
     expect(parts.modes.light).not.toContain('paper-dark')
     expect(parts.modes.dark).toContain('[data-theme="paper-dark"] {')
     expect(parts.modes.dark).toContain('--b-shadow: none;')
     expect(parts.modes.dark).not.toMatch(/:root,|paper-light/)
     expect(parts.modes.dark).toContain('@media (prefers-color-scheme: dark)')
-    expect(Object.keys(parts.previews)).toEqual(['ink'])
-    expect(parts.previews.ink).not.toContain(':root')
+    expect(Object.keys(parts.themes)).toEqual(['ink'])
+    expect(parts.themes.ink).not.toContain(':root')
 
-    // Ничего не потеряно и не задвоено: те же строки, что у слоёв.
+    // Ничего не потеряно и не задвоено: те же строки, что у слоёв основной темы.
     const lines = (css: string): string[] => css.split('\n').filter(line => line.trim()).sort()
-    expect(lines([parts.root, ...Object.values(parts.modes), ...Object.values(parts.previews)].join('\n')))
+    expect(lines([parts.root, ...Object.values(parts.modes)].join('\n')))
       .toEqual(lines(`${sheet.layers.tokens}\n${sheet.layers.themes}`))
   })
 
@@ -89,8 +96,7 @@ describe('emitThemeStylesheet', () => {
     const fallbacks = [{ supports: 'not (color: oklch(0 0 0))', tokens: { 'p-bg': 'navy' } }]
     const sheet = await emitThemeStylesheet({
       providers: [provider],
-      theme: 'paper',
-      modes: { names: ['light', 'dark', 'ocean'], define: { ocean: { extends: 'dark', tokens: { 'p-bg': '#012' }, fallbacks } } },
+      themes: [{ theme: 'paper', modes: { names: ['light', 'dark', 'ocean'], define: { ocean: { extends: 'dark', tokens: { 'p-bg': '#012' }, fallbacks } } } }],
       root,
     })
     const supports = [...sheet.layers.themes.matchAll(/@supports[^{]+\{[^@]*?\}\s*\}/g)].map(match => match[0])
@@ -106,7 +112,7 @@ describe('emitThemeStylesheet', () => {
   it('tokensRef режима приложения читается от root, как у сборки приложения', async () => {
     const { root, provider } = catalogProvider()
     writeFileSync(join(root, 'ocean.css'), ':root{--p-bg:#012}')
-    const sheet = await emitThemeStylesheet({ providers: [provider], theme: 'paper', modes: { define: { ocean: { extends: 'dark', tokensRef: 'ocean.css' } } }, root })
+    const sheet = await emitThemeStylesheet({ providers: [provider], themes: [{ theme: 'paper', modes: { define: { ocean: { extends: 'dark', tokensRef: 'ocean.css' } } } }], root })
     expect(sheet.layers.themes).toMatch(/\[data-theme="paper-ocean"\] \{[^}]*--p-bg: #012;/)
   })
 })
@@ -119,20 +125,25 @@ describe('resolveThemeManifest', () => {
       config: {
         engine: testEngine(),
         providers: [provider, uiProvider()],
-        theme: 'ink',
-        previews: ['paper'],
-        modes: { names: ['light', 'dim', 'ocean'], define: { ocean: { extends: 'dim', title: 'Ocean', tokens: { 'p-bg': '#012' } } } },
+        themes: [
+          { theme: 'ink', default: true, modes: { names: ['light', 'dim', 'ocean'], define: { ocean: { extends: 'dim', title: 'Ocean', tokens: { 'p-bg': '#012' } } } } },
+          { theme: 'paper', modes: ['light', 'dark'] },
+        ],
         appSources: { dirs: [] },
       },
     }
   }
 
-  it('совпадает с манифестом сборки приложения, включая режимы приложения и превью', async () => {
+  it('совпадает с манифестом сборки приложения, включая режимы приложения и дополнительные темы', async () => {
     const { root, config } = app()
     const built = getThemeManifest((await prepareApp(config, root)).resolution)
-    expect(built.modes.map(mode => mode.value)).toEqual(['ink-light', 'ink-dim', 'ink-ocean'])
-    expect(built.previews?.map(preview => preview.theme.id)).toEqual(['paper'])
-    expect(resolveThemeManifest({ providers: config.providers, theme: config.theme!, previews: config.previews!, modes: config.modes!, root })).toEqual(built)
+    expect(built.defaultTheme).toBe('ink')
+    expect(built.themes.map(theme => theme.id)).toEqual(['ink', 'paper'])
+    expect(built.themes[0]!.modes.map(mode => mode.value)).toEqual(['ink-light', 'ink-dim', 'ink-ocean'])
+    expect(built.themes[1]!.modes.map(mode => mode.value)).toEqual(['paper-light', 'paper-dark'])
+    // Адреса листов знает только сборка: до неё их нет.
+    expect(built.themes.some(theme => theme.href !== undefined)).toBe(false)
+    expect(resolveThemeManifest({ providers: config.providers, themes: config.themes!, root })).toEqual(built)
   })
 
   it('plugin.api.themeManifest отдаёт его до сборки', async () => {

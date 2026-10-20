@@ -1,9 +1,9 @@
 import type { GranumLoadedManifest } from '../contract'
-import type { GranumAppTheme, ResolveThemesInput } from '../core/resolveThemes'
+import type { GranumAppTheme, ResolvedThemes, ResolveThemesInput } from '../core/resolveThemes'
 import { describe, expect, it } from 'vitest'
 import { ThemeResolutionError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
-import { planThemes, resolveThemes } from '../core/resolveThemes'
+import { additionalThemes, planThemes, resolveThemes } from '../core/resolveThemes'
 import { INK, makeManifest, PAPER, themeData } from './helpers'
 
 /** Владелец каталога в форме манифеста: данные тем приходят резолверу отдельно (`themeData`). */
@@ -26,6 +26,11 @@ function resolve(input: ResolveThemesInput = {}, providers: GranumLoadedManifest
   return resolveThemes(providers.map(toProviderNode), input, [], DATA)
 }
 
+/** Основная тема резолюции. */
+function main(r: ResolvedThemes) {
+  return r.default!
+}
+
 function reasonOf(run: () => unknown): string | undefined {
   try {
     run()
@@ -39,48 +44,46 @@ function reasonOf(run: () => unknown): string | undefined {
 describe('значения тем и режимов молча не теряются', () => {
   const none = [makeManifest('@p/plain')]
 
-  it('без активной темы непустые modes и previews — theme-missing', () => {
-    expect(reasonOf(() => resolve({ modes: { tokenOverrides: { root: { 'x-radius': '4px' } } } }, none))).toBe('theme-missing')
-    expect(reasonOf(() => resolve({ modes: { names: ['dark'] } }, none))).toBe('theme-missing')
-    expect(reasonOf(() => resolve({ modes: { define: { sepia: { extends: 'light' } } } }, none))).toBe('theme-missing')
-    expect(reasonOf(() => resolve({ previews: [themeData('x', { light: { a: '1' } })] }, none))).toBe('theme-missing')
-    // Пустой набор, активация, системная схема и строгость значений не несут.
-    expect(reasonOf(() => resolve({ modes: { names: [], tokenOverrides: {}, define: {}, activation: { attribute: 'data-mode' }, system: 'media', strictTokens: true }, previews: [] }, none))).toBeUndefined()
+  it('без тем активация — theme-missing; без неё тем просто нет', () => {
+    expect(reasonOf(() => resolve({ activation: { system: 'media' } }, none))).toBe('theme-missing')
+    expect(reasonOf(() => resolve({}, none))).toBeUndefined()
   })
 
   it('extends темы-объекта не из каталога — unknown-theme со списком доступных', () => {
     const brand: GranumAppTheme = { ...themeData('brand', { light: { a: '1' } }), extends: 'papr' }
-    expect(reasonOf(() => resolve({ theme: brand }))).toBe('unknown-theme')
-    expect(reasonOf(() => resolve({ theme: 'paper', previews: [brand] }))).toBe('unknown-theme')
-    expect(reasonOf(() => resolve({ theme: brand }, none))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ themes: [brand] }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, brand] }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ themes: [brand] }, none))).toBe('unknown-theme')
     try {
-      resolve({ theme: brand })
+      resolve({ themes: [brand] })
     }
     catch (error) {
       expect((error as ThemeResolutionError).available).toEqual(['paper', 'ink'])
     }
-    expect(resolve({ theme: { ...brand, extends: 'ink' } }).theme?.chain).toEqual(['brand', 'ink', 'paper'])
+    expect(main(resolve({ themes: [{ ...brand, extends: 'ink' }] })).theme.chain).toEqual(['brand', 'ink', 'paper'])
   })
 })
 
-describe('активная тема', () => {
+describe('основная тема', () => {
   it('по умолчанию — defaultTheme владельца, источник default', () => {
     const r = resolve()
-    expect(r.theme?.id).toBe('paper')
+    expect(r.themes.map(entry => entry.theme.id)).toEqual(['paper'])
+    expect(main(r).theme.id).toBe('paper')
+    expect(main(r).isDefault).toBe(true)
     expect(r.themeSource).toBe('default')
     expect(r.owner).toBe('@p/ds')
   })
 
   it('id из конфига и квалифицированная форма; цепочка тем для токенов компонентов', () => {
-    expect(resolve({ theme: 'ink' }).theme?.chain).toEqual(['ink', 'paper'])
-    expect(resolve({ theme: '@p/ds:ink' }).themeSource).toBe('provider')
+    expect(main(resolve({ themes: ['ink'] })).theme.chain).toEqual(['ink', 'paper'])
+    expect(resolve({ themes: ['@p/ds:ink'] }).themeSource).toBe('provider')
   })
 
   it('неизвестная тема — unknown-theme со списком доступных; чужой провайдер в ключе — тоже', () => {
-    expect(reasonOf(() => resolve({ theme: 'clay' }))).toBe('unknown-theme')
-    expect(reasonOf(() => resolve({ theme: '@other/x:paper' }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ themes: ['clay'] }))).toBe('unknown-theme')
+    expect(reasonOf(() => resolve({ themes: ['@other/x:paper'] }))).toBe('unknown-theme')
     try {
-      resolve({ theme: 'clay' })
+      resolve({ themes: ['clay'] })
     }
     catch (error) {
       expect((error as ThemeResolutionError).available).toEqual(['paper', 'ink'])
@@ -93,8 +96,8 @@ describe('активная тема', () => {
 
   it('без владельца и без темы-объекта тем нет', () => {
     const r = resolve({}, [makeManifest('@p/plain', { X: {} })])
-    expect(r.theme).toBeUndefined()
-    expect(r.modes).toEqual([])
+    expect(r.default).toBeUndefined()
+    expect(r.themes).toEqual([])
   })
 
   it('каталог без defaultTheme: одна тема — она, несколько — unknown-theme', () => {
@@ -103,85 +106,116 @@ describe('активная тема', () => {
 
   it('тема-объект приложения: источник app, extends даёт цепочку каталога', () => {
     const brand: GranumAppTheme = { ...themeData('brand', { light: { 'p-bg': '#fafafa' } }), extends: 'ink' }
-    const r = resolve({ theme: brand })
-    expect(r.theme?.providerId).toBe('(app)')
+    const r = resolve({ themes: [brand] })
+    expect(main(r).theme.providerId).toBe('(app)')
     expect(r.themeSource).toBe('app')
-    expect(r.theme?.chain).toEqual(['brand', 'ink', 'paper'])
+    expect(main(r).theme.chain).toEqual(['brand', 'ink', 'paper'])
   })
 
   it('данные темы каталога не переданы — theme-data-missing', () => {
     expect(reasonOf(() => resolveThemes([toProviderNode(owner())], {}, [], {}))).toBe('theme-data-missing')
   })
+})
 
-  it('план читает только активную тему и превью', () => {
-    const plan = planThemes([toProviderNode(owner())], { theme: 'ink', previews: ['paper'] })
-    expect(plan.active).toEqual({ kind: 'catalog', providerId: '@p/ds', id: 'ink', data: 'themes/ink.json' })
-    expect(plan.previews.map(p => p.kind === 'catalog' ? p.id : '')).toEqual(['paper'])
+describe('темы сборки', () => {
+  it('основная ровно одна: единственная — без пометки, из нескольких — помеченная', () => {
+    const r = resolve({ themes: ['ink', { theme: 'paper', default: true }] })
+    expect(r.themes.map(entry => `${entry.theme.id}${entry.isDefault ? '*' : ''}`)).toEqual(['ink', 'paper*'])
+    expect(main(r).theme.id).toBe('paper')
+    expect(additionalThemes(r).map(entry => entry.theme.id)).toEqual(['ink'])
+    expect(r.themeSource).toBe('provider')
+  })
+
+  it('ни одной пометки, две пометки и пустой список — default-theme', () => {
+    expect(reasonOf(() => resolve({ themes: ['paper', 'ink'] }))).toBe('default-theme')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, { theme: 'ink', default: true }] }))).toBe('default-theme')
+    expect(reasonOf(() => resolve({ themes: [] }))).toBe('default-theme')
+  })
+
+  it('одна тема дважды, в том числе тема-объект с id каталога, — duplicate-theme', () => {
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, '@p/ds:paper'] }))).toBe('duplicate-theme')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, themeData('paper', { light: { a: '1' } })] }))).toBe('duplicate-theme')
+  })
+
+  it('план читает только темы из списка', () => {
+    const plan = planThemes([toProviderNode(owner())], { themes: [{ theme: 'ink', default: true }, 'paper'] })
+    expect(plan.themes.map(t => (t.pick.kind === 'catalog' ? `${t.pick.id}:${t.pick.data}` : ''))).toEqual(['ink:themes/ink.json', 'paper:themes/paper.json'])
+    expect(plan.themes.map(t => t.isDefault)).toEqual([true, false])
+  })
+
+  it('режимы у каждой темы свои — по тому же правилу набора', () => {
+    const r = resolve({ themes: [{ theme: 'ink', default: true, modes: ['dim'] }, { theme: 'paper', modes: ['light', 'dark'] }] })
+    expect(r.themes.map(entry => `${entry.theme.id}:${entry.modes.map(m => m.value).join(',')}`)).toEqual(['ink:ink-dim', 'paper:paper-light,paper-dark'])
+    // Без `modes` дополнительная тема — только свой режим по умолчанию, как и основная.
+    expect(additionalThemes(resolve({ themes: [{ theme: 'ink', default: true }, 'paper'] }))[0]!.modes.map(m => m.name)).toEqual(['light'])
+  })
+
+  it('define и tokenOverrides — у своей темы: чужой режим в overrides — unknown-mode', () => {
+    const r = resolve({ themes: [{ theme: 'paper', default: true }, { theme: 'ink', modes: { define: { ocean: { extends: 'dark' } } } }] })
+    expect(main(r).definitions).toEqual([])
+    expect(additionalThemes(r)[0]!.modes.map(m => m.value)).toEqual(['ink-light', 'ink-ocean'])
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, { theme: 'ink', modes: { tokenOverrides: { dim: { 'p-bg': 'red' } } } }] }))).toBe('unknown-mode')
+  })
+
+  it('пары всех тем сборки различны: шаблон без {theme} сталкивает одноимённые режимы', () => {
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', default: true }, 'ink'], activation: { value: '{mode}' } }))).toBe('activation-collision')
   })
 })
 
 describe('режимы', () => {
-  it('без modes.names — только режим по умолчанию темы, пара по шаблону', () => {
-    const r = resolve({ theme: 'ink' })
-    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light'])
-    expect(r.modesSource).toBe('theme')
-    expect(r.defaultMode).toBe('light')
+  it('без modes — только режим по умолчанию темы, пара по шаблону', () => {
+    const r = resolve({ themes: ['ink'] })
+    expect(main(r).modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light'])
+    expect(main(r).modesSource).toBe('theme')
+    expect(main(r).defaultMode).toBe('light')
     expect(r.activation).toEqual({ attribute: 'data-theme', value: '{theme}-{mode}' })
   })
 
   it('все режимы темы — перечислением; режим по умолчанию первым', () => {
-    const r = resolve({ theme: 'ink', modes: { names: ['dim', 'dark', 'light'] } })
-    expect(r.modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light', 'dim=ink-dim', 'dark=ink-dark'])
+    const r = resolve({ themes: [{ theme: 'ink', modes: ['dim', 'dark', 'light'] }] })
+    expect(main(r).modes.map(m => `${m.name}=${m.value}`)).toEqual(['light=ink-light', 'dim=ink-dim', 'dark=ink-dark'])
   })
 
-  it('modes.names задаёт набор; режим по умолчанию всё равно первым', () => {
-    const r = resolve({ theme: 'ink', modes: { names: ['dim', 'light'] } })
-    expect(r.modes.map(m => m.name)).toEqual(['light', 'dim'])
-    expect(r.modesSource).toBe('explicit')
+  it('names задаёт набор; режим по умолчанию всё равно первым', () => {
+    const r = resolve({ themes: [{ theme: 'ink', modes: { names: ['dim', 'light'] } }] })
+    expect(main(r).modes.map(m => m.name)).toEqual(['light', 'dim'])
+    expect(main(r).modesSource).toBe('explicit')
   })
 
   it('неизвестный режим — unknown-mode', () => {
-    expect(reasonOf(() => resolve({ modes: { names: ['sepia'] } }))).toBe('unknown-mode')
-    expect(reasonOf(() => resolve({ modes: { tokenOverrides: { sepia: { 'p-bg': 'red' } } } }))).toBe('unknown-mode')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', modes: ['sepia'] }] }))).toBe('unknown-mode')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', modes: { tokenOverrides: { sepia: { 'p-bg': 'red' } } } }] }))).toBe('unknown-mode')
   })
 
   it('define поверх режима темы и другого define; база раньше наследника и в набор не обязана входить', () => {
-    const r = resolve({ modes: { define: { deep: { extends: 'ocean' }, ocean: { extends: 'dark', title: 'Океан' } } } })
-    // Без `modes.names` в набор входят режим по умолчанию и режимы приложения;
+    const r = resolve({ themes: [{ theme: 'paper', modes: { define: { deep: { extends: 'ocean' }, ocean: { extends: 'dark', title: 'Океан' } } } }] })
+    // Без `names` в набор входят режим по умолчанию и режимы приложения;
     // `dark` — только база `ocean`: его значения взяты, блока у него нет.
-    expect(r.modes.map(m => m.name)).toEqual(['light', 'ocean', 'deep'])
-    expect(r.definitions.map(m => `${m.name}←${m.extends}`)).toEqual(['ocean←dark', 'deep←ocean'])
-    const ocean = r.modes.find(m => m.name === 'ocean')!
+    expect(main(r).modes.map(m => m.name)).toEqual(['light', 'ocean', 'deep'])
+    expect(main(r).definitions.map(m => `${m.name}←${m.extends}`)).toEqual(['ocean←dark', 'deep←ocean'])
+    const ocean = main(r).modes.find(m => m.name === 'ocean')!
     expect(ocean).toMatchObject({ origin: 'define', colorScheme: 'dark', title: 'Океан', value: 'paper-ocean' })
   })
 
-  it('неизвестная база и цикл define — предупреждения, наследуется режим по умолчанию', () => {
-    const r = resolve({ modes: { define: { a: { extends: 'nope' }, b: { extends: 'c' }, c: { extends: 'b' } } } })
-    expect(r.warnings).toContainEqual({ kind: 'mode-extends-unresolved', mode: 'a', base: 'nope' })
-    expect(r.warnings.some(w => w.kind === 'mode-extends-cycle')).toBe(true)
-    expect(r.definitions.find(m => m.name === 'a')!.extends).toBe('light')
+  it('неизвестная база и цикл define — предупреждения с темой, наследуется режим по умолчанию', () => {
+    const r = resolve({ themes: [{ theme: 'paper', modes: { define: { a: { extends: 'nope' }, b: { extends: 'c' }, c: { extends: 'b' } } } }] })
+    expect(r.warnings).toContainEqual({ kind: 'mode-extends-unresolved', theme: 'paper', mode: 'a', base: 'nope' })
+    expect(r.warnings.some(w => w.kind === 'mode-extends-cycle' && w.theme === 'paper')).toBe(true)
+    expect(main(r).definitions.find(m => m.name === 'a')!.extends).toBe('light')
   })
 
   it('define с именем режима темы — та же пара: activation-collision', () => {
-    expect(reasonOf(() => resolve({ modes: { define: { dark: { extends: 'light' } } } }))).toBe('activation-collision')
+    expect(reasonOf(() => resolve({ themes: [{ theme: 'paper', modes: { define: { dark: { extends: 'light' } } } }] }))).toBe('activation-collision')
   })
 
-  it('шаблон без {mode} и совпавшие пары — activation-collision', () => {
-    expect(reasonOf(() => resolve({ modes: { activation: { value: '{theme}' } } }))).toBe('activation-collision')
-    expect(reasonOf(() => resolve({ previews: ['paper'], modes: { activation: { value: '{mode}' } } }))).toBe('activation-collision')
+  it('шаблон без {mode} — activation-collision', () => {
+    expect(reasonOf(() => resolve({ activation: { value: '{theme}' } }))).toBe('activation-collision')
   })
 
   it('свой атрибут и шаблон', () => {
-    const r = resolve({ modes: { names: ['light', 'dark'], activation: { attribute: 'data-mode', value: '{mode}@{theme}' } } })
-    expect(r.modes.map(m => m.value)).toEqual(['light@paper', 'dark@paper'])
+    const r = resolve({ themes: [{ theme: 'paper', modes: ['light', 'dark'] }], activation: { attribute: 'data-mode', value: '{mode}@{theme}' } })
+    expect(main(r).modes.map(m => m.value)).toEqual(['light@paper', 'dark@paper'])
     expect(r.activation.attribute).toBe('data-mode')
-  })
-})
-
-describe('превью', () => {
-  it('режимы превью — все режимы её данных, пары своей темы', () => {
-    const r = resolve({ theme: 'ink', previews: ['paper'] })
-    expect(r.previews.map(p => `${p.theme.id}:${p.modes.map(m => m.value).join(',')}`)).toEqual(['paper:paper-light,paper-dark'])
   })
 })
 

@@ -38,7 +38,7 @@
 | `.` | browser + node | контракт и резолвер: `resolveGranum`, типы `GranumResolution`, ошибки |
 | `./contract` | browser + node | `defineGranumProvider`, `defineGranumComponent`, `GRANUM_CONTRACT_VERSION` |
 | `./engine` | browser + node | интерфейс `GranumEngine`, типы правил, `extractClasses`, `parseDialect`, `vocabularyFingerprint` |
-| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createThemeManifest`, `createCookieStorage`, `modeFromCookie`, `themeRootAttributes`, `resolveThemeActivation`, `themeModeValue` |
+| `./runtime` | browser | `createThemeController`, `createThemeScript`, `createThemeScriptCode`, `createThemeManifest`, `createCookieStorage`, `themeFromCookie`, `themeRootAttributes`, `loadThemeSheet`, `themeSheetLink`, `resolveThemeActivation`, `readThemeSelection`, `themeSelectionKey`, `themeModeValue`, `findTheme`, `defaultTheme` |
 | `./build` | node, peer `vite` | плагин `granumProvider()` |
 | `./vite` | node, peer `vite` | плагин `granum()`, `defineGranumConfig` |
 | `./node` | node | чтение манифестов, `prepareApp`, `emitCss`, `buildReport`, диагностика как функции |
@@ -52,12 +52,12 @@
 
 ## Резолюция
 
-`resolveGranum({ providers, components, theme, previews, modes, themeData })` — чистая
+`resolveGranum({ providers, components, themes, activation, themeData })` — чистая
 функция: без FS, сети и глобального состояния. Вход — манифесты (`{ manifest, baseUrl }`)
 или объекты контракта; обе формы нормализуются в узлы провайдеров. Данные тем
-приносит подготовка приложения — только активной темы и превью. Результат —
+приносит подготовка приложения — только тем из `themes`. Результат —
 упорядоченный граф провайдеров, реестр компонентов, селекция после
-транзитивного замыкания, активная тема и режимы с источниками, значения токенов по режимам с
+транзитивного замыкания, темы сборки (основная и дополнительные) с режимами и источниками, значения токенов каждой темы по режимам с
 эффективными значениями, классы и safelist селекции, список CSS в порядке
 эмиссии, предупреждения. За один билд существует ровно одна резолюция:
 мемоизация по идентичности конфига.

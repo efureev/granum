@@ -166,7 +166,7 @@ components/XhButton/themes/
 The folder name is a theme id, the file name a mode; a file is JSON or CSS with one flat block
 (the selector does not matter). Anything else is `invalid-theme-dir`; `README.md` and hidden
 files are skipped. Themes of a foreign catalog are legitimate: a companion ships tokens for the
-design system's themes, and the application applies them when the theme is active. The object
+design system's themes, and the application applies them when the theme is in the build. The object
 form of a provider (tests, local development) does not merge data: its `data` must be
 complete. Examples are the fixtures [`themes-package`](../../fixtures/themes-package/README.md),
 [`themed-ds-package`](../../fixtures/themed-ds-package/README.md) and
@@ -200,7 +200,7 @@ Pass the provider object itself — its components are not scanned, the
 import { emitThemeStylesheet } from '@feugene/granum/node'
 import { provider } from './src/granum-provider/index.ts'
 
-const { css } = await emitThemeStylesheet({ providers: [provider], theme: 'slate', root: process.cwd() })
+const { css } = await emitThemeStylesheet({ providers: [provider], themes: [{ theme: 'slate', modes: ['light', 'dark'] }], root: process.cwd() })
 ```
 
 The same sheet comes in parts — `parts`: `root` (everything that does not depend
@@ -209,7 +209,9 @@ as files — `themes/<id>/root.css`, `themes/<id>/<mode>.css` — and an applica
 takes `root` and only its own modes; its bundler joins them into one file. `root`
 goes first. Each mode is self-contained — inheritance by `extends` is already
 resolved in it — and only the default mode carries `:root`: an application without
-it gets the pair on `<html>` from the mode script or its markup.
+it gets the pair on `<html>` from the mode script or its markup. Additional `themes`
+entries give the sheets of other themes — `sheets.<theme>`: full pair blocks without
+`:root`, which may be linked next to the default theme in any order.
 
 Tokens of companion packages are not in such a file: only an application build
 knows all the manifests. A `$`-prefixed key in a `themesDir` JSON file is a note
@@ -224,9 +226,12 @@ a build:
 import { createThemeManifest } from '@feugene/granum/runtime'
 
 const manifest = createThemeManifest({
-  theme: { id: 'slate', title: 'Slate' },
-  modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
-  defaultMode: 'light',
+  themes: [{
+    id: 'slate',
+    title: 'Slate',
+    modes: [{ name: 'light', colorScheme: 'light' }, { name: 'dark', colorScheme: 'dark' }],
+    defaultMode: 'light',
+  }],
 })
 ```
 

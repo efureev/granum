@@ -9,7 +9,7 @@ export default {
   },
   css: {
     present: [
-      { what: 'режим по умолчанию темы приложения', css: ':root,[data-theme=brand-light]{' },
+      { what: 'режим по умолчанию темы приложения', css: ':where(:root),[data-theme=brand-light]{' },
       { what: 'свой токен кнопки перекрыл токен компонента', css: '--td-button-shadow:0 0 0 2px #7c3aed' },
       { what: 'в тёмном режиме — токен компонента paper по цепочке extends', css: '--td-button-shadow:none' },
       { what: 'режим приложения sepia своей парой', css: '[data-theme=brand-sepia]{' },
@@ -22,7 +22,7 @@ export default {
     ],
   },
   report: (report, check) => {
-    check(report.themes.theme === 'brand' && report.themes.themeSource === 'app', `theme: ${report.themes.theme} (${report.themes.themeSource})`)
-    check(report.themes.modes.join(',') === 'light,dark,sepia', `modes: ${report.themes.modes}`)
+    check(report.themes.defaultTheme === 'brand' && report.themes.themeSource === 'app', `theme: ${report.themes.defaultTheme} (${report.themes.themeSource})`)
+    check(report.themes.themes[0]?.modes.join(',') === 'light,dark,sepia', `modes: ${report.themes.themes[0]?.modes}`)
   },
 }

@@ -44,7 +44,7 @@ function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } 
 async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<ReturnType<typeof emitCss>>, app: Awaited<ReturnType<typeof prepareTestApp>> }> {
   const { root, manifest } = fixture()
   // Оба режима фикстуры явно: без `modes.names` сборка берёт только режим по умолчанию.
-  const app = await prepareTestApp({ providers: [manifest], modes: { names: ['light', 'dark'] }, ...config }, root)
+  const app = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'] } }], ...config }, root)
   return { css: await emitCss(app), app }
 }
 
@@ -57,7 +57,7 @@ describe('emitCss: слои и порядок; utilities позже components',
     expect(css.layers.tokens).toContain('--space: 8px')
     expect(css.layers.base).toContain('body { margin')
     // Литералы root темы — в слое tokens после файлов токенов, режимы — в themes.
-    expect(css.layers.tokens).toContain(':root {\n  --accent: red;\n}')
+    expect(css.layers.tokens).toContain(':root:not([data-theme]), [data-theme="kit-light"], [data-theme="kit-dark"] {\n  --accent: red;\n}')
     expect(css.layers.tokens.indexOf('--space: 8px')).toBeLessThan(css.layers.tokens.indexOf('--accent: red'))
     expect(css.layers.themes).toContain('[data-theme="kit-dark"] {')
     // Компоненты — в порядке селекции: зависимость раньше зависящего.
@@ -69,12 +69,12 @@ describe('emitCss: слои и порядок; utilities позже components',
   it('режим по умолчанию первым при любом порядке modes.names', async () => {
     // `:root` и `[data-theme]` равны по специфичности: стоящий позже победил бы,
     // и при `names: ['dark', 'light']` светлый режим перекрыл бы тёмный на острове.
-    const { css } = await run({ components: ['@x/kit:Card'], modes: { names: ['dark', 'light'] } })
+    const { css } = await run({ components: ['@x/kit:Card'], themes: [{ theme: 'kit', modes: { names: ['dark', 'light'] } }] })
     expect(css.layers.themes.indexOf(':root, [data-theme="kit-light"] {')).toBeLessThan(css.layers.themes.indexOf('[data-theme="kit-dark"] {'))
   })
 
   it('режим приложения — в слое themes под своей парой', async () => {
-    const { css } = await run({ components: ['@x/kit:Card'], modes: { define: { brand: { extends: 'light', tokens: { bg: 'red' } } } } })
+    const { css } = await run({ components: ['@x/kit:Card'], themes: [{ theme: 'kit', modes: { define: { brand: { extends: 'light', tokens: { bg: 'red' } } } } }] })
     expect(css.layers.themes).toContain('[data-theme="kit-brand"] {\n  color-scheme: light;\n  --bg: red;\n}')
     expect(css.layers.tokens).not.toContain('--bg: red')
   })
@@ -211,12 +211,12 @@ describe('buildReport', () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, 'src/App.vue'), '<template><div class="bg-[var(--ghost)]"></div></template>')
-    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' }, modes: { names: ['light', 'dark'] } }, root)
+    const app = await prepareTestApp({ providers: [manifest], components: ['@x/kit:Panel'], appSources: { dirs: ['src'] }, pruneTokens: { mode: 'report' }, themes: [{ theme: 'kit', modes: { names: ['light', 'dark'] } }] }, root)
     const css = await emitCss(app)
     const report = buildReport(app, css)
     expect(report.selection.map(s => s.key)).toEqual(['@x/kit:Card', '@x/kit:Panel'])
     expect(report.selection[1]!.dependencies).toEqual(['@x/kit:Card'])
-    expect(report.themes).toEqual({ theme: 'kit', themeSource: 'default', modes: ['light', 'dark'], modesSource: 'explicit', previews: [] })
+    expect(report.themes).toEqual({ defaultTheme: 'kit', themeSource: 'provider', themes: [{ id: 'kit', default: true, modes: ['light', 'dark'], modesSource: 'explicit' }] })
     expect(report.classes.unmatched).toEqual([{ className: 'shadow-legacy', sources: ['@x/kit:Panel'] }])
     expect(report.classes.safelistRedundant).toEqual(['p-4'])
     // `--ghost` потребляет разметка приложения, а не компонент: вердикт — тот же,
@@ -312,22 +312,22 @@ describe('prepareApp: tokensRef режимов приложения', () => {
     writeFileSync(join(root, 'src/themes/crimson.css'), ':root{--app-bg:#111;--app-fg:#eee}')
     const app = await prepareTestApp({
       providers: [manifest],
-      modes: { define: { crimson: { extends: 'dark', tokensRef: { url: 'src/themes/crimson.css' }, tokens: { 'app-fg': '#fff' } } } },
+      themes: [{ theme: 'kit', modes: { define: { crimson: { extends: 'dark', tokensRef: { url: 'src/themes/crimson.css' }, tokens: { 'app-fg': '#fff' } } } } }],
     }, root)
     expect(resolveTokenValue(app.resolution, 'crimson', 'app-bg')).toBe('#111')
     expect(resolveTokenValue(app.resolution, 'crimson', 'app-fg')).toBe('#fff')
     expect(resolveTokenValue(app.resolution, 'crimson', 'bg')).toBe('#000')
-    await expect(prepareTestApp({ providers: [manifest], modes: { define: { x: { extends: 'light', tokensRef: 'src/themes/none.css' } } } }, root)).rejects.toBeInstanceOf(TokenRefError)
+    await expect(prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { define: { x: { extends: 'light', tokensRef: 'src/themes/none.css' } } } }] }, root)).rejects.toBeInstanceOf(TokenRefError)
   })
 
   it('несколько плоских блоков без selector — ошибка, а не первый попавшийся; с selector — его блок', async () => {
     const { root, manifest } = fixture()
     mkdirSync(join(root, 'src/themes'), { recursive: true })
     writeFileSync(join(root, 'src/themes/two.css'), ':root{--app-bg:#111}\n.alt{--app-fg:#eee}')
-    const failed = await prepareTestApp({ providers: [manifest], modes: { define: { two: { extends: 'dark', tokensRef: 'src/themes/two.css' } } } }, root).catch((e: unknown) => e)
+    const failed = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { define: { two: { extends: 'dark', tokensRef: 'src/themes/two.css' } } } }] }, root).catch((e: unknown) => e)
     expect(failed).toBeInstanceOf(TokenRefError)
     expect((failed as TokenRefError).cause).toMatchObject({ reason: 'multiple-blocks', available: [':root', '.alt'] })
-    const app = await prepareTestApp({ providers: [manifest], modes: { define: { two: { extends: 'dark', tokensRef: { url: 'src/themes/two.css', selector: '.alt' } } } } }, root)
+    const app = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { define: { two: { extends: 'dark', tokensRef: { url: 'src/themes/two.css', selector: '.alt' } } } } }] }, root)
     expect(resolveTokenValue(app.resolution, 'two', 'app-fg')).toBe('#eee')
   })
 })

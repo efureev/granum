@@ -32,14 +32,16 @@ route and each response needs its own set of links. With granum there is one set
 
 ## The server picks the mode
 
-The theme is chosen at build time, and the values of all its modes are already in CSS.
-Switching a mode is a pair in the root attribute: `data-theme="slate-dark"`. Only
-the build knows the pair values, and they reach the runtime as a manifest:
+The themes are chosen at build time: the default theme's values are in the shared
+sheet, the additional themes' — in their sheets. Switching a theme and a mode is a pair
+in the root attribute: `data-theme="slate-dark"`. Only the build knows the pair values
+and the sheet addresses, and they reach the runtime as a manifest:
 
 ```ts
 import manifest from 'virtual:granum/themes'
 
-manifest.modes
+manifest.defaultTheme // 'slate'
+manifest.themes[0].modes
 // [{ name: 'light', colorScheme: 'light', value: 'slate-light' },
 //  { name: 'dark',  colorScheme: 'dark',  value: 'slate-dark' }]
 ```
@@ -51,16 +53,19 @@ the client reads it back.
 
 ```ts
 // src/entry-server.ts
-import { modeFromCookie, themeRootAttributes } from '@feugene/granum/runtime'
+import { themeFromCookie, themeRootAttributes, themeSheetLink } from '@feugene/granum/runtime'
 
-const mode = modeFromCookie(manifest, request.headers.cookie)
-const attrs = mode ? themeRootAttributes(manifest, mode.name) : {}   // { 'data-theme': 'slate-dark' }
+const chosen = themeFromCookie(manifest, request.headers.cookie)
+const attrs = chosen ? themeRootAttributes(manifest, { theme: chosen.theme.id, mode: chosen.mode.name }) : {} // { 'data-theme': 'slate-dark' }
+const link = chosen && themeSheetLink(manifest, chosen.theme.id) // the <link> of an additional theme's sheet; undefined for the default one
 ```
 
 The user's choice reaches the server in a cookie: on the client it is written by
-`createCookieStorage()`, the server reads it with `modeFromCookie`. A name that is not
-among the build's modes is never returned by `modeFromCookie`: no CSS blocks were emitted
-for it. An application framed by another site needs `sameSite: 'none'` — the storage writes
+`createCookieStorage()`, the server reads it with `themeFromCookie`. A key that names
+no mode of a selectable build theme is never returned by `themeFromCookie`: there are no
+CSS blocks for it. For an additional theme the server also puts its sheet's `<link>`
+into `<head>` — its order against the shared sheet does not matter, the cascade does
+not depend on it. An application framed by another site needs `sameSite: 'none'` — the storage writes
 such a cookie with `Secure`, without which the browser rejects it; `secure: true` adds the
 attribute with other values too.
 
@@ -77,8 +82,10 @@ then no cookie means no choice.
 
 For a static application the pair is set by an inline script in `<head>` — before the
 browser paints the first frame. The script leaves a pair set by the server alone; otherwise
-it takes the mode from a cookie (if its name is given), from `localStorage`, by the system
-scheme and, finally, the default mode.
+it takes the choice from a cookie (if its name is given), from `localStorage`, by the
+default theme's system scheme and, finally, its default mode. For an additional theme it
+first inserts its sheet's `<link rel="stylesheet" blocking="render">`, and it never picks a
+theme without a sheet address: a pair without the sheet would give the default theme's values.
 
 ```ts
 import { createThemeScript } from '@feugene/granum/runtime'
@@ -113,8 +120,10 @@ injectScript('head-inline', createThemeScriptCode({ manifest, storageKey: 'gr-th
 
 `createThemeScriptCode` is the same code without the `<script>` tag.
 
-Without the plugin — `resolveThemeManifest({ providers, theme, modes, root })` from
+Without the plugin — `resolveThemeManifest({ providers, themes, activation, root })` from
 `@feugene/granum/node`: the same result, the app sources are not scanned.
+Such a manifest has no sheet addresses — there are no assets yet — so the script will not
+pick an additional theme; the server sets a root with its pair together with the `<link>`.
 
 ## The client reads the mode instead of picking it
 
@@ -124,8 +133,10 @@ const controller = createThemeController(manifest, { storage: createCookieStorag
 ```
 
 A controller raised over a pair that is already set recognises the mode by it and leaves
-the root alone, so the first client frame matches the server one. It stores the mode
-name, not the pair: changing the theme at build time does not reset the user's choice. There
+the root alone, so the first client frame matches the server one; it finds an additional
+theme's sheet inserted by the server and does not duplicate it. It stores a selection key,
+not the pair: for the default theme that is the mode name, so changing the default theme at
+build time does not reset the user's choice. There
 is no need to read the choice from `localStorage` behind the server's back: if the server
 sent one mode and the client switched to another, that is exactly the flash SSR avoids.
 

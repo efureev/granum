@@ -1,5 +1,7 @@
-import type { GranumModeEntry, GranumThemeManifest } from './manifest'
-import { resolveThemeActivation } from './manifest'
+import type { GranumModeEntry, GranumThemeManifest, GranumThemeManifestEntry, GranumThemeSelection, GranumThemeSelectionInput } from './manifest'
+import type { GranumSheetDocument } from './sheets'
+import { carryThemeMode, defaultTheme, findTheme, isSelectableTheme, readThemeSelection, resolveThemeActivation, themeSelectionKey } from './manifest'
+import { loadThemeSheet } from './sheets'
 
 /**
  * Минимум от DOM-элемента, который нужен контроллеру. Структурный тип, а не
@@ -17,7 +19,7 @@ export interface GranumThemeStorage {
 }
 
 export interface GranumThemeControllerOptions {
-  /** Куда применять режим. По умолчанию `document.documentElement`. */
+  /** Куда применять выбор. По умолчанию `document.documentElement`. */
   target?: GranumThemeTarget
   /**
    * Где запоминать выбор пользователя. По умолчанию `localStorage`, если он
@@ -28,12 +30,15 @@ export interface GranumThemeControllerOptions {
   storageKey?: string
   /**
    * Что включить на старте:
-   *   - имя режима — его;
+   *   - имя режима — его в основной теме;
    *   - `'auto'` (по умолчанию) — пара, уже выставленная на корне (серверный
-   *     HTML, ранний скрипт), иначе сохранённый режим, иначе системная схема —
-   *     первый режим с подходящим `colorScheme`, иначе `defaultMode`.
+   *     HTML, ранний скрипт), иначе сохранённый выбор, иначе системная схема —
+   *     первый режим основной темы с подходящим `colorScheme`, иначе её режим
+   *     по умолчанию;
+   *   - `{ theme?, mode? }` — выбор, который сервер прочитал из cookie. Явный
+   *     выбор в хранилище не пишется.
    */
-  initial?: string | 'auto'
+  initial?: string | 'auto' | GranumThemeSelectionInput
   /**
    * Как узнать системную схему. По умолчанию
    * `matchMedia('(prefers-color-scheme: dark)')`. Вызывается один раз при
@@ -41,26 +46,44 @@ export interface GranumThemeControllerOptions {
    * это решение приложения, и оно всегда может вызвать `setMode()` само.
    */
   prefersDark?: () => boolean
+  /** Документ для листов дополнительных тем. По умолчанию глобальный `document`. */
+  document?: GranumSheetDocument
+}
+
+/** Текущий выбор: id темы и имя режима. */
+export interface GranumThemeState {
+  readonly theme: string
+  readonly mode: string
 }
 
 export interface GranumThemeController {
-  /** Активная тема сборки — только чтение. */
-  readonly theme: GranumThemeManifest['theme']
+  /** Текущая тема — запись манифеста. */
+  readonly theme: GranumThemeManifestEntry
   /** Текущий режим. */
   readonly mode: string
-  /** Режимы в порядке манифеста. */
+  /** Применён ли первый выбор: для дополнительной темы — после загрузки её листа. */
+  readonly ready: Promise<void>
+  /** Темы сборки в порядке манифеста. */
+  themes: () => readonly GranumThemeManifestEntry[]
+  /** Режимы текущей темы в порядке манифеста. */
   modes: () => readonly GranumModeEntry[]
   /**
-   * Переключить режим: атрибут на корне + сохранение + уведомление подписчиков.
-   * `persist: false` — применить без записи в хранилище: режим вслед за
-   * системной схемой или за сменой в другой вкладке не должен становиться
-   * выбором пользователя.
+   * Переключить режим текущей темы: атрибут на корне + сохранение +
+   * уведомление подписчиков. `persist: false` — применить без записи в
+   * хранилище: режим вслед за системной схемой или за сменой в другой вкладке
+   * не должен становиться выбором пользователя.
    */
   setMode: (name: string, options?: { readonly persist?: boolean }) => void
-  /** Следующий режим по кругу — удобно для одной кнопки. */
+  /**
+   * Переключить тему: сначала загрузить её лист, потом поставить пару. Режим —
+   * `mode`, иначе одноимённый текущему, иначе первый той же схемы, иначе режим
+   * по умолчанию темы.
+   */
+  setTheme: (id: string, options?: { readonly mode?: string, readonly persist?: boolean }) => Promise<void>
+  /** Следующий режим текущей темы по кругу — удобно для одной кнопки. */
   cycle: () => string
-  /** Подписка на смену режима. Возвращает функцию отписки. */
-  subscribe: (listener: (mode: string) => void) => () => void
+  /** Подписка на смену темы или режима. Возвращает функцию отписки. */
+  subscribe: (listener: (state: GranumThemeState) => void) => () => void
 }
 
 export const DEFAULT_THEME_STORAGE_KEY = 'granum-theme'
@@ -87,49 +110,53 @@ function defaultPrefersDark(): boolean {
 }
 
 /**
- * Контроллер режимов активной темы поверх манифеста сборки.
+ * Контроллер темы и режима поверх манифеста сборки.
  *
- * Значения всех режимов уже в CSS — контроллер лишь выставляет пару в атрибут
- * корня. Хранит он имя режима, а не пару: смена темы на сборке не сбрасывает
- * выбор пользователя.
+ * Значения основной темы уже в CSS, дополнительной — в её листе: контроллер
+ * загружает лист, если нужно, и выставляет пару в атрибут корня. Хранит он
+ * не пару, а ключ выбора (`themeSelectionKey`): шаблон пары может смениться.
  *
  * ```ts
  * import manifest from 'virtual:granum/themes'
  * import { createThemeController } from '@feugene/granum/runtime'
  *
  * const themes = createThemeController(manifest)
- * themes.modes()          // [{ name: 'light', … }, { name: 'dark', … }]
- * themes.setMode('dark')  // <html data-theme="slate-dark">
+ * themes.setMode('dark')       // <html data-theme="slate-dark">
+ * await themes.setTheme('clay') // лист clay, затем <html data-theme="clay-dark">
  * ```
  */
 export function createThemeController(
   manifest: GranumThemeManifest,
   options: GranumThemeControllerOptions = {},
 ): GranumThemeController {
-  if (!manifest || manifest.modes.length === 0)
+  const main = manifest ? defaultTheme(manifest) : undefined
+  if (!main || main.modes.length === 0)
     throw new Error('createThemeController: the manifest has no modes — the build contains no theme.')
 
-  const byName = new Map(manifest.modes.map(mode => [mode.name, mode]))
   const target = options.target ?? defaultTarget()
   const storage = options.storage === undefined ? defaultStorage() : options.storage
   const storageKey = options.storageKey ?? DEFAULT_THEME_STORAGE_KEY
   const attribute = manifest.activation.attribute
-  const listeners = new Set<(mode: string) => void>()
+  const listeners = new Set<(state: GranumThemeState) => void>()
+  const sheetOptions = options.document !== undefined ? { document: options.document } : {}
 
-  const entry = (name: string): GranumModeEntry => {
-    const found = byName.get(name)
-    if (!found) {
-      throw new Error(
-        `createThemeController: mode '${name}' is not in the build of theme '${manifest.theme.id}'. `
-        + `Available: ${manifest.modes.map(m => m.name).join(', ')}. `
-        + `The mode set is controlled by 'modes.names' and 'modes.define' of granum.config.`,
-      )
-    }
+  const themeEntry = (id: string): GranumThemeManifestEntry => {
+    const found = findTheme(manifest, id)
+    if (!found)
+      throw new Error(`createThemeController: theme '${id}' is not in the build. Themes: ${manifest.themes.map(t => t.id).join(', ')}. The build themes are listed in 'themes' of granum.config.`)
     return found
   }
 
-  const apply = (name: string): void => {
-    target?.setAttribute(attribute, entry(name).value)
+  const modeEntry = (theme: GranumThemeManifestEntry, name: string): GranumModeEntry => {
+    const found = theme.modes.find(mode => mode.name === name)
+    if (!found) {
+      throw new Error(
+        `createThemeController: mode '${name}' is not in the build of theme '${theme.id}'. `
+        + `Available: ${theme.modes.map(m => m.name).join(', ')}. `
+        + `The mode set is controlled by the 'modes' of its entry in 'themes' of granum.config.`,
+      )
+    }
+    return found
   }
 
   // Хранилище бросает и на записи (Safari в приватном режиме, квота): выбор
@@ -142,56 +169,130 @@ export function createThemeController(
       return null
     }
   }
-  const writeStored = (name: string): void => {
+  const writeStored = (selection: GranumThemeSelection): void => {
     try {
-      storage?.setItem(storageKey, name)
+      storage?.setItem(storageKey, themeSelectionKey(manifest, selection.theme.id, selection.mode.name))
     }
     catch {}
   }
 
-  const pickInitial = (): { name: string, applied: boolean } => {
+  const pickInitial = (): { selection: GranumThemeSelection, applied: boolean } => {
     const requested = options.initial ?? 'auto'
+    if (typeof requested === 'object') {
+      const theme = requested.theme === undefined ? main : themeEntry(requested.theme)
+      return { selection: { theme, mode: modeEntry(theme, requested.mode ?? theme.defaultMode) }, applied: false }
+    }
     if (requested !== 'auto')
-      return { name: requested, applied: false }
+      return { selection: { theme: main, mode: modeEntry(main, requested) }, applied: false }
 
     // Пара уже на корне: контроллер узнаёт её и корень не трогает.
     const present = resolveThemeActivation(manifest, target?.getAttribute(attribute))
     if (present)
-      return { name: present.name, applied: true }
+      return { selection: present, applied: true }
 
-    const stored = readStored()
-    if (stored && byName.has(stored))
-      return { name: stored, applied: false }
+    // Дополнительная тема без адреса листа (манифест до сборки) не выбирается:
+    // пару без листа контроллер не ставит, как и ранний скрипт.
+    const stored = readThemeSelection(manifest, readStored(), theme => isSelectableTheme(manifest, theme))
+    if (stored)
+      return { selection: stored, applied: false }
 
     const scheme = (options.prefersDark ?? defaultPrefersDark)() ? 'dark' : 'light'
-    const bySystem = manifest.modes.find(mode => mode.colorScheme === scheme)
-    return { name: bySystem?.name ?? manifest.defaultMode, applied: false }
+    const mode = main.modes.find(entry => entry.colorScheme === scheme) ?? modeEntry(main, main.defaultMode)
+    return { selection: { theme: main, mode }, applied: false }
   }
 
   const initial = pickInitial()
-  let current = initial.name
-  if (!initial.applied)
-    apply(current)
+  let current = initial.selection
+  /** Номер последнего запроса: ответ на устаревший `setTheme` пару не ставит. */
+  let generation = 0
+  /**
+   * Первый выбор — дополнительная тема, и её лист ещё грузится. Пока так, пару
+   * не ставит никто: `setMode` лишь запоминает режим, загрузка поставит
+   * последний, а ошибка вернёт основную тему. Снимает ожидание загрузка или
+   * `setTheme` — выбор другой темы.
+   */
+  let awaitingSheet = current.theme.id !== main.id
+
+  const notify = (): void => {
+    for (const listener of listeners)
+      listener({ theme: current.theme.id, mode: current.mode.name })
+  }
+
+  const commit = (selection: GranumThemeSelection, persist: boolean): void => {
+    target?.setAttribute(attribute, selection.mode.value)
+    current = selection
+    if (persist)
+      writeStored(selection)
+    notify()
+  }
+
+  // Основная тема применяется сразу: её блоки уже в общем листе. Дополнительной
+  // пару ставит загрузка листа; пару, выставленную раньше контроллера, тоже
+  // держит лист — ссылку скрипта или сервера загрузчик находит и не дублирует.
+  if (!initial.applied && !awaitingSheet)
+    target?.setAttribute(attribute, current.mode.value)
+  const ready = loadThemeSheet(manifest, current.theme.id, sheetOptions).then(
+    () => {
+      if (!awaitingSheet)
+        return
+      awaitingSheet = false
+      if (target?.getAttribute(attribute) !== current.mode.value)
+        target?.setAttribute(attribute, current.mode.value)
+    },
+    (error: unknown) => {
+      // Лист не загрузился — остаёмся в основной теме: пара без листа дала бы
+      // её значения под чужим именем.
+      if (awaitingSheet) {
+        awaitingSheet = false
+        current = { theme: main, mode: carryThemeMode(main, current.mode) }
+        target?.setAttribute(attribute, current.mode.value)
+        notify()
+      }
+      throw error
+    },
+  )
+  // Отказ уже обработан выше; без подписчика он не должен шуметь в консоли.
+  ready.catch(() => {})
 
   return {
-    theme: manifest.theme,
-    get mode() {
-      return current
+    get theme() {
+      return current.theme
     },
-    modes: () => manifest.modes,
+    get mode() {
+      return current.mode.name
+    },
+    ready,
+    themes: () => manifest.themes,
+    modes: () => current.theme.modes,
 
     setMode(name, setOptions) {
-      apply(name)
-      current = name
-      if (setOptions?.persist !== false)
-        writeStored(name)
-      for (const listener of listeners)
-        listener(name)
+      // Имя проверяется до любых перемен: неверный вызов не отменяет загрузку.
+      const selection = { theme: current.theme, mode: modeEntry(current.theme, name) }
+      generation++
+      if (awaitingSheet) {
+        current = selection
+        if (setOptions?.persist !== false)
+          writeStored(selection)
+        notify()
+        return
+      }
+      commit(selection, setOptions?.persist !== false)
+    },
+
+    async setTheme(id, setOptions) {
+      const theme = themeEntry(id)
+      const mode = carryThemeMode(theme, current.mode, setOptions?.mode)
+      awaitingSheet = false
+      const request = ++generation
+      await loadThemeSheet(manifest, theme.id, sheetOptions)
+      if (request !== generation)
+        return
+      commit({ theme, mode }, setOptions?.persist !== false)
     },
 
     cycle() {
-      const names = manifest.modes.map(mode => mode.name)
-      const next = names[(names.indexOf(current) + 1) % names.length]!
+      const names = current.theme.modes.map(mode => mode.name)
+      const next = names[(names.indexOf(current.mode.name) + 1) % names.length]!
       this.setMode(next)
       return next
     },

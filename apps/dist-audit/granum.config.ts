@@ -18,7 +18,7 @@ export default defineGranumConfig({
   engine: windEngine(),
   providers: ['@granum-fixtures/mini-ds'],
   components: ['@granum-fixtures/mini-ds:XxCard'],
-  modes: { names: ['light'] },
+  themes: [{ theme: 'mini', modes: ['light'] }],
   appSources: { dirs: ['src'] },
   pruneTokens: { mode: 'on' },
 })

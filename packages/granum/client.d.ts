@@ -23,14 +23,14 @@ declare module 'virtual:granum/layers/themes.css' {}
 declare module 'virtual:granum/layers/components.css' {}
 declare module 'virtual:granum/layers/utilities.css' {}
 
-/** Блоки тем превью при `css.previews: 'separate'` — все темы или одна. */
-declare module 'virtual:granum/previews.css' {}
-declare module 'virtual:granum/previews/*' {}
+/** Листы дополнительных тем сборки: все разом или одной темы — `virtual:granum/themes/<id>.css`. */
+declare module 'virtual:granum/themes.css' {}
+declare module 'virtual:granum/themes/*' {}
 
 declare module 'virtual:granum/themes' {
   import type { GranumThemeManifest } from '@feugene/granum/runtime'
 
-  /** Активная тема сборки, её режимы с парами и атрибут активации. */
+  /** Темы сборки с режимами и парами, основная тема, адреса листов и атрибут активации. */
   const manifest: GranumThemeManifest
   export default manifest
 }

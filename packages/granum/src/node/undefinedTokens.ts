@@ -52,12 +52,14 @@ export function inlinedTokenDeclarations(resolution: GranumResolution): Map<stri
   return declared
 }
 
-/** Токены, которые объявляет хоть один слой granum в активной теме, с `--`. */
+/** Токены, которые объявляет хоть один слой granum хоть в одной теме сборки, с `--`. */
 function definedTokens(resolution: GranumResolution): Set<string> {
   const defined = new Set<string>(inlinedTokenDeclarations(resolution).keys())
-  for (const chain of allTokenChains(resolution.tokens.active)) {
-    if (chain.effective !== undefined)
-      defined.add(`--${chain.token}`)
+  for (const set of resolution.tokens.themes) {
+    for (const chain of allTokenChains(set)) {
+      if (chain.effective !== undefined)
+        defined.add(`--${chain.token}`)
+    }
   }
   return defined
 }

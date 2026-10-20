@@ -45,13 +45,12 @@ export interface GranumBuildReport {
     readonly gained: readonly string[]
   }[]
   readonly selection: readonly { readonly key: string, readonly dependencies: readonly string[] }[]
-  /** Активная тема, режимы, превью и их источники. */
+  /** Темы сборки, их режимы и источники. */
   readonly themes: {
-    readonly theme: string | null
+    /** Основная тема. */
+    readonly defaultTheme: string | null
     readonly themeSource: string | null
-    readonly modes: readonly string[]
-    readonly modesSource: string
-    readonly previews: readonly string[]
+    readonly themes: readonly { readonly id: string, readonly default: boolean, readonly modes: readonly string[], readonly modesSource: string }[]
   }
   readonly classes: {
     readonly input: number
@@ -269,11 +268,14 @@ export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundle
       dependencies: sortedUnique(component.dependencies.map(d => (typeof d === 'string' ? (d.includes(':') ? d : `${provider.id}:${d}`) : d.components.map(n => `${d.provider}:${n}`).join(',')))),
     })),
     themes: {
-      theme: resolution.themes.theme?.id ?? null,
+      defaultTheme: resolution.themes.default?.theme.id ?? null,
       themeSource: resolution.themes.themeSource ?? null,
-      modes: resolution.themes.modes.map(mode => mode.name),
-      modesSource: resolution.themes.modesSource,
-      previews: resolution.themes.previews.map(preview => preview.theme.id),
+      themes: resolution.themes.themes.map(entry => ({
+        id: entry.theme.id,
+        default: entry.isDefault,
+        modes: entry.modes.map(mode => mode.name),
+        modesSource: entry.modesSource,
+      })),
     },
     classes: {
       input: css.engineInput.length,

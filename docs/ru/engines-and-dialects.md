@@ -190,7 +190,7 @@ interface GranumEngine {
   множество имён — считайте его `vocabularyFingerprint` либо гарантируйте это
   правило сами;
 - **вариант тёмного режима по входу**: `input.darkSelector` — пары режимов
-  активной темы с `colorScheme: 'dark'` (`[data-theme="slate-dark"]`); движок с
+  всех тем сборки с `colorScheme: 'dark'` (`[data-theme="slate-dark"], [data-theme="clay-dark"]`); движок с
   вариантом `dark:` строит его по этому селектору, а без поля — по своему
   умолчанию. Отпечаток от селектора не зависит: он приходит входом, а не опцией.
 

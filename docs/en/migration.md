@@ -92,12 +92,12 @@ entry without a runtime dependency on granum.
 ```
 
 The v1 preset options move like this: `providers`, `components`, `pruneTokens` keep their
-names; `themes.names/define/tokenOverrides/strictTokens` become `modes.names/define/
-tokenOverrides/strictTokens`, and `theme` picks the theme; `pruneTokens.appSources` became a
+names; `themes.names/define/tokenOverrides/strictTokens` become the `modes` of a theme
+entry in `themes` (`names`, `define`, `tokenOverrides`, `strictTokens`); `pruneTokens.appSources` became a
 top-level `appSources` because it now also feeds the extraction of application
 classes. There is no swap of provider files (`themes.themeFiles`, `baseFile`, `tokensFile`):
-mode values are changed by `modes.tokenOverrides`, a whole theme by an application
-theme object in `theme` ([Themes and tokens](./themes-and-tokens.md)).
+mode values are changed by a theme entry's `modes.tokenOverrides`, a whole theme by an application
+theme object in `themes` ([Themes and tokens](./themes-and-tokens.md)).
 A v1 key left in the config is a load error that says where it went, not a silently
 ignored option.
 
@@ -149,3 +149,21 @@ in short:
   a pair, there are no `.light`/`.dark` classes; before the first frame — `createThemeScript`;
 - a format 2 manifest of a companion without themes is still read; with themes it is
   `UnsupportedManifestVersionError`, and the package is rebuilt with granum 3.
+
+## Moving from granum 3.7 to 3.8
+
+granum 3.8 builds several themes at once: one default theme — in the shared sheet and
+under `:root`, the others — each in a sheet of its own that the runtime loads on a switch.
+The provider contract and manifest do not change — packages need no rebuild. Details
+are in the package's [`MIGRATION.md`](../../packages/granum/MIGRATION.md); in short:
+
+- config: `theme`, `previews` and `modes` → `themes: [{ theme, default?, modes? }]` and
+  `activation`; `css.previews` is removed — an additional theme always has its own sheet;
+- modules: `virtual:granum/previews*` → `virtual:granum/themes/<id>.css` and
+  `virtual:granum/themes.css`;
+- manifest: `themes[]`, `defaultTheme`, `activation` instead of `theme`, `modes`,
+  `defaultMode`, `previews`;
+- runtime: the controller's `setTheme` and `themes()`, `loadThemeSheet`,
+  `themeFromCookie` instead of `modeFromCookie`, `themeRootAttributes(manifest, { theme?, mode? })`;
+- CSS: the default theme's `:root` goes under `:where(:root)`, the shared-formula boundary
+  is the list of its pairs; check your own CSS that relies on `:root, [data-theme]`.

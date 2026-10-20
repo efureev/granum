@@ -7,8 +7,8 @@ import type { GranumProviderInput } from '../contract'
 import type { ProviderNode } from './providerNode'
 import type { ComponentRegistry } from './registry'
 import type { ComponentCssRef, ComponentSelection, ResolvedSelection } from './resolveSelection'
-import type { ComponentThemesInput, GranumModesInput, GranumThemeChoice, ResolvedThemes, ThemeDataInput } from './resolveThemes'
-import type { ResolvedTokens } from './tokenLayers'
+import type { ComponentThemesInput, GranumActivation, GranumThemeConfig, ResolvedThemes, ThemeDataInput } from './resolveThemes'
+import type { ResolvedTokens, ThemeTokenSet } from './tokenLayers'
 import { createDebug } from './debug'
 import { expandProviders } from './expandProviders'
 import { buildRegistry } from './registry'
@@ -20,13 +20,12 @@ import { collectTokenLayers, tokenValueIn } from './tokenLayers'
 export interface GranumResolveInput {
   readonly providers: readonly GranumProviderInput[]
   readonly components?: ComponentSelection
-  /** Активная тема: id каталога, `providerId:id` или тема-объект приложения. */
-  readonly theme?: GranumThemeChoice
-  /** Темы для показа рядом с активной. */
-  readonly previews?: readonly GranumThemeChoice[]
-  readonly modes?: GranumModesInput
+  /** Темы сборки: основная и дополнительные, у каждой свои режимы. */
+  readonly themes?: readonly GranumThemeConfig[]
+  /** Атрибут, шаблон пары и системная схема — общие на все темы. */
+  readonly activation?: GranumActivation
   /**
-   * Данные тем каталога: активной и превью. Ядро файлов не читает — их
+   * Данные тем каталога, перечисленных в `themes`. Ядро файлов не читает — их
    * читает подготовка приложения по `planThemes`.
    */
   readonly themeData?: ThemeDataInput
@@ -36,7 +35,7 @@ export interface GranumResolveInput {
 
 export type ResolutionWarning
   = | ResolvedThemes['warnings'][number]
-    | { readonly kind: 'override-skipped', readonly mode: string, readonly token: string }
+    | { readonly kind: 'override-skipped', readonly theme: string, readonly mode: string, readonly token: string }
     | { readonly kind: 'provider-without-manifest', readonly providerId: string }
 
 export interface GranumResolution {
@@ -45,7 +44,7 @@ export interface GranumResolution {
   readonly registry: ComponentRegistry
   readonly selection: ResolvedSelection
   readonly themes: ResolvedThemes
-  /** Значения токенов активной темы и превью по режимам с цепочками слоёв. */
+  /** Значения токенов тем сборки по режимам с цепочками слоёв. */
   readonly tokens: ResolvedTokens
   /** Статические классы селекции из манифестов, отсортированы. */
   readonly classes: readonly string[]
@@ -84,9 +83,8 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
   const selection = resolveSelection(registry, input.components)
   const components = selection.entries.map(e => e.component)
   const themes = resolveThemes(providers, {
-    ...(input.theme !== undefined ? { theme: input.theme } : {}),
-    ...(input.previews !== undefined ? { previews: input.previews } : {}),
-    ...(input.modes !== undefined ? { modes: input.modes } : {}),
+    ...(input.themes !== undefined ? { themes: input.themes } : {}),
+    ...(input.activation !== undefined ? { activation: input.activation } : {}),
   }, components, input.themeData)
 
   const warnings: ResolutionWarning[] = [...themes.warnings]
@@ -95,10 +93,7 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
       warnings.push({ kind: 'provider-without-manifest', providerId: provider.id })
   }
   const tokens = collectTokenLayers(themes, components, {
-    ...(input.modes?.tokenOverrides !== undefined ? { tokenOverrides: input.modes.tokenOverrides } : {}),
-    ...(input.modes?.define !== undefined ? { define: input.modes.define } : {}),
-    ...(input.modes?.strictTokens !== undefined ? { strictTokens: input.modes.strictTokens } : {}),
-    onSkippedOverride: (mode, token) => warnings.push({ kind: 'override-skipped', mode, token }),
+    onSkippedOverride: (theme, mode, token) => warnings.push({ kind: 'override-skipped', theme, mode, token }),
   })
 
   const result: GranumResolution = {
@@ -117,18 +112,20 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
   debug(
     `providers=[${providers.map(p => p.id).join(', ')}] `
     + `selected=${selection.order.length} [${selection.order.join(', ')}] `
-    + `theme=${themes.theme?.id ?? '—'} modes=[${themes.modes.map(m => m.name).join(', ')}] classes=${result.classes.length} safelist=${result.safelist.length}`,
+    + `themes=[${themes.themes.map(t => `${t.theme.id}${t.isDefault ? '*' : ''}(${t.modes.map(m => m.name).join(', ')})`).join(', ')}] classes=${result.classes.length} safelist=${result.safelist.length}`,
   )
   return result
 }
 
 /**
  * Эффективное значение токена в режиме — та же функция для CSS, отчётов и CLI.
- * `theme` — id превью-темы; по умолчанию активная.
+ * `theme` — id темы сборки; по умолчанию основная.
  */
 export function resolveTokenValue(resolution: GranumResolution, mode: string, token: string, theme?: string): string | undefined {
-  const set = theme === undefined || theme === resolution.tokens.active?.themeId
-    ? resolution.tokens.active
-    : resolution.tokens.previews.find(preview => preview.themeId === theme)
-  return tokenValueIn(set, mode, token)
+  return tokenValueIn(themeTokenSet(resolution, theme), mode, token)
+}
+
+/** Значения темы сборки; без `theme` — основной. */
+export function themeTokenSet(resolution: GranumResolution, theme?: string): ThemeTokenSet | undefined {
+  return theme === undefined ? resolution.tokens.default : resolution.tokens.themes.find(set => set.themeId === theme)
 }

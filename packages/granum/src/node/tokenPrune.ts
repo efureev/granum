@@ -167,7 +167,7 @@ export function planTokenPrune(input: PlanTokenPruneInput): TokenPrunePlan {
       values.set(token, [value])
   }
   const themeTokens = new Set<string>()
-  for (const set of [input.resolution.tokens.active, ...input.resolution.tokens.previews]) {
+  for (const set of input.resolution.tokens.themes) {
     for (const chain of allTokenChains(set)) {
       if (chain.layers.some(layer => layer.source.startsWith('app-')))
         keep(chain.token, { kind: 'app-value' })

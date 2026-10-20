@@ -92,12 +92,12 @@ granum провайдеру нужен на сборке, в `devDependencies`: 
 ```
 
 Опции пресета v1 переезжают так: `providers`, `components`, `pruneTokens` — те же
-имена; `themes.names/define/tokenOverrides/strictTokens` — `modes.names/define/
-tokenOverrides/strictTokens`, а тему выбирает `theme`; `pruneTokens.appSources` стал
+имена; `themes.names/define/tokenOverrides/strictTokens` — `modes` записи темы в
+`themes` (`names`, `define`, `tokenOverrides`, `strictTokens`); `pruneTokens.appSources` стал
 `appSources` верхнего уровня, потому что теперь он питает и извлечение классов
 приложения. Подмены файлов провайдера (`themes.themeFiles`, `baseFile`, `tokensFile`)
-нет: значения режима меняют `modes.tokenOverrides`, тему целиком — тема-объект
-приложения в `theme` ([Темы и токены](./themes-and-tokens.md)).
+нет: значения режима меняют `modes.tokenOverrides` записи темы, тему целиком — тема-объект
+приложения в `themes` ([Темы и токены](./themes-and-tokens.md)).
 Ключ v1, оставшийся в конфиге, — ошибка загрузки с подсказкой, куда он делся, а не
 молча проигнорированная опция.
 
@@ -149,3 +149,21 @@ granum 3 меняет модель тем: тема — данные прова�
   пара, классов `.light`/`.dark` нет; до первого кадра — `createThemeScript`;
 - манифест формата 2 у спутника без тем читается по-прежнему; с темами —
   `UnsupportedManifestVersionError`, пакет пересобирают granum 3.
+
+## Переход с granum 3.7 на 3.8
+
+granum 3.8 собирает несколько тем сразу: одну основную — в общем листе и под
+`:root`, остальные — каждую своим листом, который рантайм грузит при переключении.
+Контракт и манифест провайдера не меняются — пакеты пересобирать не нужно.
+Подробно — [`MIGRATION.md`](../../packages/granum/MIGRATION.md) пакета; коротко:
+
+- конфиг: `theme`, `previews` и `modes` → `themes: [{ theme, default?, modes? }]` и
+  `activation`; `css.previews` удалён — дополнительная тема всегда своим листом;
+- модули: `virtual:granum/previews*` → `virtual:granum/themes/<id>.css` и
+  `virtual:granum/themes.css`;
+- манифест: `themes[]`, `defaultTheme`, `activation` вместо `theme`, `modes`,
+  `defaultMode`, `previews`;
+- рантайм: `setTheme` и `themes()` у контроллера, `loadThemeSheet`,
+  `themeFromCookie` вместо `modeFromCookie`, `themeRootAttributes(manifest, { theme?, mode? })`;
+- CSS: `:root` основной темы — под `:where(:root)`, граница общих формул — список её
+  пар; свой CSS, рассчитанный на `:root, [data-theme]`, сверьте.

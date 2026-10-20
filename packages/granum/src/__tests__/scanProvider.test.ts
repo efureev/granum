@@ -133,7 +133,7 @@ describe('объектные доноры в dependencies', () => {
     writeFileSync(join(dir, 'themes/paper.json'), JSON.stringify({ id: 'paper', title: 'P', root: {}, modes: { light: { colorScheme: 'light', tokens: { 'b-bg': 'red' } } } }))
     return makeProvider('b', { baseUrl: `${pathToFileURL(dir).href}/`, theme: { defaultTheme: 'paper', catalog: { paper: { title: 'P', data: 'themes/paper.json' } } } })
   }
-  const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] => [...(app.resolution.tokens.active?.modes.get('light')?.keys() ?? [])]
+  const lightTokens = (app: Awaited<ReturnType<typeof prepareTestApp>>): string[] => [...(app.resolution.tokens.default?.modes.get('light')?.keys() ?? [])]
 
   it('донор-владелец тем и в providers, и в dependencies — один провайдер', async () => {
     // Материализация даёт новый объект; ссылка из dependencies — старый. По
