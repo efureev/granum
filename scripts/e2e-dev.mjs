@@ -40,7 +40,7 @@
  * Запуск: `yarn e2e` (в CI — своя джоба; в `test:all` не входит, чтобы
  * локальный прогон не тянул браузер).
  */
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -486,7 +486,74 @@ for (const stand of ['app-theme-ink', 'app-5']) {
   }
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Пример переключения тем (`apps/app-theme-switch`) на собранной странице: острова
+ * в своих темах, выбор темы и режима, режим при смене темы, а после перезагрузки
+ * выбор стоит до первого кадра — даже с заблокированным JS приложения: пару и
+ * ссылку на лист ставит скрипт в `<head>`.
+ */
+{
+  const stand = fileURLToPath(new URL('../apps/app-theme-switch/', import.meta.url))
+  const outDir = mkdtempSync(join(tmpdir(), 'granum-e2e-switch-'))
+  try {
+    await build({ root: stand, configFile: join(stand, 'vite.config.ts'), logLevel: 'silent', build: { outDir, emptyOutDir: true } })
+    browser = await chromium.launch()
+    const page = await browser.newPage()
+    let blockScripts = false
+    await page.route('http://granum.test/**', (route) => {
+      const path = new URL(route.request().url()).pathname.replace(/^\/app-theme-switch\//, '')
+      const file = join(outDir, path === '' ? 'index.html' : path)
+      if (blockScripts && file.endsWith('.js'))
+        return route.abort()
+      if (!existsSync(file))
+        return route.fulfill({ status: 404, body: '' })
+      const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript'
+      return route.fulfill({ contentType: type, body: readFileSync(file) })
+    })
+    const attribute = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    const token = (selector, name) => page.evaluate(([sel, n]) => getComputedStyle(sel === 'html' ? document.documentElement : document.querySelector(sel)).getPropertyValue(n).trim(), [selector, name])
+    const waitPair = pair => page.waitForFunction(value => document.documentElement.getAttribute('data-theme') === value, pair, { timeout: 5000 })
+
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('http://granum.test/app-theme-switch/')
+    await page.waitForSelector('[data-theme-option="ink"]')
+    check(await attribute() === 'paper-light', `пример: основная тема на старте: ${await attribute()}`)
+
+    // Острова грузят листы своих тем сами и ставят пару после загрузки.
+    await page.waitForFunction(() => document.querySelector('[data-island="sand"]')?.getAttribute('data-theme') === 'sand-dark', undefined, { timeout: 5000 })
+    await page.waitForFunction(() => document.querySelector('[data-island="ink"]')?.getAttribute('data-theme') === 'ink-dim', undefined, { timeout: 5000 })
+    check(await token('[data-island="sand"]', '--th-radius') === '12px', `пример: остров sand-dark — скругление своей темы: ${await token('[data-island="sand"]', '--th-radius')}`)
+    check(await token('[data-island="ink"]', '--th-bg') === '#1e293b', `пример: остров ink-dim — фон режима «Сумерки»: ${await token('[data-island="ink"]', '--th-bg')}`)
+    check(await token('html', '--th-radius') === '6px', `пример: корень остался paper: ${await token('html', '--th-radius')}`)
+
+    await page.click('[data-theme-option="ink"]')
+    await waitPair('ink-light')
+    check(await token('html', '--th-font') === 'Georgia, serif', `пример: тема ink на корне — её шрифт: ${await token('html', '--th-font')}`)
+    await page.click('[data-mode-option="dim"]')
+    await waitPair('ink-dim')
+    check(await token('html', '--th-bg') === '#1e293b', `пример: режим «Сумерки»: ${await token('html', '--th-bg')}`)
+    // У «Песка» нет «Сумерек»: берётся первый режим той же схемы — тёмный.
+    await page.click('[data-theme-option="sand"]')
+    await waitPair('sand-dark')
+    check(await attribute() === 'sand-dark', `пример: смена темы переносит схему режима: ${await attribute()}`)
+
+    blockScripts = true
+    await page.reload()
+    check(await attribute() === 'sand-dark', `пример: после перезагрузки без JS приложения выбор на корне: ${await attribute()}`)
+    check(await page.evaluate(() => document.querySelector('link[data-granum-theme="sand"]')?.getAttribute('blocking') === 'render'), 'пример: лист sand поставлен скриптом до первого кадра')
+    check(await token('html', '--th-radius') === '12px', `пример: значения sand на корне без JS приложения: ${await token('html', '--th-radius')}`)
+  }
+  catch (error) {
+    failures.push(`пример переключения тем: прогон упал: ${error?.message ?? error}`)
+  }
+  finally {
+    await browser?.close()
+    browser = undefined
+    rmSync(outDir, { recursive: true, force: true })
+  }
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5, пример переключения тем)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
   ? '✓ слои, HMR, режимы, дополнительные темы, фолбэки и собранные листы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)
