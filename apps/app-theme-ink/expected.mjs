@@ -3,7 +3,9 @@ export default {
   purpose: 'тема ink: цепочки тем и режимов для токенов компонентов, превью paper полными блоками',
   doctor: {
     // Папка `themes/unknown/` спутника — тема, которой нет ни в одном каталоге.
-    warnings: { 'component-theme-unknown': 1 },
+    // `--tc-chart-label` спутник читает только через запасное значение и хуком не
+    // объявил — намеренная находка: так виден переименованный или забытый токен.
+    warnings: { 'component-theme-unknown': 1, 'token-fallback-only': 1 },
   },
   css: {
     present: [

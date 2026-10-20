@@ -7,5 +7,7 @@ export default function ({ manifest, check }) {
   check(chart.tokens.themes.ink.modes.dark['tc-chart-grid'] === '#374151', 'ink.dark')
   // Под темами, кроме `ink`, сетка рисует запасное значение — объявленный хук.
   check(chart.tokens.hooks?.join(' ') === '--tc-chart-grid', `TcChart.hooks: ${chart.tokens.hooks}`)
+  // Подпись читается только через запасное значение и хуком не объявлена — её назовёт doctor.
+  check(chart.tokens.optional?.join(' ') === '--tc-chart-grid --tc-chart-label', `TcChart.optional: ${chart.tokens.optional}`)
   check(manifest.warnings.length === 0, `warnings: ${JSON.stringify(manifest.warnings)}`)
 }
