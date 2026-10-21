@@ -121,7 +121,7 @@
 `CatalogEntry = { title, description?, docs?, extends?, data, modes, defaultMode }`: `data` — путь к
 JSON `GranumThemeData` с уже разрешённым `extends` (C-27); `modes` и `defaultMode` вычислены сборкой
 из данных (C-29), режим по умолчанию в `modes` первым. Данные тем приложение читает только для
-активной и превью-тем (T-6).
+тем сборки (T-6).
 
 ### 3.3 `components[Name]`
 

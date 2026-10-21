@@ -135,6 +135,17 @@ the theme object) override the package on purpose and are not conflicts.
 catalog of the graph declares: for a companion supporting several design systems this is
 normal, for a typo in a folder name it is a reason to fix it.
 
+`theme-incomplete` in `doctor` means a build theme has no value for a required token in
+at least one of its modes; the items list `light:th-ring`, `root:th-font`, and the message
+gives the share. Most often it is an application theme object that lacks a registry token,
+or an additional theme without `extends` that has no component tokens. An element with
+such a theme's pair takes the token from another theme — the main theme's default mode,
+whose block sits under `:where(:root)`, or an ancestor — or gets none: the main theme's
+`root` literals sit only under its own pairs. A component token is needed in every mode,
+even if the component reads it under one mode's selector: another mode's pair without a
+value does not get it. Add the value to the theme data, point `extends` at a catalog theme
+with the component tokens, or set the token in `modes.tokenOverrides` of its entry.
+
 ## A token override does not work
 
 `granum tokens granum.config.ts @acme/ui:XhCard --deep` shows the chain of

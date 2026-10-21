@@ -52,6 +52,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | Код | Уровень | Что значит |
 |---|---|---|
 | `missing-file` | error | файл манифеста отсутствует на диске |
+| `registry-invalid` | error | реестр токенов владельца каталога не разбирается: не JSON, ключ с `--` или природа не `root`/`mode` |
 | `apply-not-expanded` | error | в CSS провайдера остался `@apply` — пересоберите провайдер плагином |
 | `boundary` | error | чанк провайдера импортирует `node:*` или node-entry granum |
 | `important-in-provider-css` | warn | `!important` внутри слоя инвертирует порядок каскада |
@@ -61,6 +62,7 @@ granum codegen [<package-dir>] [--check] [--json] [--targets=barrel,exports,mani
 | `token-undefined` | warn | токен нужен компоненту извне, но не объявлен ни одним слоем. Потребление с fallback, токен, который компонент присваивает сам (в том числе переменная `v-bind()` из `<style>`), и `dynamicTokens` находкой не считаются |
 | `token-fallback-only` | warn | компонент читает токен только через `var(--x, запасное)`, и ни один слой его не объявляет: компонент всегда рисует запасное значение — например, токен переименовали. Намеренный хук объявите в `hookTokens` дескриптора; `dynamicTokens` находкой не считаются |
 | `theme-base-global` | warn | `baseCss` дополнительной темы содержит правило стиля: её лист, однажды загруженный, остаётся в документе, и правило действует на всю страницу — и после возврата к основной теме. Там место только `@font-face`, `@property` и `@keyframes` |
+| `theme-incomplete` | warn | у темы сборки нет значения обязательного токена хотя бы в одном её режиме. Обязательны токены реестра владельца каталога (`root` — в корне темы, `mode` — в каждом режиме) и `requires` выбранных компонентов, которые задаёт хоть одна тема сборки, — в каждом режиме: под каким селектором компонент читает токен, сборка не знает. Значение во фолбэке `@supports` режима засчитывается; то, что объявляют инлайнимые файлы провайдеров, не требуется. Сообщение называет долю — `theme 'sand' covers 192 of 195 required token(s) (98%)`, — перечисление — `<режим>:<токен>` или `root:<токен>`. Реестр у темы каталога проверяет ещё сборка провайдера, а требования компонентов — только эта находка. Токен, которого не задаёт ни одна тема сборки, остаётся `token-undefined`. Блок тем вывода показывает покрытие (`coverage`) каждой темы |
 | `token-conflict` | warn | токен пишут два пакетных слоя — компонент поверх данных темы или два компонента; показана цепочка и итог. Значения приложения конфликтом не считаются |
 | `component-theme-unknown` | warn | компонент кладёт токены для темы, которой нет ни в одном каталоге графа: они не применятся |
 | `component-mode-missing` | warn | у компонента нет файла режима сборки ни для него, ни для его предков: литералы взяты из режима по умолчанию — например забытый `dark.json`; значение, одинаковое во всех режимах, место в `root.json` |
@@ -89,8 +91,8 @@ Selected components (5, order = deps → dependents) — classes 41, safelist 14
   …
 
 Theme: heavy (source: defaultTheme of the catalog owner, catalog of @granum-fixtures/heavy)
-heavy (default, main sheet) — modes: [light, dark] (source: modes.names)
-  • light → heavy-light (light, 64 token(s))
+heavy (default, main sheet) — modes: [light, dark] (source: modes.names), coverage 100% (23/23)
+  • light → heavy-light (light, 65 token(s))
   • dark → heavy-dark (dark, 65 token(s))
 
 Diagnostics (errors: 0, warnings: 1):

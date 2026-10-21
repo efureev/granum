@@ -14,6 +14,7 @@
  * объявления в инлайнимых файлах. Другие темы каталога сюда не входят: в CSS
  * приложения их нет.
  */
+import type { ComponentNode } from '../core/providerNode'
 import type { ComponentKey } from '../core/registry'
 import type { GranumResolution } from '../core/resolve'
 import { sortedUnique } from '../core/dedupe'
@@ -52,27 +53,50 @@ export function inlinedTokenDeclarations(resolution: GranumResolution): Map<stri
   return declared
 }
 
-/** Токены, которые объявляет хоть один слой granum хоть в одной теме сборки, с `--`. */
-function definedTokens(resolution: GranumResolution): Set<string> {
-  const defined = new Set<string>(inlinedTokenDeclarations(resolution).keys())
+/**
+ * Что объявлено, считается один раз на прогон: инлайнимые файлы читаются с
+ * диска, а судят по ним три вердикта — `token-undefined`, `token-fallback-only`
+ * и полнота тем.
+ */
+export interface TokenDeclarations {
+  /** Объявленные инлайнимыми файлами провайдеров, с `--`, — и чей файл объявил первым. */
+  readonly inlined: Map<string, string>
+  /** Со значением хоть в одной теме сборки — в корне, режиме или фолбэке; без `--`. */
+  readonly themes: Set<string>
+}
+
+export function tokenDeclarations(resolution: GranumResolution): TokenDeclarations {
+  const themes = new Set<string>()
   for (const set of resolution.tokens.themes) {
     for (const chain of allTokenChains(set)) {
       if (chain.effective !== undefined)
-        defined.add(`--${chain.token}`)
+        themes.add(chain.token)
     }
   }
+  return { inlined: inlinedTokenDeclarations(resolution), themes }
+}
+
+/** Токены, которые объявляет хоть один слой granum хоть в одной теме сборки, с `--`. */
+function definedTokens(declarations: TokenDeclarations): Set<string> {
+  const defined = new Set<string>(declarations.inlined.keys())
+  for (const token of declarations.themes)
+    defined.add(`--${token}`)
   return defined
 }
 
-export function findUndefinedTokens(resolution: GranumResolution): UndefinedToken[] {
-  const defined = definedTokens(resolution)
+/** Токены, которые компонент требует извне, с `--`: `requires` минус `dynamicTokens` и переменные движка. */
+export function componentRequirements(component: ComponentNode): string[] {
+  const dynamic = component.dynamicTokens.map(patternMatcher)
+  return [...new Set(component.requiresTokens)].sort().filter(token => !token.startsWith('--un-') && !dynamic.some(match => match(token)))
+}
+
+export function findUndefinedTokens(resolution: GranumResolution, declarations: TokenDeclarations = tokenDeclarations(resolution)): UndefinedToken[] {
+  const defined = definedTokens(declarations)
   const out: UndefinedToken[] = []
   for (const { provider, component } of resolution.selection.entries) {
-    const dynamic = component.dynamicTokens.map(patternMatcher)
-    for (const token of [...new Set(component.requiresTokens)].sort()) {
-      if (defined.has(token) || token.startsWith('--un-') || dynamic.some(match => match(token)))
-        continue
-      out.push({ token, component: `${provider.id}:${component.name}` as ComponentKey })
+    for (const token of componentRequirements(component)) {
+      if (!defined.has(token))
+        out.push({ token, component: `${provider.id}:${component.name}` as ComponentKey })
     }
   }
   return out
@@ -90,8 +114,8 @@ export interface FallbackOnlyTokens {
  * глазу, ни `token-undefined`. Хук (`hookTokens`) — объявление автора, что это
  * норма; `dynamicTokens` и переменные движка вычитаются, как у `token-undefined`.
  */
-export function findFallbackOnlyTokens(resolution: GranumResolution): FallbackOnlyTokens[] {
-  const defined = definedTokens(resolution)
+export function findFallbackOnlyTokens(resolution: GranumResolution, declarations: TokenDeclarations = tokenDeclarations(resolution)): FallbackOnlyTokens[] {
+  const defined = definedTokens(declarations)
   const out: FallbackOnlyTokens[] = []
   for (const { provider, component } of resolution.selection.entries) {
     const declared = [...component.hookTokens, ...component.dynamicTokens].map(patternMatcher)

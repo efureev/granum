@@ -1,4 +1,5 @@
 import type { GranumConfig } from '../config'
+import type { GranumAppTheme } from '../core/resolveThemes'
 import type { DoctorDiagnostic, DoctorReport } from '../node/diagnostics/doctor'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -410,6 +411,142 @@ describe('granum tokens', () => {
   })
 })
 
+describe('theme-incomplete: полнота тем сборки', () => {
+  /** Фикстура с реестром владельца; карточке нужен токен, который дают её токены по темам. */
+  function withRegistry(): Fixture {
+    const f = fixture()
+    writeFileSync(join(f.dist, 'themes/registry.json'), JSON.stringify({ accent: 'root', bg: 'mode' }))
+    const card = f.manifest.manifest.components.Card!
+    return {
+      ...f,
+      manifest: {
+        ...f.manifest,
+        manifest: {
+          ...f.manifest.manifest,
+          theme: { ...f.manifest.manifest.theme!, registry: 'themes/registry.json' },
+          components: { ...f.manifest.manifest.components, Card: { ...card, tokens: { ...card.tokens!, consumes: [...card.tokens!.consumes, '--card-pad'] } } },
+        },
+      },
+    }
+  }
+  /** Карточке нужны ещё токены — сверх того, что она читает в фикстуре. */
+  function requiring(f: Fixture, ...tokens: string[]): Fixture {
+    const card = f.manifest.manifest.components.Card!
+    const components = { ...f.manifest.manifest.components, Card: { ...card, tokens: { ...card.tokens!, consumes: [...card.tokens!.consumes, ...tokens] } } }
+    return { ...f, manifest: { ...f.manifest, manifest: { ...f.manifest.manifest, components } } }
+  }
+  const sand = (modes: { light: Record<string, string>, dark: Record<string, string> }, root: Record<string, string> = {}, extra: Partial<GranumAppTheme> = {}): GranumAppTheme => ({
+    id: 'sand',
+    title: 'Sand',
+    root,
+    defaultMode: 'light',
+    modes: { light: { colorScheme: 'light', tokens: modes.light }, dark: { colorScheme: 'dark', tokens: modes.dark } },
+    ...extra,
+  })
+  const doctorOf = async (f: Fixture, extra?: NonNullable<GranumConfig['themes']>[number]) => granumDoctor(await app(f, {
+    themes: [{ theme: 'kit', default: true, modes: BOTH }, ...(extra ? [extra] : [])],
+  }))
+  const incomplete = (report: DoctorReport) => report.diagnostics.filter(d => d.code === 'theme-incomplete')
+
+  it('тема каталога полна — находки нет, покрытие 100 % в отчёте и в выводе', async () => {
+    const report = await doctorOf(withRegistry())
+    // Реестр (accent, bg) и требование карточки card-pad; --derived даёт tokens.css, --nowhere нет нигде.
+    expect(report.themes.themes[0]!.coverage).toEqual({ required: 3, covered: 3 })
+    expect(incomplete(report)).toEqual([])
+    expect(formatDoctorReport(report)).toContain('coverage 100% (3/3)')
+  })
+
+  it('тема-объект без токена реестра и без токенов компонента — доля и список непокрытого', async () => {
+    // Литерал, которого нет у режима, берётся из режима по умолчанию (находка
+    // theme-mode-missing), поэтому непокрыт здесь bg в самом режиме по умолчанию.
+    const report = await doctorOf(withRegistry(), { theme: sand({ light: {}, dark: { bg: '#111' } }, { accent: 'blue' }), modes: ['light', 'dark'] })
+    const [finding] = incomplete(report)
+    expect(finding?.subject).toBe('sand')
+    expect(finding?.message).toContain(`theme 'sand' covers 1 of 3 required token(s) (33%)`)
+    expect(finding?.items).toEqual(['light:bg', 'light:card-pad', 'dark:card-pad'])
+    expect(report.themes.themes.find(t => t.id === 'sand')?.coverage).toEqual({ required: 3, covered: 1 })
+    // Токен, которого нет ни в одной теме, — только token-undefined: одна дыра — одна находка.
+    expect(report.diagnostics.some(d => d.code === 'token-undefined' && d.subject.endsWith('--nowhere'))).toBe(true)
+    expect(finding?.items?.some(item => item.endsWith(':nowhere'))).toBe(false)
+  })
+
+  it('цепочка extends и tokenOverrides закрывают тему — находки нет', async () => {
+    const chained = await doctorOf(withRegistry(), { theme: sand({ light: { bg: '#eee' }, dark: { bg: '#111' } }, { accent: 'blue' }, { extends: 'kit' }), modes: ['light', 'dark'] })
+    expect(incomplete(chained)).toEqual([])
+    const overridden = await doctorOf(withRegistry(), {
+      theme: sand({ light: { bg: '#eee' }, dark: {} }, { accent: 'blue' }),
+      modes: { names: ['light', 'dark'], tokenOverrides: { dark: { 'bg': '#111', 'card-pad': '2px' }, light: { 'card-pad': '2px' } } },
+    })
+    expect(incomplete(overridden)).toEqual([])
+    expect(overridden.themes.themes.find(t => t.id === 'sand')?.coverage).toEqual({ required: 3, covered: 3 })
+  })
+
+  it('без реестра обязательны только требования компонентов', async () => {
+    const report = await doctorOf(fixture(), { theme: sand({ light: {}, dark: {} }), modes: ['light', 'dark'] })
+    // Требования карточки: --bg есть у kit — его нет у sand; --derived даёт tokens.css.
+    expect(incomplete(report)[0]?.items).toEqual(['light:bg', 'dark:bg'])
+  })
+
+  it('требование компонента нужно в каждом режиме: значение только в тёмном — находка по светлому', async () => {
+    // Селектор режима, под которым компонент читает токен, манифест не знает, а
+    // пара другого режима токена не получит: значение задаётся всем режимам.
+    const report = await doctorOf(withRegistry(), { theme: sand({ light: { bg: '#eee' }, dark: { 'bg': '#111', 'card-pad': '2px' } }, { accent: 'blue' }), modes: ['light', 'dark'] })
+    expect(incomplete(report)[0]?.items).toEqual(['light:card-pad'])
+  })
+
+  it('токен реестра, который компонент требует и не задаёт никто, — только token-undefined', async () => {
+    const f = withRegistry()
+    writeFileSync(join(f.dist, 'themes/registry.json'), JSON.stringify({ accent: 'root', bg: 'mode', nowhere: 'mode' }))
+    const report = await doctorOf(f)
+    expect(report.diagnostics.some(d => d.code === 'token-undefined' && d.subject.endsWith('--nowhere'))).toBe(true)
+    expect(incomplete(report)).toEqual([])
+    expect(report.themes.themes[0]!.coverage).toEqual({ required: 3, covered: 3 })
+  })
+
+  it('тема без режимов покрыта только своим root', async () => {
+    const report = await doctorOf(withRegistry(), { theme: sand({ light: { 'bg': '#eee', 'card-pad': '2px' }, dark: { 'bg': '#111', 'card-pad': '2px' } }), modes: [] })
+    expect(incomplete(report)[0]?.items).toEqual(['root:accent', 'root:bg', 'root:card-pad'])
+    expect(report.themes.themes.find(t => t.id === 'sand')?.coverage).toEqual({ required: 3, covered: 0 })
+  })
+
+  it('токен реестра с природой root нужен в root темы — значения режимов его не заменяют', async () => {
+    const both = { 'accent': 'blue', 'bg': '#eee', 'card-pad': '2px' }
+    const report = await doctorOf(withRegistry(), { theme: sand({ light: both, dark: both }), modes: ['light', 'dark'] })
+    expect(incomplete(report)[0]?.items).toEqual(['root:accent'])
+  })
+
+  it('значение во фолбэке режима покрывает этот режим; тема без значения — находка', async () => {
+    const supports = 'not (color: color-mix(in oklab, red, red))'
+    const mode = (colorScheme: 'light' | 'dark', bg: string) => ({ colorScheme, tokens: { bg, 'card-pad': '2px' }, fallbacks: [{ supports, tokens: { fb: '1px' } }] })
+    const theme = sand({ light: {}, dark: {} }, { accent: 'blue' }, { modes: { light: mode('light', '#eee'), dark: mode('dark', '#111') } })
+    const report = await doctorOf(requiring(withRegistry(), '--fb'), { theme, modes: ['light', 'dark'] })
+    expect(report.diagnostics.some(d => d.code === 'token-undefined' && d.subject.endsWith('--fb'))).toBe(false)
+    expect(incomplete(report).map(d => [d.subject, d.items])).toEqual([['kit', ['light:fb', 'dark:fb']]])
+  })
+
+  it('порядок непокрытого — по кодовым единицам, а не по локали', async () => {
+    const f = fixture()
+    writeFileSync(join(f.dist, 'themes/registry.json'), JSON.stringify({ 'alpha': 'mode', 'Zeta-x': 'mode' }))
+    const withOwnRegistry = { ...f, manifest: { ...f.manifest, manifest: { ...f.manifest.manifest, theme: { ...f.manifest.manifest.theme!, registry: 'themes/registry.json' } } } }
+    const report = await doctorOf(withOwnRegistry)
+    expect(incomplete(report)[0]?.items).toEqual(['light:Zeta-x', 'dark:Zeta-x', 'light:alpha', 'dark:alpha'])
+  })
+
+  it('невалидный реестр — registry-invalid, а не отсутствующий файл', async () => {
+    const f = withRegistry()
+    writeFileSync(join(f.dist, 'themes/registry.json'), JSON.stringify({ '--accent': 'root' }))
+    const report = await doctorOf(f)
+    expect(report.diagnostics.find(d => d.code === 'registry-invalid')?.level).toBe('error')
+    expect(report.diagnostics.some(d => d.code === 'missing-file')).toBe(false)
+    expect(report.files.missing).toEqual([])
+  })
+
+  it('находка говорит, откуда элемент под парой берёт недостающий токен', async () => {
+    const report = await doctorOf(withRegistry(), { theme: sand({ light: {}, dark: {} }, { accent: 'blue' }), modes: ['light', 'dark'] })
+    expect(incomplete(report)[0]?.message).toContain('from another theme')
+  })
+})
+
 describe('token-undefined: доктор и отчёт сборки', () => {
   it('одно множество: только то, что требуют компоненты, без dynamicTokens и без разметки приложения', async () => {
     const f = fixture()
@@ -489,6 +626,13 @@ describe('formatDoctorReport: сводка и детали по требован
       ok: extra.every(d => d.level !== 'error'),
     } as unknown as DoctorReport
   }
+
+  it('покрытие темы — доля вниз без ошибки округления; отчёт без покрытия читается', () => {
+    const report = reportWith(0)
+    const kit = { ...report.themes.themes[0]!, coverage: { required: 50, covered: 29 } }
+    expect(formatDoctorReport({ ...report, themes: { ...report.themes, themes: [kit] } })).toContain('coverage 58% (29/50)')
+    expect(formatDoctorReport(report)).not.toContain('coverage')
+  })
 
   it('много предупреждений — таблица по кодам с числами и подсказкой флага', () => {
     const text = formatDoctorReport(reportWith(70))

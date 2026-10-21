@@ -25,9 +25,21 @@ export function readJsonFile(file: string): unknown {
 
 /** Реестр токенов: `{ "<токен без -->": "root" | "mode" }`. */
 export function readRegistry(providerId: string, file: string): Record<string, TokenNature> {
+  let text: string
+  try {
+    text = readFileSync(file, 'utf8')
+  }
+  catch (cause) {
+    throw new InvalidProviderError(providerId, 'invalid-theme-data', `cannot read the token registry ${file}: ${(cause as Error).message}.`)
+  }
+  return parseRegistry(providerId, file, text)
+}
+
+/** Реестр из уже прочитанного текста файла `file` — тем же правилом, что `readRegistry`. */
+export function parseRegistry(providerId: string, file: string, text: string): Record<string, TokenNature> {
   let raw: unknown
   try {
-    raw = readJsonFile(file)
+    raw = JSON.parse(text)
   }
   catch (cause) {
     throw new InvalidProviderError(providerId, 'invalid-theme-data', `cannot read the token registry ${file}: ${(cause as Error).message}.`)

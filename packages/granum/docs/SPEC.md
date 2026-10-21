@@ -380,11 +380,13 @@ interface EngineOutput {
   `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-cycle` —
   `doctor` показывает их своими кодами; подготовка
   приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
-- **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`,
+- **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`, `registry-invalid`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
-  `token-undefined`, `token-conflict`, `unused-provider`, `provider-dialect-mismatch`,
-  `provider-classes-recovered`, `provider-classes-dropped`, `engine-rules-skipped`,
-  `subcomponents-missing` плюс всё, что доносится из манифеста и резолюции.
+  `token-undefined`, `token-fallback-only`, `token-conflict`, `component-mode-missing`,
+  `theme-mode-missing`, `theme-base-global`, `theme-incomplete`, `unused-provider`,
+  `provider-dialect-mismatch`, `provider-classes-recovered`, `provider-classes-dropped`,
+  `engine-rules-skipped`, `subcomponents-missing` плюс всё, что доносится из манифеста и
+  резолюции.
 
 Расхождение отпечатков словаря само по себе предупреждением НЕ является: так
 выглядит любое приложение с собственным правилом в фабрике движка. Предупреждает

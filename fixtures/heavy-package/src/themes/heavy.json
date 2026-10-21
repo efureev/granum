@@ -65,6 +65,7 @@
         "xh-alert-duration": "200ms",
         "xh-table-head-bg": "#f1f5f9",
         "xh-table-stripe": "#f8fafc",
+        "xh-elevated-fg": "var(--xh-fg)",
         "xh-fg-boost": "#f1f5f9",
         "xh-accent-hover": "color-mix(in oklab, var(--xh-accent) 92%, var(--xh-fg))",
         "xh-accent-active": "color-mix(in oklab, var(--xh-accent) 84%, var(--xh-fg))",

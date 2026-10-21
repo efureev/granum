@@ -53,6 +53,7 @@ legal but suspicious.
 | Code | Level | Meaning |
 |---|---|---|
 | `missing-file` | error | a manifest file is missing on disk |
+| `registry-invalid` | error | the catalog owner's token registry does not parse: not JSON, a key with `--`, or a nature other than `root`/`mode` |
 | `apply-not-expanded` | error | `@apply` is left in provider CSS — rebuild the provider with the plugin |
 | `boundary` | error | a provider chunk imports `node:*` or a granum node entry |
 | `important-in-provider-css` | warn | `!important` inside a layer inverts the cascade order |
@@ -62,6 +63,7 @@ legal but suspicious.
 | `token-undefined` | warn | a component needs a token from outside and no layer declares it. A use with a fallback, a token the component assigns itself (including a `v-bind()` variable from `<style>`) and `dynamicTokens` are not findings |
 | `token-fallback-only` | warn | a component reads a token only through `var(--x, fallback)` and no layer declares it: the component always renders the fallback — the token was renamed, say. Declare an intentional hook in the descriptor's `hookTokens`; `dynamicTokens` are not findings |
 | `theme-base-global` | warn | an additional theme's `baseCss` has a style rule: once loaded, its sheet stays in the document, and the rule applies to the whole page — also after switching back to the default theme. Only `@font-face`, `@property` and `@keyframes` belong there |
+| `theme-incomplete` | warn | a build theme has no value for a required token in at least one of its modes. Required are the catalog owner's registry tokens (`root` in the theme's root, `mode` in every mode) and the selected components' `requires` that some build theme defines — in every mode: the build does not know under which selector a component reads a token. A value in a mode's `@supports` fallback counts; what the providers' inlined files declare is not required. The message names the share — `theme 'sand' covers 192 of 195 required token(s) (98%)` — and the items list `<mode>:<token>` or `root:<token>`. The provider build already checks a catalog theme against the registry; component requirements are checked only here. A token no build theme defines stays `token-undefined`. The theme block of the output shows `coverage` for every theme |
 | `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
 | `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
 | `component-mode-missing` | warn | a component has no file for a mode of the build or its ancestors: the literals come from the default mode — a forgotten `dark.json`, say; a value that is the same in every mode belongs in `root.json` |
@@ -90,8 +92,8 @@ Selected components (5, order = deps → dependents) — classes 41, safelist 14
   …
 
 Theme: heavy (source: defaultTheme of the catalog owner, catalog of @granum-fixtures/heavy)
-heavy (default, main sheet) — modes: [light, dark] (source: modes.names)
-  • light → heavy-light (light, 64 token(s))
+heavy (default, main sheet) — modes: [light, dark] (source: modes.names), coverage 100% (23/23)
+  • light → heavy-light (light, 65 token(s))
   • dark → heavy-dark (dark, 65 token(s))
 
 Diagnostics (errors: 0, warnings: 1):

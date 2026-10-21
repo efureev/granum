@@ -5,6 +5,7 @@
  * только под `--strict`.
  */
 import type { ModesSource, ResolvedThemeWarning, ThemeSource } from '../../core/resolveThemes'
+import type { TokenNature } from '../../core/themeData'
 import type { ProviderClassSource } from '../dialects'
 import type { PreparedApp } from '../prepare'
 import { existsSync, readFileSync } from 'node:fs'
@@ -18,7 +19,9 @@ import { scanCssBlocks } from '../cssDeclarations'
 import { boundaryKindOf, collectImportSpecifiers } from '../imports'
 import { resolveInlinedCssSources, resolveProviderPath } from '../inlinedCss'
 import { packageSubcomponents } from '../subcomponents'
-import { findFallbackOnlyTokens, findUndefinedTokens } from '../undefinedTokens'
+import { themeCoverage } from '../themeCoverage'
+import { parseRegistry } from '../themeFiles'
+import { findFallbackOnlyTokens, findUndefinedTokens, tokenDeclarations } from '../undefinedTokens'
 
 export interface DoctorProviderInfo {
   readonly id: string
@@ -76,6 +79,7 @@ export interface DoctorTokenConflict {
 
 export type DoctorDiagnosticCode
   = | 'missing-file'
+    | 'registry-invalid'
     | 'apply-not-expanded'
     | 'boundary'
     | 'component-theme-unknown'
@@ -87,6 +91,7 @@ export type DoctorDiagnosticCode
     | 'theme-base-global'
     | 'token-undefined'
     | 'token-fallback-only'
+    | 'theme-incomplete'
     | 'safelist-redundant'
     | 'safelist-dead'
     | 'css-double-delivery'
@@ -120,6 +125,8 @@ export interface DoctorThemeInfo {
   readonly default: boolean
   readonly modes: readonly { readonly name: string, readonly value: string, readonly colorScheme: 'light' | 'dark', readonly origin: 'theme' | 'define', readonly tokens: number }[]
   readonly modesSource: ModesSource
+  /** Полнота темы: обязательных токенов и покрытых во всех её режимах. В отчётах прежних версий поля нет. */
+  readonly coverage?: { readonly required: number, readonly covered: number }
 }
 
 export interface DoctorReport {
@@ -328,6 +335,24 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
   }
   for (const source of resolveInlinedCssSources(resolution))
     readIfExists(source.path, `${source.providerId} (${source.kind})`)
+  // Реестр владельца каталога — мерило полноты тем сборки. Файл уже прочитан
+  // проверкой наличия; разбирается он тем же правилом, что на сборке провайдера.
+  // Объектный провайдер этой сборки не проходил, и битый реестр — его находка,
+  // а не отсутствующий файл.
+  let registry: Record<string, TokenNature> | undefined
+  const owner = resolution.providers.find(p => p.id === resolution.themes.owner)
+  if (owner?.theme.registry !== undefined) {
+    const path = resolveProviderPath(owner.theme.registry, owner.baseUrl)
+    const text = readIfExists(path, `${owner.id} (theme registry)`)
+    if (text !== undefined) {
+      try {
+        registry = parseRegistry(owner.id, path, text)
+      }
+      catch (cause) {
+        error('registry-invalid', `${owner.id} (theme registry)`, (cause as Error).message)
+      }
+    }
+  }
   for (const { provider, component } of resolution.selection.entries) {
     const key = `${provider.id}:${component.name}`
     for (const path of component.css) {
@@ -393,14 +418,16 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
    * До этого проверялся весь `consumes`, и на дизайн-системе из 84 компонентов
    * находок было 279 при одной настоящей: `--strict` от такого шума непригоден.
    */
-  // Вердикт — той же функцией, что у отчёта сборки.
-  const undefinedTokens = findUndefinedTokens(resolution)
+  // Вердикт — той же функцией, что у отчёта сборки. Объявления считаются один
+  // раз: по ним судят и `token-fallback-only`, и полнота тем.
+  const declarations = tokenDeclarations(resolution)
+  const undefinedTokens = findUndefinedTokens(resolution, declarations)
   for (const { token, component: key } of undefinedTokens)
     warn('token-undefined', `${key}:${token}`, `token '${token}' is consumed by ${key} but no granum layer defines it for any active theme — it may still come from the application CSS or an engine rule`)
 
   // Запасное значение `var()` прячет токен, которого никто не задаёт: компонент
   // молча рисует его всегда. Хук объявляет, что так задумано.
-  for (const { component: key, tokens } of findFallbackOnlyTokens(resolution))
+  for (const { component: key, tokens } of findFallbackOnlyTokens(resolution, declarations))
     warn('token-fallback-only', key, 'reads these tokens only through var() fallbacks, and no granum layer defines them for the active theme — the component always renders the fallback; define them, or list intentional hooks in hookTokens', tokens)
 
   // Safelist без правила у движка — мёртвая запись.
@@ -415,6 +442,14 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
 
   for (const w of resolution.themes.warnings)
     warn(w.kind, themeWarningSubject(w), formatThemeWarning(w))
+  // Тема без значения обязательного токена: элемент под её парой берёт его у
+  // другой темы — режима по умолчанию основной под `:where(:root)` или у предка —
+  // или не получает вовсе: литералы `root` основной темы стоят только под её парами.
+  const coverage = themeCoverage(resolution, registry, declarations)
+  for (const c of coverage) {
+    if (c.missing.length > 0)
+      warn('theme-incomplete', c.theme, `theme '${c.theme}' covers ${c.covered} of ${c.required} required token(s) (${coveragePercent(c)}%) — elements under its pairs take these tokens from another theme (the main theme under :root, or an ancestor) or get none; add them to the theme data, extend a theme that has them, or set them in modes.tokenOverrides`, c.missing)
+  }
   // `baseCss` дополнительной темы лежит в её листе, а лист, однажды загруженный,
   // остаётся в документе: правило стиля оттуда действует на всю страницу и после
   // возврата к основной теме и спорит с базой общего листа порядком листов.
@@ -480,6 +515,7 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
           tokens: resolution.tokens.themes[i]?.modes.get(mode.name)?.size ?? 0,
         })),
         modesSource: entry.modesSource,
+        coverage: { required: coverage[i]?.required ?? 0, covered: coverage[i]?.covered ?? 0 },
       })),
       warnings: resolution.themes.warnings,
     },
@@ -534,6 +570,7 @@ const ITEMS_PREVIEW = 3
  */
 const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'missing-file',
+  'registry-invalid',
   'boundary',
   'apply-not-expanded',
   'provider-dialect-mismatch',
@@ -542,6 +579,7 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'provider-classes-recovered',
   'token-undefined',
   'token-fallback-only',
+  'theme-incomplete',
   'token-conflict',
   'theme-base-global',
   'override-skipped',
@@ -559,6 +597,14 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'mode-extends-unresolved',
   'mode-extends-cycle',
 ]
+
+/**
+ * Доля вниз: 99,6 % — ещё не 100 %. Умножение раньше деления: `29 / 50 * 100`
+ * в float даёт 57,99…, и доля занижалась бы на процент.
+ */
+function coveragePercent(coverage: { readonly required: number, readonly covered: number }): number {
+  return coverage.required === 0 ? 100 : Math.floor(coverage.covered * 100 / coverage.required)
+}
 
 function severityOf(code: string): number {
   const index = CODE_SEVERITY.indexOf(code as DoctorDiagnosticCode)
@@ -665,7 +711,8 @@ export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOp
   push(`Theme: ${t.defaultTheme ?? '—'}${t.themeSource ? ` (source: ${THEME_SOURCE_TEXT[t.themeSource]}${t.owner ? `, catalog of ${t.owner}` : ''})` : ''}`)
   for (const theme of t.themes) {
     const role = theme.default ? 'default, main sheet' : 'own sheet'
-    push(`${theme.id} (${role}) — modes: [${theme.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[theme.modesSource]})`)
+    const coverage = theme.coverage && theme.coverage.required > 0 ? `, coverage ${coveragePercent(theme.coverage)}% (${theme.coverage.covered}/${theme.coverage.required})` : ''
+    push(`${theme.id} (${role}) — modes: [${theme.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[theme.modesSource]})${coverage}`)
     for (const m of theme.modes)
       push(`  • ${m.name} → ${m.value} (${m.colorScheme}${m.origin === 'define' ? ', modes.define' : ''}, ${m.tokens} token(s))`)
   }
