@@ -65,13 +65,13 @@ interface GranumComponentDescriptor {
 | C-12 | Ключи токенов в данных тем, файлах токенов компонентов и конфиге MUST NOT начинаться с `--`; префикс добавляет генератор. Ключ с `--` — ошибка регистрации `InvalidTokenKeyError` у провайдера (в v1 было молчаливое `----x`) и `InvalidConfigError` с путём до поля у приложения. |
 | C-13 | CSS-файл токенов — файл компонента в `themesDir` (C-33) или `themes[i].modes.define[*].tokensRef` приложения — читается на сборке строго: один плоский блок, другой селектор или вложенность — `TokenParseError`, а не пустой набор. Значение токена берётся целиком — со строками, `url(…)` и скобками, внутри которых бывают `;` и `{}`; повторное объявление — побеждает последнее. Файл компонента материализуется в манифест на сборке провайдера, приложению он не нужен. |
 | C-14 | `dynamicTokens` — имена (или префиксы с `*`) токенов, которые компонент читает в рантайме. Они MUST попадать в манифест отдельным полем `tokens.dynamic` (а не в `tokens.consumes`: источник у них другой, и это видно в диагностике) и MUST NOT удаляться обрезкой, пока компонент в селекции. |
-| C-39 | `hookTokens` — имена (или префиксы с `*`) токенов-хуков: компонент читает их только через `var(--x, запасное)`, а задать их MAY тема или приложение. Хук — объявление автора, что запасное значение — норма, а не недосмотр. Хуки MUST попадать в манифест полем `tokens.hooks` (с `--`, отсортированы) и MUST снимать находку `token-fallback-only` (T-18); на обрезку и `token-undefined` они не влияют. |
+| C-39 | `hookTokens` — имена (или префиксы с `*`) токенов-хуков: компонент читает их только через `var(--x, запасное)`, а задать их MAY приложение (`tokenOverrides`, свой CSS, инлайн-стиль экземпляра). Тема хук не задаёт: значение, которое даёт тема, делает токен токеном темы, и в данных темы хук — находка `theme-token-foreign` (A-37). Хук — объявление автора, что запасное значение — норма, а не недосмотр. Хуки MUST попадать в манифест полем `tokens.hooks` (с `--`, отсортированы) и MUST снимать находку `token-fallback-only` (T-18); на обрезку и `token-undefined` они не влияют. |
 | C-15 | `group` включает сканирование `groups/<g>/shared/` при извлечении классов и учёт общих чанков в графе зависимостей. |
 | C-33 | `themesDir` — путь относительно `config.ts`; хелпер оставляет его путём (C-20), папку читает плагин сборки провайдера и материализует в манифест `components.<Name>.tokens.themes.<тема> = { root?, modes: { <режим>: tokens } }`. Файл значений — JSON `{ "<токен без -->": "<значение>" }` или CSS с одним плоским блоком `:root {}` (C-13); селектор файла игнорируется — селекторы назначает приложение (A-28, T-9). Ключи JSON с `$` (`"$comment"`) — пояснения автора, токенами не являются. |
 | C-34 | Имя подпапки MUST быть id темы, имя файла режима — имя режима (C-24); `root` — режимонезависимые токены компонента. Нарушение — `InvalidProviderError('invalid-theme-dir')` на сборке провайдера. |
 | C-35 | Компонент MAY класть токены для темы чужого каталога (спутник — для темы дизайн-системы): применяются, когда эта тема есть в сборке (A-24). |
 | C-36 | Подпапка темы, которой нет ни в одном каталоге графа, — предупреждение резолюции `component-theme-unknown`, а не ошибка: спутник кладёт токены для тем, о которых приложение может не знать. Предупреждение — только у компонентов селекции. |
-| C-37 | Токены компонента, одинаковые для всех тем, задаются значением по умолчанию в `var(--x, …)` — такой токен компонент перечисляет в `hookTokens` (C-39) — или файлами базовой темы, от которой наследуют остальные (C-27): отдельной «темы для всех» в контракте нет. |
+| C-37 | Значение токена компонента, одинаковое для всех тем, задаёт каждая тема — своим значением или наследованием (C-27), — либо его присваивает сам компонент, и тогда это не токен темы. Значение по умолчанию в `var(--x, …)` — только у хука (C-39): значение темы, спрятанное в CSS компонента, тема, которая его не задала, получает молча, и полнота (C-30, D-12) его не видит. Отдельной «темы для всех» в контракте нет. |
 | C-38 | `tokenDefinitions` и `tokenDefinitionsRef` дескриптора удалены: их место — `themesDir`. Дескриптор с ними — `InvalidProviderError('legacy-token-definitions')` с подсказкой. |
 
 ### 5.3 Темы и токены
@@ -86,14 +86,21 @@ interface GranumThemeContribution {
   baseCss?: string              // тема-независимое базовое → слой base
   registry?: string             // JSON реестра: { "<токен без -->": "root" | "mode" }
   defaultTheme?: string         // тема, если приложение не выбрало свою (A-22)
-  catalog?: Readonly<Record<string, {
+  catalog?: Readonly<Record<string, GranumCatalogEntry>>
+}
+
+type GranumCatalogEntry =
+  | {
     title: string
     description?: string
     docs?: string               // абсолютный URL дизайн-системы темы
     extends?: string            // родительская тема каталога
     data: string                // JSON `GranumThemeData`; extends уже разрешён (C-27)
-  }>>
-}
+  }
+  | {
+    source: string              // исходник темы (C-42, C-43): метаданные — из его theme.json
+    ignore?: readonly string[]  // файлы исходника, которые не данные темы (C-42)
+  }
 
 interface GranumThemeData {     // один тип для темы провайдера и темы приложения (A-22)
   id: string
@@ -105,6 +112,15 @@ interface GranumThemeData {     // один тип для темы провай�
   defaultMode?: string                                // по умолчанию 'light'
   baseCss?: readonly string[]                         // @font-face и прочее режимонезависимое → слой base
   extensions?: Readonly<Record<string, unknown>>      // прозрачно для granum (C-28)
+  version?: string                                    // версия темы, semver (C-41)
+  targets?: Readonly<Record<string, string>>          // providerId → диапазон semver (C-41)
+  components?: Readonly<Record<string,                // providerId →
+    Readonly<Record<string, GranumThemeComponentValues>>>>  // имя компонента → значения (C-40)
+}
+
+interface GranumThemeComponentValues {
+  root?: Readonly<Record<string, string>>             // режимонезависимые токены компонента
+  modes?: Readonly<Record<string, Readonly<Record<string, string>>>>  // режим → токены
 }
 
 interface GranumModeData {
@@ -122,12 +138,17 @@ interface GranumModeData {
 | C-24 | Id темы MUST соответствовать `/^[a-z][a-z0-9-]*$/`, имя режима — `/^[a-z][a-z0-9]*$/` (без дефиса — иначе пара `<тема>-<режим>` не разбирается однозначно); имя режима `root` запрещено. Нарушение — `InvalidProviderError('invalid-theme-id' \| 'invalid-mode-name')` при регистрации, у приложения — `InvalidConfigError` с путём до поля. |
 | C-25 | `defaultMode` MUST быть ключом `modes`; не задан — `light`, и тогда `modes.light` MUST существовать (`InvalidProviderError('default-mode-missing')`). |
 | C-26 | `extends` режима MUST ссылаться на режим той же темы; итоговые токены режима — цепочка предков, затем свои. Цикл — `InvalidProviderError('mode-extends-cycle')`. |
-| C-27 | Наследование темы от темы (`extends` в индексе каталога) разрешает тот, кто тему собирает: провайдер — на своей сборке, приложение — до передачи объекта в конфиг. Исходник темы с `extends` MAY содержать только отличия: сборка провайдера сливает его с родителем — токены `root` и режимов по ключу, `colorScheme`/`extends`/`title` режима и `defaultMode` — свои или родителя, `fallbacks` режима и `baseCss` — свои целиком, `extensions` — слиянием верхнего уровня; метаданные (`id`, `title`, `description`, `docs`) — из записи каталога. В манифест и `dist` уходят полные данные; `data` объектной формы, которую никто не собирает, MUST быть полными. Цепочка `extends` нужна приложению только для токенов компонентов (A-24). Ссылка `extends` на тему вне каталога и цикл — `InvalidProviderError('theme-extends-unknown')` при регистрации. |
+| C-27 | Наследование темы от темы (`extends`) разрешает тот, кто тему собирает: провайдер — на своей сборке, резолвер приложения — у темы-объекта (A-22). Тема с `extends` MAY содержать только отличия; слияние с родителем: токены `root` и режимов — по ключу; раздел `components` — по пакету, компоненту, `root` или режиму и токену; `colorScheme`/`extends`/`title` режима, `defaultMode` и `targets` — свои или родителя; `version` — только своя: версия родителя не версия потомка; `fallbacks` режима и `baseCss` — свои целиком; `extensions` — слиянием верхнего уровня; метаданные (`id`, `title`, `description`, `docs`) — из записи каталога или `theme.json` исходника. Наследование — живая связь: правка родителя приходит в потомка на следующей сборке того, кто его собирает; независимую тему даёт копия (D-13). В манифест и `dist` уходят полные данные; `data` объектной формы, которую никто не собирает, MUST быть полными. Цепочка `extends` нужна приложению ещё и для токенов компонентов по темам (A-24). Ссылка `extends` на тему вне каталога и цикл — `InvalidProviderError('theme-extends-unknown')` при регистрации. |
 | C-28 | `extensions` granum MUST NOT интерпретировать: поле уходит в `virtual:granum/themes` как есть (T-4). Через него дизайн-система передаёт приложению, например, пропы компонентов по умолчанию. |
 | C-29 | Индекс каталога в манифесте MUST содержать `title`, `extends?`, `docs?`, `data`, а также `modes` (порядок: режим по умолчанию первым) и `defaultMode`, вычисленные сборкой из данных: CLI и отчёт перечисляют темы, не читая данных. |
 | C-30 | Сборка провайдера MUST проверить каждую тему каталога по реестру: каждый токен `root` есть в `root`, каждый токен `mode` — в итоговых токенах каждого режима. Нехватка — `InvalidProviderError('theme-incomplete')` с перечнем токенов. Токены компонентов (C-33) и токены, которые читаются с значением по умолчанию в `var()`, в полноту не входят. |
 | C-31 | `theme.declares` MUST включать токены реестра и всех тем каталога; ключи каталога — по id (M-3). |
 | C-32 | Владелец каталога MAY не иметь компонентов: провайдер только с `theme` (как C-23 разрешает не объявлять `engine`). |
+| C-40 | Раздел `components` — значения токенов компонентов, которыми владеет тема: `components.<providerId>.<Name>.root` — режимонезависимые, `.modes.<режим>` — по режимам. Режим раздела MUST быть режимом темы (C-25, C-26), иначе `invalid-theme-component-mode`. Токен MUST стоять в данных темы в одном месте: два раздела, раздел и `root`/`modes` темы, `root` и режим одного раздела — `theme-token-collision`: у значения один владелец. Значения раздела — данные темы: слой (1) T-7, цепочка режима и T-10 у них те же. Ошибки — `InvalidProviderError` у провайдера, `ThemeDataError` у темы-объекта. Чьи это токены, проверяет приложение (A-37): пакет компонентов на сборке владельца каталога может быть неизвестен. |
+| C-41 | `version` — версия темы: `MAJOR.MINOR.PATCH` с необязательным предрелизом `-<id>(.<id>)*`, без сборочных метаданных `+…`; иное — `invalid-theme-version`. `targets` — `{ <providerId>: <диапазон> }`; диапазон — подмножество node-semver: компараторы `<`, `<=`, `>`, `>=`, `=` и голая версия; `^`, `~`; `x`, `X`, `*` и пропущенные позиции (`2`, `2.1`, `2.x`); дефисный диапазон `a - b`; пробел — «и», `\|\|` — «или». Версия с предрелизом подходит, только если в том же наборе есть компаратор с предрелизом того же `MAJOR.MINOR.PATCH` (правило node-semver). Иное — `invalid-theme-targets`. Каждый пакет раздела `components` MUST быть в `targets` (`theme-components-untargeted`): тема задаёт значения только компонентам пакетов, под которые заявлена. Сверка диапазонов — своя, без зависимостей пакета (§4.3); эталон — тест против `semver` из devDependencies. |
+| C-42 | Исходник темы — папка: `theme.json` (`id`, `title`, `description?`, `docs?`, `version?`, `targets?`, `extends?`, `defaultMode?`, `modes: { <имя>: { title?, colorScheme, extends?, fallbacks? } }` — порядок ключей задаёт порядок режимов, `extensions?`), `root.json`, `modes/<режим>.json`, `base.css` (`baseCss`), `components/<providerId>/<Name>/root.json` и `components/<providerId>/<Name>/modes/<режим>.json`; id со scope — двумя уровнями (`components/@acme/ui/Button/`). Файл значений — JSON или CSS с одним плоским блоком (C-13), ключи JSON с `$` — пояснения (C-33). `loadThemeSource(dir, { ignore? })` в `./node` MUST отдавать `GranumThemeData` — с `extends`, если он есть в `theme.json`: раскрывает его тот, кто тему собирает (C-27, A-22). Файлы `*.md` в любой папке исходника — документация темы, они не читаются; файлы, которые не данные темы, но нужны дизайн-системе (заметки, источники значений), перечисляет `ignore` — пути относительно папки исходника. Файл режима, которого нет в `theme.json`, папка компонента без файлов значений, любой другой файл или папка — `ThemeSourceError` с путём: молча пропущенный файл — потерянные значения. |
+| C-43 | Запись каталога MAY быть `{ source, ignore? }` — путь к исходнику темы (C-16). Сборка провайдера читает его (C-42) с этим `ignore`, берёт метаданные из `theme.json`, сливает с родителем (C-27), проверяет (C-30, C-40, C-41) и пишет в `dist` данные, как у записи с `data`. Id в `theme.json` MUST совпадать с ключом каталога (`theme-id-mismatch`). |
+| C-44 | В данных темы, которые сборка провайдера пишет в `dist`, значения раздела `components` MUST быть ещё и слиты в `root`/`modes` темы: читатель до 3.10 раздела не знает и применит их токенами темы — CSS тот же. Раздел остаётся индексом принадлежности (A-37) и источником копии (D-13); читатель 3.10 берёт значения из `root`/`modes` и MUST NOT повторять на данных `dist` проверку коллизий C-40 — слитые значения совпадают с разделом по построению. |
 
 ### 5.4 Хелперы
 
@@ -343,7 +364,9 @@ interface EngineOutput {
 | подпапка `themesDir` не slug темы, файл не slug режима | `InvalidProviderError` (`invalid-theme-dir`) | сборка провайдера |
 | `tokenDefinitions` / `tokenDefinitionsRef` в дескрипторе | `InvalidProviderError` (`legacy-token-definitions`) | регистрация |
 | неизвестная тема, тема дважды в `themes`, неизвестный режим, активация без тем, два владельца каталога, владелец не найден, совпавшие пары активации, данные темы не переданы резолверу | `ThemeResolutionError` (`unknown-theme`, `duplicate-theme`, `unknown-mode`, `multiple-theme-owners`, `theme-owner-missing`, `theme-missing`, `activation-collision`, `theme-data-missing`) | подготовка и резолюция |
-| данные темы сборки не читаются или не проходят форму | `ThemeDataError` (провайдер, тема, путь) | подготовка приложения |
+| данные темы сборки не читаются или не проходят форму; у темы-объекта — коллизия токена, режим раздела не из темы, версия или диапазон не по грамматике, пакет раздела вне `targets` | `ThemeDataError` (провайдер, тема, путь, `reason`: `theme-token-collision`, `invalid-theme-component-mode`, `invalid-theme-version`, `invalid-theme-targets`, `theme-components-untargeted`) | подготовка приложения |
+| то же в каталоге провайдера; id в `theme.json` исходника не совпал с ключом каталога | `InvalidProviderError` (те же `reason`, `theme-id-mismatch`) | сборка провайдера |
+| исходник темы: нет или не читается `theme.json`, файл режима не из `theme.json`, папка компонента без файлов значений, посторонний файл или папка | `ThemeSourceError` (путь, `reason`: `theme-json-missing`, `theme-json-invalid`, `unknown-mode-file`, `empty-component-dir`, `unexpected-entry`) | `loadThemeSource`, сборка провайдера, CLI |
 | `engine.dialect` не вида `<vendor>/<vocabulary>@<major>` | `InvalidProviderError` (`invalid-dialect`) | регистрация |
 | правила движка без `engine.dialect` | `InvalidProviderError` (`rules-without-dialect`) | регистрация |
 | объявленный диалект ≠ диалект движка сборки | `EngineDialectMismatchError` | сборка провайдера |
@@ -377,13 +400,16 @@ interface EngineOutput {
   `css-double-delivery`, `peer-missing`, `engine-module-missing`;
 - **резолюция** (`warnings`, читает отчёт и `doctor`): `provider-without-manifest`,
   `provider-scanned`, `override-skipped`, и предупреждения тем и режимов —
-  `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-cycle` —
+  `component-theme-unknown`, `mode-extends-unresolved`, `mode-extends-cycle`,
+  `theme-target-mismatch` (его печатает и строка сборки), `theme-component-unknown`,
+  `theme-token-foreign` —
   `doctor` показывает их своими кодами; подготовка
   приложения добавляет `app-sources-unset` — его видят отчёт и строка сборки;
 - **`doctor`** (`diagnostics[]`, уровни `error` и `warn`): `missing-file`, `registry-invalid`,
   `apply-not-expanded`, `boundary`, `important-in-provider-css`, `safelist-dead`,
   `token-undefined`, `token-fallback-only`, `token-conflict`, `component-mode-missing`,
-  `theme-mode-missing`, `theme-base-global`, `theme-incomplete`, `unused-provider`,
+  `theme-mode-missing`, `theme-base-global`, `theme-incomplete`, `theme-target-mismatch`,
+  `theme-component-unknown`, `theme-token-foreign`, `unused-provider`,
   `provider-dialect-mismatch`, `provider-classes-recovered`, `provider-classes-dropped`,
   `engine-rules-skipped`, `subcomponents-missing` плюс всё, что доносится из манифеста и
   резолюции.
@@ -476,3 +502,21 @@ interface EngineOutput {
 | Рантайм | контроллер переключает тему и режим (RT-1), `loadThemeSheet` (RT-8), `themeFromCookie` вместо `modeFromCookie`, `themeSheetLink` (RT-4), `resolveThemeActivation` отдаёт тему и режим (RT-9), `createThemeManifest` — список тем (RT-7) |
 | Поля отчёта | `themes { defaultTheme, themeSource, themes[] }` (A-19) |
 | Контракт провайдера, манифест провайдера | без изменений: провайдерам пересобираться не нужно |
+
+### 18.6 Что меняется в 3.10
+
+Значения компонентов у темы ([ADR-13](../../docs/decisions.md)). Контракт провайдера (версия 2) и формат
+манифеста (версия 3) не меняются: новые поля необязательны, и `dist` несёт значения раздела ещё и
+слитыми в `root`/`modes` (C-44) — читатель до 3.10 даёт тот же CSS.
+
+| Что | Изменение |
+|---|---|
+| Данные темы | `version`, `targets`, раздел `components` (C-40, C-41) — аддитивно |
+| Каталог провайдера | запись `{ source }` — исходник темы (C-42, C-43) — аддитивно |
+| Тема-объект с `extends` | данные дополняются из родителя (A-22): объект, у которого родитель задавал токены, которых в нём нет, теперь их получает |
+| Хуки | тема хук не задаёт (C-39): хук в данных темы — находка `theme-token-foreign` (A-37) |
+| `virtual:granum/themes` | `version` у темы (T-4) — аддитивно |
+| Поля отчёта | `themes.themes[].version`, `targets` (A-19) — аддитивно |
+| Коды диагностики | `theme-target-mismatch`, `theme-component-unknown`, `theme-token-foreign` (A-37, A-38) |
+| CLI и `./node` | `granum theme copy`, `copyTheme`, `loadThemeSource` (C-42, D-13) |
+| Классы ошибок | `ThemeSourceError`; `reason` у `ThemeDataError` (§14) |
