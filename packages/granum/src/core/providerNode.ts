@@ -25,6 +25,13 @@ export interface ThemeCatalogNode {
   readonly data: string
   readonly modes?: readonly string[]
   readonly defaultMode?: string
+  readonly version?: string
+  readonly targets?: Readonly<Record<string, string>>
+  /**
+   * Исходник темы объектного провайдера (C-43): его читает только сборка
+   * провайдера, и до неё у записи нет ни данных, ни метаданных.
+   */
+  readonly source?: string
 }
 
 export interface ThemeNode {
@@ -72,6 +79,8 @@ export interface ComponentNode {
 
 export interface ProviderNode {
   readonly id: string
+  /** Версия пакета из манифеста; у объектной формы её нет. */
+  readonly version?: string
   readonly form: ProviderForm
   /** База раскладки: `baseUrl` объекта или директория манифеста; у объекта без `baseUrl` — `undefined`. */
   readonly baseUrl: string | undefined
@@ -94,11 +103,19 @@ export interface ProviderNode {
   readonly subcomponents?: ReadonlyMap<string, string>
 }
 
+/** Код предупреждения манифеста, собранного медленным путём из объектного провайдера. */
+export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
+
 const EMPTY: readonly never[] = Object.freeze([])
 const EMPTY_RECORD: Readonly<Record<string, never>> = Object.freeze({})
 
 export function toProviderNode(input: GranumProviderInput): ProviderNode {
   return isLoadedManifest(input) ? fromManifest(input) : fromObject(input)
+}
+
+function objectCatalog(catalog: NonNullable<NonNullable<GranumProvider['theme']>['catalog']>): Record<string, ThemeCatalogNode> {
+  return Object.fromEntries(Object.entries(catalog).map(([id, entry]): [string, ThemeCatalogNode] =>
+    'source' in entry ? [id, { title: id, data: '', source: entry.source }] : [id, entry]))
 }
 
 function fromObject(provider: GranumProvider): ProviderNode {
@@ -129,7 +146,7 @@ function fromObject(provider: GranumProvider): ProviderNode {
       ...(theme?.tokensCss !== undefined ? { tokensCss: theme.tokensCss } : {}),
       ...(theme?.registry !== undefined ? { registry: theme.registry } : {}),
       ...(theme?.defaultTheme !== undefined ? { defaultTheme: theme.defaultTheme } : {}),
-      catalog: theme?.catalog ?? EMPTY_RECORD,
+      catalog: theme?.catalog ? objectCatalog(theme.catalog) : EMPTY_RECORD,
       declares: EMPTY,
     },
     engine: provider.engine,
@@ -146,8 +163,11 @@ function fromManifest(loaded: GranumLoadedManifest): ProviderNode {
     for (const part of component.subcomponents ?? [])
       subcomponents.set(part, name)
   }
+  // Просканированный манифест версии пакета не знает: его `0.0.0` — заглушка, а не версия (A-38).
+  const scanned = manifest.warnings.some(warning => warning.code === SCANNED_MANIFEST_WARNING)
   return {
     id: manifest.id,
+    ...(scanned ? {} : { version: manifest.version }),
     form: 'manifest',
     baseUrl: loaded.baseUrl,
     components: Object.entries(manifest.components).map(([name, component]) => ({

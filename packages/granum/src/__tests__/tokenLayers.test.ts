@@ -1,4 +1,4 @@
-import type { GranumComponentThemeTokens, GranumLoadedManifest } from '../contract'
+import type { GranumComponentThemeTokens, GranumLoadedManifest, GranumThemeData } from '../contract'
 import type { GranumThemeChoice, GranumThemeModes } from '../core/resolveThemes'
 import { describe, expect, it } from 'vitest'
 import { resolveGranum, resolveTokenValue } from '../core/resolve'
@@ -28,7 +28,7 @@ const BUTTON = ui({
 })
 
 function resolve(theme: GranumThemeChoice | undefined, modes?: GranumThemeModes, extra: GranumLoadedManifest[] = [BUTTON]) {
-  const data = typeof theme === 'object' ? theme : theme === 'ink' ? INK : PAPER
+  const data = typeof theme === 'object' ? theme as GranumThemeData : theme === 'ink' ? INK : PAPER
   return resolveGranum({
     providers: [OWNER, ...extra],
     themes: [{ theme: theme ?? 'paper', modes: allModes(data, modes) }],
@@ -148,5 +148,64 @@ describe('дополнительная тема', () => {
     // Значения дополнительной темы не трогают основную.
     expect(resolveTokenValue(two, 'light', 'p-radius')).toBe('2px')
     expect(resolveTokenValue(r, 'light', 'b-shadow')).toBe('line')
+  })
+})
+
+/** «Бумага» с данными, которые задают и токен кнопки: конфликт «данные против themesDir». */
+const PAPER_WITH_SHADOW = themeData('paper', {
+  light: { colorScheme: 'light', tokens: { ...PAPER.modes.light!.tokens, 'b-shadow': 'from-data' } },
+  dark: PAPER.modes.dark!,
+}, { title: 'Бумага', root: PAPER.root })
+
+function resolveOver(paper: GranumThemeData, theme: GranumThemeChoice) {
+  return resolveGranum({
+    providers: [OWNER, BUTTON],
+    themes: [{ theme, modes: allModes(paper) }],
+    themeData: { '@p/ds': { paper, ink: INK } },
+  })
+}
+
+describe('тема-объект с extends: унаследованное — слоем данных родителя (A-22, T-7, INV-THEME-14)', () => {
+  const twin: GranumThemeChoice = { id: 'twin', title: 'Двойник', extends: 'paper' }
+
+  it('наследник без отличий даёт по парам то же, что родитель, и при конфликте данных с токенами компонента', () => {
+    const parent = resolveOver(PAPER_WITH_SHADOW, 'paper')
+    const heir = resolveOver(PAPER_WITH_SHADOW, twin)
+    for (const mode of ['light', 'dark']) {
+      for (const token of ['p-bg', 'p-accent', 'b-bg', 'b-shadow', 'b-gap', 'p-radius'])
+        expect(resolveTokenValue(heir, mode, token), `${mode}:${token}`).toBe(resolveTokenValue(parent, mode, token))
+    }
+    // Токены компонента идут после данных темы — и у родителя, и у наследника.
+    expect(resolveTokenValue(heir, 'light', 'b-shadow')).toBe('soft')
+    expect(heir.tokens.default!.modes.get('light')!.get('p-accent')!.layers).toEqual([{ source: 'theme', value: PAPER.modes.light!.tokens['p-accent'], theme: 'paper', mode: 'light' }])
+  })
+
+  it('собственные отличия — слоем приложения, после токенов компонента', () => {
+    const own: GranumThemeChoice = { id: 'brand', title: 'Бренд', extends: 'paper', root: { 'p-radius': '9px' }, modes: { light: { tokens: { 'b-shadow': 'own' } } } }
+    const r = resolveOver(PAPER_WITH_SHADOW, own)
+    expect(resolveTokenValue(r, 'light', 'b-shadow')).toBe('own')
+    expect(r.tokens.default!.modes.get('light')!.get('b-shadow')!.layers.map(layer => layer.source)).toEqual(['theme', 'component', 'app-theme'])
+    expect(r.tokens.default!.root.get('p-radius')!.layers.map(layer => [layer.source, layer.value])).toEqual([['theme', '6px'], ['app-theme', '9px']])
+    // Значение, совпавшее с родительским, вторым слоем не пишется.
+    expect(r.tokens.default!.modes.get('dark')!.get('p-bg')!.layers.map(layer => layer.source)).toEqual(['theme'])
+  })
+
+  it('значение из режима по умолчанию — запасное: значение компонента в режиме им не перекрывается', () => {
+    const own: GranumThemeChoice = { id: 'brand', title: 'Бренд', extends: 'paper', modes: { light: { tokens: { 'b-shadow': 'own' } } } }
+    // Тёмный режим кнопки — свой у компонента (`none`), светлое значение объекта туда не приходит.
+    expect(resolveTokenValue(resolveOver(PAPER, own), 'dark', 'b-shadow')).toBe('none')
+  })
+})
+
+describe('фолбэк темы — к значению темы', () => {
+  it('токен, чьё значение в паре дал компонент, фолбэков темы не получает; остальные — получают', () => {
+    const paper = themeData('paper', {
+      light: { colorScheme: 'light', tokens: { ...PAPER.modes.light!.tokens, 'b-bg': 'oklch(0.6 0.2 250)', 'p-bg': 'oklch(1 0 0)' }, fallbacks: [{ supports: 'x', tokens: { 'b-bg': '#2563eb', 'p-bg': '#fff' } }] },
+      dark: PAPER.modes.dark!,
+    }, { title: 'Бумага', root: PAPER.root })
+    const fallbacks = resolveOver(paper, 'paper').tokens.default!.fallbacks
+    expect([...fallbacks.get('light')![0]!.tokens.keys()]).toEqual(['p-bg'])
+    // В тёмном `p-bg` свой, а `b-bg` даёт компонент: фолбэков режима по умолчанию нет вовсе.
+    expect(fallbacks.get('dark')).toBeUndefined()
   })
 })

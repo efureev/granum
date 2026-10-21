@@ -5,25 +5,39 @@
  */
 import type { GranumComponentThemeTokens, GranumModeFallback, GranumThemeData, GranumTokenRef } from '../contract'
 import type { ComponentNode, ProviderNode } from './providerNode'
+import type { ThemePatch, TokenNature } from './themeData'
 import { themePairValue } from '../runtime/manifest'
 import { DEFAULT_ACTIVATION_ATTRIBUTE, DEFAULT_ACTIVATION_VALUE } from './activation'
-import { ThemeResolutionError } from './errors'
+import { ThemeDataError, ThemeResolutionError } from './errors'
 import { ownsThemes } from './providerNode'
-import { DEFAULT_MODE, modeChain, themeModeOrder } from './themeData'
+import { satisfies } from './semver'
+import { checkThemeData, DEFAULT_MODE, flattenThemeComponents, mergeThemePatch, modeChain, themeModeOrder, unflattenThemeComponents } from './themeData'
 
 /** Идентификатор источника для вкладов самого приложения. */
 export const APP_THEME_SOURCE = '(app)'
 
-/**
- * Тема-объект приложения: полные данные. `extends` называет тему каталога,
- * чьи токены компонентов служат основой: данные он не дополняет —
- * наследование данных приложение разрешает само, до конфига.
- */
-export interface GranumAppTheme extends GranumThemeData {
-  readonly extends?: string
+interface GranumAppThemeSources {
   /** Файлы, из которых собран объект: их правка в dev перезагружает конфиг. */
   readonly sources?: readonly string[]
 }
+
+/** Тема-объект без `extends`: полные данные. */
+export interface GranumAppThemeData extends GranumThemeData, GranumAppThemeSources {
+  readonly extends?: undefined
+}
+
+/**
+ * Тема-объект с `extends` — темой каталога по id или другим объектом: только
+ * отличия, `id` и `title` свои. Резолвер сливает их с родителем до проверок (A-22).
+ */
+export interface GranumAppThemePatch extends ThemePatch, GranumAppThemeSources {
+  readonly id: string
+  readonly title: string
+  readonly extends: string | GranumAppTheme
+}
+
+/** Тема-объект приложения: полные данные или отличия от родителя. */
+export type GranumAppTheme = GranumAppThemeData | GranumAppThemePatch
 
 /** Режим приложения поверх режимов темы. */
 export interface GranumModeDefinition {
@@ -93,14 +107,31 @@ export type ComponentThemesInput = Readonly<Record<string, Readonly<Record<strin
 export type ThemeSource = 'app' | 'provider' | 'default'
 export type ModesSource = 'explicit' | 'theme'
 
+/** Исход сверки `targets` темы с пакетом графа (A-38). */
+export interface ThemeTargetCheck {
+  readonly providerId: string
+  readonly range: string
+  /** Версия пакета в графе; нет — пакета нет в графе или его версия неизвестна. */
+  readonly version?: string
+  readonly status: 'match' | 'mismatch' | 'absent' | 'unknown-version'
+}
+
 export interface ResolvedTheme {
   readonly id: string
   readonly title: string
   /** Владелец каталога; у темы-объекта приложения — {@link APP_THEME_SOURCE}. */
   readonly providerId: string
+  /** Полные данные; значения раздела `components` слиты в `root`/`modes`, раздел остаётся индексом. */
   readonly data: GranumThemeData
+  /**
+   * У темы-объекта с `extends` — полные данные родителя: унаследованное идёт слоем
+   * данных его темы, а слоем приложения — только собственные отличия (A-22, T-7).
+   */
+  readonly inherited?: { readonly id: string, readonly data: GranumThemeData }
   /** Цепочка тем для токенов компонентов: сама тема, затем предки по каталогу. */
   readonly chain: readonly string[]
+  /** Сверка `targets` с пакетами графа; у темы без `targets` пусто. */
+  readonly targets: readonly ThemeTargetCheck[]
 }
 
 export interface ResolvedMode {
@@ -133,6 +164,10 @@ export type ResolvedThemeWarning
   = | { readonly kind: 'component-theme-unknown', readonly providerId: string, readonly component: string, readonly theme: string }
     | { readonly kind: 'mode-extends-unresolved', readonly theme: string, readonly mode: string, readonly base: string }
     | { readonly kind: 'mode-extends-cycle', readonly theme: string, readonly chain: readonly string[] }
+    | { readonly kind: 'theme-target-mismatch', readonly theme: string, readonly providerId: string, readonly range: string, readonly version: string }
+    | { readonly kind: 'theme-component-unknown', readonly theme: string, readonly providerId: string, readonly component: string }
+    /** Токен раздела, которого компонент не требует извне, или хук в данных темы (A-37). */
+    | { readonly kind: 'theme-token-foreign', readonly theme: string, readonly providerId: string, readonly component: string, readonly token: string, readonly place: 'section' | 'hook' }
 
 export interface ResolvedThemes {
   /** Темы сборки в порядке конфига; пусто — тем нет, слой `themes` пуст. */
@@ -295,32 +330,163 @@ function themeChain(owner: ProviderNode | undefined, id: string | undefined): st
   return chain
 }
 
-function materializePick(pick: ThemePick, owner: ProviderNode | undefined, themeData: ThemeDataInput): ResolvedTheme {
-  if (pick.kind === 'app') {
-    const { extends: base, sources: _sources, ...data } = pick.theme
-    // Неизвестная база молча не дала бы токенов компонентов своей цепочки.
-    if (base !== undefined && owner?.theme.catalog[base] === undefined) {
+function catalogData(owner: ProviderNode, id: string, themeData: ThemeDataInput): GranumThemeData {
+  const data = themeData[owner.id]?.[id]
+  if (!data) {
+    throw new ThemeResolutionError(
+      'theme-data-missing',
+      `the data of theme '${id}' of '${owner.id}' was not supplied to the resolver (expected at '${owner.theme.catalog[id]?.data}').`,
+      id,
+    )
+  }
+  return data
+}
+
+function appThemeIssue(id: string, data: unknown): void {
+  const issue = checkThemeData(data)
+  if (issue)
+    throw new ThemeDataError(APP_THEME_SOURCE, id, issue.path ? `themes: ${issue.path}` : 'themes', issue.details, { reason: issue.reason })
+}
+
+/**
+ * Тема-объект: с `extends` — родитель плюс отличия по C-27, проверенные уже
+ * целиком; цепочка — сама тема и цепочка родителя по каталогу. Без `extends`
+ * данные проверяются и здесь: резолвер зовут и без проверки конфига.
+ */
+function appThemeData(
+  theme: GranumAppTheme,
+  owner: ProviderNode | undefined,
+  themeData: ThemeDataInput,
+  visiting: readonly GranumAppTheme[] = [],
+): { readonly data: GranumThemeData, readonly chain: readonly string[], readonly inherited?: { readonly id: string, readonly data: GranumThemeData } } {
+  if (visiting.includes(theme))
+    throw new ThemeResolutionError('theme-extends-cycle', `theme objects extend each other in a cycle: ${[...visiting, theme].map(t => t.id).join(' -> ')}.`, theme.id)
+  if (theme.extends === undefined) {
+    const { extends: _base, sources: _sources, ...own } = theme
+    appThemeIssue(own.id, own)
+    return { data: own, chain: [own.id] }
+  }
+  const { extends: base, sources: _sources, ...own } = theme
+  let parent: GranumThemeData
+  let parentChain: readonly string[]
+  if (typeof base === 'string') {
+    // Неизвестная база молча не дала бы ни значений, ни токенов компонентов своей цепочки.
+    if (!owner || owner.theme.catalog[base] === undefined) {
       const available = owner ? Object.keys(owner.theme.catalog) : []
       throw new ThemeResolutionError(
         'unknown-theme',
         owner
-          ? `theme object '${data.id}' extends '${base}', which is not in the catalog of '${owner.id}'. Available: ${available.join(', ') || '—'}.`
-          : `theme object '${data.id}' extends '${base}', but no provider in the graph declares a theme catalog.`,
+          ? `theme object '${own.id}' extends '${base}', which is not in the catalog of '${owner.id}'. Available: ${available.join(', ') || '—'}.`
+          : `theme object '${own.id}' extends '${base}', but no provider in the graph declares a theme catalog.`,
         base,
         available,
       )
     }
-    return { id: data.id, title: data.title, providerId: APP_THEME_SOURCE, data, chain: [data.id, ...themeChain(owner, base)] }
+    parent = catalogData(owner, base, themeData)
+    parentChain = themeChain(owner, base)
   }
-  const data = themeData[pick.providerId]?.[pick.id]
-  if (!data) {
-    throw new ThemeResolutionError(
-      'theme-data-missing',
-      `the data of theme '${pick.id}' of '${pick.providerId}' was not supplied to the resolver (expected at '${pick.data}').`,
-      pick.id,
-    )
+  else {
+    const resolved = appThemeData(base, owner, themeData, [...visiting, theme])
+    parent = resolved.data
+    parentChain = resolved.chain
   }
-  return { id: pick.id, title: data.title, providerId: pick.providerId, data, chain: themeChain(owner, pick.id) }
+  const pureParent = unflattenThemeComponents(parent)
+  const data = mergeThemePatch(pureParent, own, {
+    id: own.id,
+    title: own.title,
+    ...(own.description !== undefined ? { description: own.description } : {}),
+    ...(own.docs !== undefined ? { docs: own.docs } : {}),
+  })
+  appThemeIssue(own.id, data)
+  return { data, chain: [own.id, ...parentChain], inherited: { id: parentChain[0]!, data: flattenThemeComponents(pureParent) } }
+}
+
+/** Сверка `targets` темы с версиями пакетов графа (A-38): пакет вне графа и без версии не сверяется. */
+export function checkThemeTargets(data: Pick<GranumThemeData, 'targets'>, providers: ReadonlyMap<string, ProviderNode>): ThemeTargetCheck[] {
+  return Object.entries(data.targets ?? {}).map(([providerId, range]): ThemeTargetCheck => {
+    const provider = providers.get(providerId)
+    if (!provider)
+      return { providerId, range, status: 'absent' }
+    if (provider.version === undefined)
+      return { providerId, range, status: 'unknown-version' }
+    return { providerId, range, version: provider.version, status: satisfies(provider.version, range) ? 'match' : 'mismatch' }
+  })
+}
+
+function materializePick(pick: ThemePick, owner: ProviderNode | undefined, themeData: ThemeDataInput, providers: ReadonlyMap<string, ProviderNode>): ResolvedTheme {
+  if (pick.kind === 'app') {
+    const { data, chain, inherited } = appThemeData(pick.theme, owner, themeData)
+    return {
+      id: data.id,
+      title: data.title,
+      providerId: APP_THEME_SOURCE,
+      data: flattenThemeComponents(data),
+      ...(inherited !== undefined ? { inherited } : {}),
+      chain,
+      targets: checkThemeTargets(data, providers),
+    }
+  }
+  const data = catalogData(owner!, pick.id, themeData)
+  return { id: pick.id, title: data.title, providerId: pick.providerId, data: flattenThemeComponents(data), chain: themeChain(owner, pick.id), targets: checkThemeTargets(data, providers) }
+}
+
+/** Токены значений раздела `components` одного компонента. */
+function sectionTokens(values: NonNullable<GranumThemeData['components']>[string][string]): string[] {
+  return [...new Set([...Object.keys(values.root ?? {}), ...Object.values(values.modes ?? {}).flatMap(tokens => Object.keys(tokens))])].sort()
+}
+
+function matchesToken(pattern: string, token: string): boolean {
+  return pattern.endsWith('*') ? token.startsWith(pattern.slice(0, -1)) : pattern === token
+}
+
+/**
+ * Чьи значения задаёт тема (A-37): раздел — по манифестам графа, хуки в
+ * `root`/`modes` — у компонентов селекции. Токен, пришедший в `root`/`modes`
+ * слиянием раздела, судится как токен раздела: одна дыра — одна находка.
+ */
+function checkThemeValues(
+  theme: ResolvedTheme,
+  providers: ReadonlyMap<string, ProviderNode>,
+  registry: Readonly<Record<string, TokenNature>>,
+  selected: readonly ComponentNode[],
+  warnings: ResolvedThemeWarning[],
+): void {
+  const fromSections = new Set<string>()
+  for (const [providerId, byComponent] of Object.entries(theme.data.components ?? {})) {
+    const provider = providers.get(providerId)
+    for (const [name, values] of Object.entries(byComponent)) {
+      const tokens = sectionTokens(values)
+      for (const token of tokens)
+        fromSections.add(token)
+      if (!provider)
+        continue
+      const component = provider.components.find(c => c.name === name)
+      if (!component) {
+        warnings.push({ kind: 'theme-component-unknown', theme: theme.id, providerId, component: name })
+        continue
+      }
+      // Объектный провайдер до медленного пути: требований ещё нет, судить не по чему.
+      if (provider.form === 'object' && component.consumesTokens.length === 0)
+        continue
+      const required = new Set(component.requiresTokens)
+      for (const token of tokens) {
+        if (!required.has(`--${token}`) || Object.hasOwn(registry, token))
+          warnings.push({ kind: 'theme-token-foreign', theme: theme.id, providerId, component: name, token, place: 'section' })
+      }
+    }
+  }
+  // Токен, который компонент требует извне, — его токен темы, даже если он подходит под шаблон хука (`--btn-*`).
+  const hooks = selected.flatMap(component => component.hookTokens.map(pattern => ({ component, pattern, required: new Set(component.requiresTokens) })))
+  if (hooks.length === 0)
+    return
+  const own = new Set([...Object.keys(theme.data.root), ...Object.values(theme.data.modes).flatMap(mode => Object.keys(mode.tokens))])
+  for (const token of [...own].sort()) {
+    if (fromSections.has(token))
+      continue
+    const hook = hooks.find(({ pattern, required }) => !required.has(`--${token}`) && matchesToken(pattern, `--${token}`))
+    if (hook)
+      warnings.push({ kind: 'theme-token-foreign', theme: theme.id, providerId: hook.component.providerId, component: hook.component.name, token, place: 'hook' })
+  }
 }
 
 function themeModes(theme: ResolvedTheme, template: string): ResolvedMode[] {
@@ -486,6 +652,7 @@ export function resolveThemes(
   input: ResolveThemesInput = {},
   components: readonly ComponentNode[] = [],
   themeData: ThemeDataInput = {},
+  registry: Readonly<Record<string, TokenNature>> = {},
 ): ResolvedThemes {
   const plan = planThemes(providers, input)
   const attribute = input.activation?.attribute ?? DEFAULT_ACTIVATION_ATTRIBUTE
@@ -508,11 +675,21 @@ export function resolveThemes(
   if (!template.includes('{mode}'))
     throw new ThemeResolutionError('activation-collision', `'activation.value' must contain '{mode}' (got '${template}'): without it every mode activates with the same value.`, template)
 
-  const resolved = plan.themes.map(planned => ({ planned, theme: materializePick(planned.pick, plan.owner, themeData) }))
+  const graph = new Map(providers.map(provider => [provider.id, provider]))
+  const resolved = plan.themes.map(planned => ({ planned, theme: materializePick(planned.pick, plan.owner, themeData, graph) }))
+  for (const { theme } of resolved) {
+    for (const check of theme.targets) {
+      if (check.status === 'mismatch')
+        warnings.push({ kind: 'theme-target-mismatch', theme: theme.id, providerId: check.providerId, range: check.range, version: check.version! })
+    }
+    checkThemeValues(theme, graph, registry, components, warnings)
+  }
 
   const knownThemes = new Set(plan.owner ? Object.keys(plan.owner.theme.catalog) : [])
-  for (const { theme } of resolved)
-    knownThemes.add(theme.id)
+  for (const { theme } of resolved) {
+    for (const id of theme.chain)
+      knownThemes.add(id)
+  }
   for (const component of components) {
     for (const id of Object.keys(component.themeTokens)) {
       if (!knownThemes.has(id))

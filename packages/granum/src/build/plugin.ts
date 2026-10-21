@@ -6,9 +6,11 @@
  * browser/node и пишет `granum.manifest.json`.
  */
 import type { Plugin, ResolvedConfig, Rolldown, UserConfig } from 'vite'
-import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumManifest, GranumManifestCatalogEntry, GranumManifestWarning, GranumProvider, GranumThemeData } from '../contract'
+import type { GranumComponentDescriptor, GranumComponentThemeTokens, GranumManifest, GranumManifestCatalogEntry, GranumManifestWarning, GranumProvider, GranumThemeCatalogEntry, GranumThemeData } from '../contract'
+import type { InvalidProviderReason } from '../core/errors'
 import type { ProviderNode } from '../core/providerNode'
-import type { TokenNature } from '../core/themeData'
+import type { GranumAppTheme } from '../core/resolveThemes'
+import type { ThemePatch, TokenNature } from '../core/themeData'
 import type { GranumEngine } from '../engine/types'
 import type { BoundaryViolation, BundleAnalysis, BundleLike } from './graph'
 import { createHash } from 'node:crypto'
@@ -21,15 +23,16 @@ import { normalizePath } from 'vite'
 import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
 import { validateProvider } from '../contract/validate'
 import { sortedUnique } from '../core/dedupe'
-import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, ManifestNotFoundError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidProviderError, ManifestNotFoundError, PackageExportsError, ThemeSourceError, UndeclaredDependencyError } from '../core/errors'
 import { ownerOf, toProviderNode } from '../core/providerNode'
 import { splitComponentKey } from '../core/registry'
-import { checkThemeData, DEFAULT_MODE, mergeThemePatch, missingRegistryTokens, themeModeOrder, themeTokenNames } from '../core/themeData'
+import { checkThemeData, DEFAULT_MODE, flattenThemeComponents, mergeThemePatch, missingRegistryTokens, themeModeOrder, themeTokenNames } from '../core/themeData'
 import { scanCssDeclarations } from '../node/cssDeclarations'
 import { collectImportSpecifiers } from '../node/imports'
 import { loadPackageManifest, MANIFEST_FILE_NAME, normalizePackagePath, writeManifestSync } from '../node/manifest'
 import { subcomponentsFromExports } from '../node/subcomponents'
 import { readComponentThemesDir, readRegistry, readThemeDataFile, themeDataError } from '../node/themeFiles'
+import { loadThemeSource } from '../node/themeSource'
 import { extractRequiredTokenUses, fallbackOnlyTokens, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
@@ -65,6 +68,19 @@ export interface GranumProviderPluginOptions {
   readonly log?: (line: string) => void
 }
 
+/** Запись каталога на сборке: готовые данные или исходник темы; `data` — путь данных в `dist`. */
+type CatalogPath
+  = | { readonly kind: 'data', readonly data: string }
+    | { readonly kind: 'source', readonly source: string, readonly ignore: readonly string[], readonly data: string }
+
+/** Метаданные записи индекса каталога — из записи или из theme.json исходника. */
+interface CatalogMeta {
+  readonly title: string
+  readonly description?: string
+  readonly docs?: string
+  readonly extends?: string
+}
+
 interface ComponentSourceEntry {
   readonly descriptor: GranumComponentDescriptor
   readonly dir: string
@@ -83,6 +99,8 @@ const GRANUM_CONTRACT = '@feugene/granum/contract'
 const GRANUM_RUNTIME = '@feugene/granum/runtime'
 /** Любая точка входа granum в импортах `dist`. */
 const GRANUM_PACKAGE = /^@feugene\/granum(?:\/|$)/
+/** Причины данных, у которых нет своей причины провайдера: их ошибка исходника идёт как есть. */
+const GENERIC_DATA_REASONS = new Set(['invalid-theme-data', 'token-key-prefix'])
 
 /**
  * Точки входа `./contract` и `./runtime` того granum, что собирает провайдер,
@@ -168,7 +186,20 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     tokensCss: provider.theme?.tokensCss !== undefined ? packagePath(provider.theme.tokensCss, 'theme.tokensCss') : undefined,
     baseCss: provider.theme?.baseCss !== undefined ? packagePath(provider.theme.baseCss, 'theme.baseCss') : undefined,
     registry: provider.theme?.registry !== undefined ? packagePath(provider.theme.registry, 'theme.registry') : undefined,
-    catalog: Object.fromEntries(Object.entries(provider.theme?.catalog ?? {}).map(([id, entry]) => [id, packagePath(entry.data, `theme.catalog.${id}.data`)])),
+    catalog: Object.fromEntries(Object.entries(provider.theme?.catalog ?? {}).map(([id, entry]): [string, CatalogPath] => {
+      if ('source' in entry) {
+        const source = packagePath(entry.source, `theme.catalog.${id}.source`).replace(/\/+$/, '')
+        return [id, { kind: 'source', source, ignore: entry.ignore ?? [], data: `${source}.json` }]
+      }
+      return [id, { kind: 'data', data: packagePath(entry.data, `theme.catalog.${id}.data`) }]
+    })),
+  }
+  const writtenBy = new Map<string, string>()
+  for (const [id, path] of Object.entries(themePaths.catalog)) {
+    const other = writtenBy.get(path.data)
+    if (other !== undefined)
+      throw new InvalidProviderError(provider.id, 'invalid-theme-data', `catalog themes '${other}' and '${id}' write the same file '${path.data}' to dist.`)
+    writtenBy.set(path.data, id)
   }
   const engineModule = options.engineModule ? packagePath(options.engineModule, 'engineModule') : null
   const log = options.log ?? ((line: string) => process.stdout.write(`[granum] ${line}\n`))
@@ -482,22 +513,66 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
       const catalog: Record<string, GranumManifestCatalogEntry> = {}
       const themeData = new Map<string, GranumThemeData>()
+      const themeMeta = new Map<string, CatalogMeta>()
+      const building: string[] = []
+      /** Исходник записи: данные, метаданные и родитель — из записи каталога или theme.json (C-43). */
+      const readCatalogEntry = (id: string): { readonly meta: CatalogMeta, readonly patch: ThemePatch } => {
+        const path = themePaths.catalog[id]!
+        if (path.kind === 'data') {
+          const entry = theme!.catalog![id] as GranumThemeCatalogEntry
+          const meta: CatalogMeta = {
+            title: entry.title,
+            ...(entry.description !== undefined ? { description: entry.description } : {}),
+            ...(entry.docs !== undefined ? { docs: entry.docs } : {}),
+            ...(entry.extends !== undefined ? { extends: entry.extends } : {}),
+          }
+          return { meta, patch: readThemeDataFile(provider.id, id, join(sourceDir, path.data), { partial: entry.extends !== undefined }) }
+        }
+        let loaded: GranumAppTheme
+        try {
+          loaded = loadThemeSource(join(sourceDir, path.source), { ignore: path.ignore })
+        }
+        catch (cause) {
+          // Нарушение C-40/C-41 — ошибка провайдера своей причиной; остальное — ошибка исходника как есть (§14).
+          if (cause instanceof ThemeSourceError && cause.dataReason !== undefined && !GENERIC_DATA_REASONS.has(cause.dataReason))
+            throw new InvalidProviderError(provider.id, cause.dataReason as InvalidProviderReason, `theme '${id}': ${cause.message}`)
+          throw cause
+        }
+        const { extends: parent, sources: _sources, ...patch } = loaded
+        if (patch.id !== id)
+          throw new InvalidProviderError(provider.id, 'theme-id-mismatch', `the source of catalog theme '${id}' (${path.source}/theme.json) declares id '${patch.id}'; the id and the catalog key must match.`)
+        if (typeof parent === 'object')
+          throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `the source of catalog theme '${id}' extends an object; a catalog theme extends a catalog theme by id.`)
+        if (parent !== undefined && !Object.hasOwn(theme!.catalog!, parent))
+          throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `theme '${id}' extends '${parent}', which is not in the catalog.`)
+        const meta: CatalogMeta = {
+          title: patch.title,
+          ...(patch.description !== undefined ? { description: patch.description } : {}),
+          ...(patch.docs !== undefined ? { docs: patch.docs } : {}),
+          ...(parent !== undefined ? { extends: parent } : {}),
+        }
+        return { meta, patch }
+      }
       const buildTheme = (id: string): GranumThemeData => {
         const done = themeData.get(id)
         if (done)
           return done
-        const entry = theme!.catalog![id]!
-        const path = themePaths.catalog[id]!
-        const meta = {
+        if (building.includes(id))
+          throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `catalog themes extend each other in a cycle: ${[...building, id].join(' -> ')}.`)
+        building.push(id)
+        const { meta, patch } = readCatalogEntry(id)
+        themeMeta.set(id, meta)
+        const identity = {
           id,
-          title: entry.title,
-          ...(entry.description !== undefined ? { description: entry.description } : {}),
-          ...(entry.docs !== undefined ? { docs: entry.docs } : {}),
+          title: meta.title,
+          ...(meta.description !== undefined ? { description: meta.description } : {}),
+          ...(meta.docs !== undefined ? { docs: meta.docs } : {}),
         }
-        const source = readThemeDataFile(provider.id, id, join(sourceDir, path), { partial: entry.extends !== undefined })
-        const data = entry.extends !== undefined
-          ? mergeThemePatch(buildTheme(entry.extends), source, meta)
-          : { ...source, ...meta }
+        // Без родителя исходник обязан быть полным: форму проверит `checkThemeData` ниже.
+        const data = meta.extends !== undefined
+          ? mergeThemePatch(buildTheme(meta.extends), patch, identity)
+          : { ...patch, ...identity } as GranumThemeData
+        building.pop()
         const issue = checkThemeData(data)
         if (issue)
           throw themeDataError(provider.id, id, issue)
@@ -517,19 +592,20 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         return data
       }
       for (const id of Object.keys(themePaths.catalog).sort()) {
-        const entry = theme!.catalog![id]!
         const data = buildTheme(id)
-        writeOut(outDir, themePaths.catalog[id]!, `${JSON.stringify(data, null, 2)}\n`)
+        const meta = themeMeta.get(id)!
+        const dataPath = themePaths.catalog[id]!.data
+        // Значения раздела — ещё и слитыми: читатель до 3.10 раздела не знает (C-44).
+        writeOut(outDir, dataPath, `${JSON.stringify(flattenThemeComponents(data), null, 2)}\n`)
         for (const token of themeTokenNames(data))
           declaredByTheme.add(`--${token}`)
         catalog[id] = {
-          title: entry.title,
-          ...(entry.description !== undefined ? { description: entry.description } : {}),
-          ...(entry.docs !== undefined ? { docs: entry.docs } : {}),
-          ...(entry.extends !== undefined ? { extends: entry.extends } : {}),
-          data: themePaths.catalog[id]!,
+          ...meta,
+          data: dataPath,
           modes: themeModeOrder(data),
           defaultMode: data.defaultMode ?? DEFAULT_MODE,
+          ...(data.version !== undefined ? { version: data.version } : {}),
+          ...(data.targets !== undefined ? { targets: data.targets } : {}),
         }
       }
 

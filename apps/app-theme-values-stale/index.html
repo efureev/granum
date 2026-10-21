@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>granum app-theme-values-stale — тема отстала от пакета</title>
+  </head>
+  <body>
+    <header class="demo-head">
+      <p class="demo-kicker">granum · демо-стенд <code>app-theme-values-stale</code></p>
+      <h1>Тема отстала от пакета компонентов</h1>
+      <p class="demo-lead">
+        Тема написана под <code>valued-ds ^0.9.0</code>, а в сборке 1.0.0: у неё нет значений компонента, которого тогда не было, она задаёт хук и значения компонента, которого нет. Сборка предупреждает, <code>doctor</code> называет каждое место.
+      </p>
+      <p class="demo-run">Проверка: <code>yarn workspace @granum-apps/app-theme-values-stale verify</code></p>
+    </header>
+    <div id="app" class="demo-stage"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

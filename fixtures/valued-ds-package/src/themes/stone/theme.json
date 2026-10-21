@@ -1,0 +1,19 @@
+{
+  "id": "stone",
+  "title": "Камень",
+  "description": "Базовая тема пакета: тёплый серый и спокойный акцент.",
+  "version": "1.0.0",
+  "targets": {
+    "@granum-fixtures/valued-ds": "^1.0.0"
+  },
+  "modes": {
+    "light": {
+      "title": "Светлый",
+      "colorScheme": "light"
+    },
+    "dark": {
+      "title": "Тёмный",
+      "colorScheme": "dark"
+    }
+  }
+}

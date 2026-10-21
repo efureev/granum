@@ -8,6 +8,7 @@ import type { ProviderNode } from './providerNode'
 import type { ComponentRegistry } from './registry'
 import type { ComponentCssRef, ComponentSelection, ResolvedSelection } from './resolveSelection'
 import type { ComponentThemesInput, GranumActivation, GranumThemeConfig, ResolvedThemes, ThemeDataInput } from './resolveThemes'
+import type { TokenNature } from './themeData'
 import type { ResolvedTokens, ThemeTokenSet } from './tokenLayers'
 import { createDebug } from './debug'
 import { expandProviders } from './expandProviders'
@@ -31,6 +32,8 @@ export interface GranumResolveInput {
   readonly themeData?: ThemeDataInput
   /** Токены компонентов объектной формы, прочитанные из `themesDir`. */
   readonly componentThemes?: ComponentThemesInput
+  /** Реестр владельца каталога: глобальный токен в разделе `components` темы — находка (A-37). */
+  readonly themeRegistry?: Readonly<Record<string, TokenNature>>
 }
 
 export type ResolutionWarning
@@ -85,7 +88,7 @@ export function resolveGranum(input: GranumResolveInput): GranumResolution {
   const themes = resolveThemes(providers, {
     ...(input.themes !== undefined ? { themes: input.themes } : {}),
     ...(input.activation !== undefined ? { activation: input.activation } : {}),
-  }, components, input.themeData)
+  }, components, input.themeData, input.themeRegistry)
 
   const warnings: ResolutionWarning[] = [...themes.warnings]
   for (const provider of providers) {

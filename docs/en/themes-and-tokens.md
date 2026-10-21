@@ -3,8 +3,8 @@
 > 🇷🇺 Русская версия: [`../ru/themes-and-tokens.md`](../ru/themes-and-tokens.md).
 
 A token is a CSS custom property (`--th-accent`). A **theme** is a design language:
-a complete set of token values without selectors, mode-independent (`root`) and per
-**mode** (`light`, `dark`, then anything). The application lists the build themes:
+a complete set of token values without selectors, mode-independent (`root`), per
+**mode** (`light`, `dark`, then anything) and the values of components. The application lists the build themes:
 one **default** theme — in the shared sheet and under `:root`, the other ones are
 **additional** — each in a sheet of its own. A theme and a mode are switched on by a
 pair in an attribute on the root and switch at runtime. Every name in data, configs
@@ -16,7 +16,7 @@ with the field path in an application).
 
 | Concept | What it is |
 |---|---|
-| theme | `GranumThemeData`: `id` (slug `^[a-z][a-z0-9-]*$`), `title`, `root`, `modes`, `defaultMode` (`light` by default), `baseCss`, `extensions` |
+| theme | `GranumThemeData`: `id` (slug `^[a-z][a-z0-9-]*$`), `title`, `root`, `modes`, `defaultMode` (`light` by default), `baseCss`, `extensions`, `version`, `targets`, `components` |
 | mode | values of mode-dependent tokens: `{ colorScheme, tokens, extends?, title?, fallbacks? }`; the name is a slug without a hyphen, `root` is forbidden |
 | pair | the value of the activation attribute: `<theme>-<mode>` (`slate-light`, `ink-dim`) |
 | catalog | the themes a provider declares; there is one catalog owner in the graph |
@@ -137,9 +137,10 @@ by the variant.
 A build theme token's value in a mode is assembled from layers, each overriding the
 previous:
 
-1. theme data — `root`, then the mode chain;
+1. theme data — `root`, then the mode chain, together with the values of the `components` section;
+   for a theme object with `extends`, the data of its parent;
 2. component tokens for that theme — in selection order;
-3. the application theme object;
+3. the application theme object — for an object with `extends`, only its own differences;
 4. `modes.define` of the theme's entry;
 5. `modes.tokenOverrides` of the theme's entry.
 
@@ -147,13 +148,47 @@ A token declared in at least one mode gets a value in every mode: along the mode
 `extends` chain, otherwise from the default mode. Such a value is a fallback: it does
 not override what another layer already gave the mode. A value taken from the default
 mode brings that mode's `@supports` fallbacks for the token along, ahead of the mode's
-own. One function computes the value
+own. A theme fallback is written for the theme's value: a token whose value in the pair
+comes from a component gets no theme fallbacks. One function computes the value
 for CSS, the report and the CLI: `granum tokens <id:Name> --deep` shows the layer chain
 for each mode of the default theme together with the theme and mode the value came from.
 
+## Component values in the theme
+
+Token names are the contract of the component package, values belong to the theme.
+A theme carries the values of components in the `components` section of its data:
+package → component → `root` and modes. So a new theme for a component package does
+not edit the package, and a theme published apart or living in an application does
+not set component values blindly — granum checks them against the manifests of the graph.
+
+```ts
+components: {
+  '@acme/ui': {
+    Button: { root: { 'btn-radius': '6px' }, modes: { light: { 'btn-bg': '#fff' }, dark: { 'btn-bg': '#111' } } },
+  },
+}
+```
+
+A value has one place: a token in two sections, in a section and in `root`/`modes` of
+the theme, or in `root` and a mode of one section is the error `theme-token-collision`.
+A section mode is a mode of the theme, a section package is in the theme's `targets`.
+Section values are theme data: the same layer and the same mode chains as
+`root`/`modes`.
+
+Whose values they are is checked against the manifests of the graph, not against the
+selection: a theme is written for the whole package. A package missing from the graph —
+its section is skipped. A missing component — `theme-component-unknown`. A token the
+component does not require from outside — `theme-token-foreign`: a hook, a token the
+component assigns itself, a global registry token (its place is `root`/`modes`) or a
+typo. A theme does not set hooks at all: a value the theme gives makes the token a theme
+token, and a hook in `root`/`modes` of the theme is the same finding. The values apply
+despite a finding: the theme author decides.
+
 ## Component tokens per theme
 
-Component tokens live next to the component, in the `themesDir` folder: `<theme>/root.json`
+Values on the component side are for themes of a foreign catalog or for a package that
+has not moved its values into themes yet. They live next to the component, in the
+`themesDir` folder: `<theme>/root.json`
 and `<theme>/modes/<mode>.json` (or `.css` with one flat block). The provider build puts them
 into the manifest. For every build theme a token's value is looked up as follows: the mode,
 its ancestors by `extends`, the default mode — and in each of them the theme first, then its
@@ -165,6 +200,79 @@ one unless that is its ancestor.
 A component may ship tokens for themes of a foreign catalog — a companion for a theme
 of the design system: they apply when that theme is in the build. A theme folder that no
 catalog of the graph declares is a `component-theme-unknown` warning, not an error.
+
+## Theme source
+
+A theme is easiest to keep as a folder — a source: `theme.json` with the metadata and
+the modes, the values in files where they belong. The layout is one for a catalog
+theme, a theme package and an application theme.
+
+```text
+themes/stone/
+  theme.json                         id, title, description, version, targets, extends, defaultMode, modes, extensions
+  root.json                          mode-independent tokens
+  modes/light.json                   mode tokens
+  base.css                           baseCss: @font-face and the like
+  components/@acme/ui/Button/root.json
+  components/@acme/ui/Button/modes/dark.json
+  README.md                          documentation — not read
+```
+
+The key order of `modes` in `theme.json` is the order of modes; every mode file is
+declared there, and in a source with `extends` a mode without fields of its own is an
+empty entry `"dark": {}`. A value file is JSON or CSS with one flat block. `*.md` and
+hidden files are not read; anything else that is not theme data is named in `ignore`,
+otherwise a stray file is a `ThemeSourceError`: a silently skipped file is lost values.
+
+```ts
+import { loadThemeSource } from '@feugene/granum/node'
+
+const reef = loadThemeSource(new URL('./src/themes/reef/', import.meta.url), { ignore: ['notes.json'] })
+```
+
+A provider puts a source into its catalog as `{ source: 'themes/stone', ignore? }`: the
+provider build reads it and writes the data into `dist` (section values are also merged
+into `root`/`modes` there — granum before 3.10 applies them).
+
+## Inheritance and copy
+
+A theme starts in one of two ways, and the difference is not syntax but what happens to
+the theme when its source changes.
+
+| | `extends` — inheritance | `granum theme copy` — copy |
+|---|---|---|
+| Resolved | on every build of whoever builds the theme | once, by the command |
+| A change of the source | reaches the theme | does not reach it |
+| A new token of the source | the theme gets its value silently | `theme-incomplete` names it — the author decides |
+| Take it when | the theme is a variation that must follow its source | the theme is a language of its own |
+
+```bash
+granum theme copy stone themes/moss --id moss --title "Moss" --config granum.config.ts
+```
+
+A copy resolves the inheritance of the theme and the component values of the source,
+including those on the component side (`themesDir`), and keeps the inheritance of
+modes: that is a link inside one theme. The values per pair of a copy equal those of
+the source at the moment of copying.
+
+## Version and target packages
+
+`version` is the version of the theme, its own, not the version of its package.
+`targets` are the packages whose versions the theme is written for:
+
+```json
+{ "version": "2.1.0", "targets": { "@acme/ui": "^1.2.0" } }
+```
+
+A package whose values the theme sets in `components` must be in `targets`. An heir
+merges `targets` with the parent's per package: its own range overrides the parent's
+only for its own package, so a section inherited from the parent keeps its target.
+`version` is not inherited. The build
+checks the ranges against the manifest versions of the graph: going out of range is a
+warning in the build log and the `doctor` finding `theme-target-mismatch`; a package
+missing from the graph is not checked. A version is a coarse signal, completeness is a
+precise one: a theme for `^1` may be complete on `2.0`, and a theme in range may not —
+then `theme-incomplete` says so.
 
 ## CSS layout
 
@@ -250,27 +358,34 @@ sheet as a module, and the manifest carries the asset address.
 
 ## An application's own theme
 
-A `themes` entry also accepts a `GranumThemeData` object — complete data. Inheriting
-from a catalog theme is resolved by the application itself, before the config, and
-`extends` tells granum whose component tokens to build on:
+A `themes` entry also accepts a `GranumThemeData` object — an application theme or a
+theme from a package of its own. With `extends` the object carries only differences:
+granum merges it with the parent — a catalog theme by id or another object — before
+any check, and the catalog chain also gives component tokens. So a theme package
+extends a catalog theme live: changes of the parent arrive on the next application build.
 
 ```ts
-themes: [{
-  theme: {
-    ...brandData,          // complete data: id, title, root, modes
-    extends: 'paper',      // component tokens for modes where the theme sets none
-    sources: ['src/theme'],
-  },
-}]
+import tide from '@acme/theme-tide'          // the theme object of a theme package: extends: 'stone'
+
+themes: [
+  { theme: 'stone', default: true },
+  tide,
+  { theme: { ...loadThemeSource(new URL('./src/themes/reef/', import.meta.url)) } },
+]
 ```
 
 An `extends` absent from the catalog is the error `unknown-theme` listing the available
-ones: otherwise the component tokens of that chain would silently not apply.
+ones: otherwise the values of that chain would silently not apply. Objects that extend each
+other in a cycle are `theme-extends-cycle`. Without `extends` the object data must be
+complete; an object's `id` and `title` are always its own.
 
-The theme object is a layer after component tokens: a button token's value in one of its
-modes overrides the component token. `sources` are the files the theme is assembled from:
-the config is read once per Vite process, so editing them in dev restarts the
-server. The stand is `apps/app-theme-own`.
+The theme object's own values are a layer after component tokens: a button token's value
+in one of its modes overrides the component token. What it inherits from the parent comes
+as the parent's theme data — before component tokens and under pruning, as for the parent
+itself: an heir without differences of its own looks just like the parent. `sources` are the files the theme is assembled from
+(`loadThemeSource` fills them): the config is read once per Vite process, so editing them
+in dev restarts the server. The stands are `apps/app-theme-own` and
+`apps/app-theme-values`.
 
 ## Consumption and the report
 
@@ -288,8 +403,8 @@ A token a component reads **only** through `var(--x, fallback)` is not required
 from outside, yet staying silent about it is risky: if no layer sets it, the
 component always renders the fallback, and a renamed token hides exactly this way.
 The build records such tokens in the manifest separately, and `doctor` reports the
-unset ones as `token-fallback-only`. An intentional hook — a default a theme or the
-application may override — is declared by the component in `hookTokens`.
+unset ones as `token-fallback-only`. An intentional hook — a default the application
+may override — is declared by the component in `hookTokens`; a theme does not set hooks.
 
 ## Token pruning
 

@@ -8,7 +8,7 @@ import { build, parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidManifestError, PackageExportsError, UndeclaredDependencyError } from '../core/errors'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidManifestError, PackageExportsError, ThemeSourceError, UndeclaredDependencyError } from '../core/errors'
 import { readManifestSync, writeManifestSync } from '../node/manifest'
 import { subcomponentsFromExports } from '../node/subcomponents'
 import { granum } from '../vite/plugin'
@@ -890,6 +890,82 @@ describe('темы на сборке провайдера', () => {
     const { provider } = makeFixture()
     const escaping = { ...provider, theme: { catalog: { kit: { title: 'Kit', data: '../kit.json' } } } }
     expect(() => granumProvider({ provider: escaping, engine: testEngine() })).toThrow(expect.objectContaining({ reason: 'path-escapes-package' }))
+  })
+
+  const STONE = {
+    'themes/stone/theme.json': {
+      id: 'stone',
+      title: 'Stone',
+      version: '1.2.0',
+      targets: { '@t/kit': '^0.1.0' },
+      modes: { light: { colorScheme: 'light' }, dark: { colorScheme: 'dark' } },
+    },
+    'themes/stone/root.json': { 't-radius': '6px' },
+    'themes/stone/modes/light.json': { 't-bg': '#fff' },
+    'themes/stone/modes/dark.json': { 't-bg': '#000' },
+    'themes/stone/components/@t/kit/Card/modes/light.json': { 't-card-bg': '#fafafa' },
+    'themes/stone/components/@t/kit/Card/modes/dark.json': { 't-card-bg': '#111' },
+    'themes/stone/README.md': '# Stone',
+    'themes/stone/notes.json': { why: 'docs only' },
+  }
+
+  it('исходник темы в каталоге: метаданные из theme.json, в dist раздел слит в root/modes, индекс с версией и targets (C-43, C-44)', async () => {
+    const fixture = withTheme(makeFixture(), {
+      registry: 'themes/registry.json',
+      defaultTheme: 'kit',
+      catalog: { ...KIT_CATALOG, stone: { source: 'themes/stone/', ignore: ['notes.json'] } },
+    }, STONE)
+    const { manifest, dist } = await run(fixture)
+    const stone = JSON.parse(readFileSync(join(dist, 'themes/stone.json'), 'utf8'))
+    expect(stone.modes.light.tokens).toEqual({ 't-bg': '#fff', 't-card-bg': '#fafafa' })
+    expect(stone.modes.dark.tokens).toEqual({ 't-bg': '#000', 't-card-bg': '#111' })
+    expect(stone.components).toEqual({ '@t/kit': { Card: { modes: { light: { 't-card-bg': '#fafafa' }, dark: { 't-card-bg': '#111' } } } } })
+    expect(manifest.theme.catalog!.stone).toEqual({
+      title: 'Stone',
+      data: 'themes/stone.json',
+      modes: ['light', 'dark'],
+      defaultMode: 'light',
+      version: '1.2.0',
+      targets: { '@t/kit': '^0.1.0' },
+    })
+    // Значения раздела — объявленные темой токены (C-31).
+    expect(manifest.theme.declares).toContain('--t-card-bg')
+  })
+
+  it('две записи каталога, которые пишут один файл dist, — ошибка: одна затёрла бы другую', async () => {
+    const fixture = withTheme(makeFixture(), {
+      catalog: { ...KIT_CATALOG, stone: { source: 'themes/stone', ignore: ['notes.json'] }, copy: { title: 'Копия', data: 'themes/stone.json' } },
+    }, { ...STONE, 'themes/stone.json': { id: 'copy', title: 'Копия', root: {}, modes: { light: { colorScheme: 'light', tokens: { 't-bg': '#fff' } } } } })
+    await expect(run(fixture)).rejects.toMatchObject({ reason: 'invalid-theme-data', message: expect.stringContaining(`catalog themes 'stone' and 'copy' write the same file 'themes/stone.json'`) })
+  })
+
+  it('исходник с extends дополняется из записи каталога; версия родителя не наследуется', async () => {
+    const fixture = withTheme(makeFixture(), {
+      registry: 'themes/registry.json',
+      catalog: { ...KIT_CATALOG, stone: { source: 'themes/stone', ignore: ['notes.json'] }, ember: { source: 'themes/ember' } },
+    }, {
+      ...STONE,
+      'themes/ember/theme.json': { id: 'ember', title: 'Ember', extends: 'stone', modes: { dark: {} } },
+      'themes/ember/modes/dark.json': { 't-bg': '#100' },
+    })
+    const { manifest, dist } = await run(fixture)
+    const ember = JSON.parse(readFileSync(join(dist, 'themes/ember.json'), 'utf8'))
+    expect(ember).toMatchObject({ id: 'ember', title: 'Ember', root: { 't-radius': '6px' }, targets: { '@t/kit': '^0.1.0' } })
+    expect(ember.version).toBeUndefined()
+    expect(ember.modes.dark.tokens).toEqual({ 't-bg': '#100', 't-card-bg': '#111' })
+    expect(manifest.theme.catalog!.ember).toMatchObject({ title: 'Ember', extends: 'stone', targets: { '@t/kit': '^0.1.0' } })
+  })
+
+  it('исходник: id не совпал с ключом, значения без targets, посторонний файл — ошибка провайдера', async () => {
+    const source = (files: Record<string, unknown>, ignore: string[] = ['notes.json']): Fixture =>
+      withTheme(makeFixture(), { catalog: { ...KIT_CATALOG, stone: { source: 'themes/stone', ignore } } }, { ...STONE, ...files })
+    await expect(run(source({ 'themes/stone/theme.json': { ...STONE['themes/stone/theme.json'], id: 'rock' } }))).rejects.toMatchObject({ reason: 'theme-id-mismatch' })
+    await expect(run(source({ 'themes/stone/theme.json': { ...STONE['themes/stone/theme.json'], targets: { '@t/other': '^1.0.0' } } }))).rejects.toMatchObject({ reason: 'theme-components-untargeted' })
+    await expect(run(source({}, []))).rejects.toThrow(/notes\.json/)
+    // Ошибка исходника — как есть, со своей причиной (§14), а не обёрнутая формой данных.
+    const stray = await run(source({}, [])).then(() => undefined, (error: unknown) => error)
+    expect(stray).toBeInstanceOf(ThemeSourceError)
+    expect(stray).toMatchObject({ reason: 'unexpected-entry' })
   })
 
   it('themesDir компонента материализуется в tokens.themes; без него поля нет', async () => {

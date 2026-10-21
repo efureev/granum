@@ -600,7 +600,56 @@ for (const stand of ['app-theme-ink', 'app-5']) {
   }
 }
 
-process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5, пример переключения тем на сборке и в dev)\n  ${steps.join('\n  ')}\n`)
+/*
+ * Значения компонентов у темы (`apps/app-theme-values`, ADR-13) на собранной
+ * странице: тема из отдельного пакета (`tide`) выбирается, как тема каталога, —
+ * лист грузится, у карточки значение из раздела темы, а не пакета компонентов; у
+ * кнопки — значение, унаследованное от «Камня»; выбор переживает перезагрузку.
+ */
+{
+  const stand = fileURLToPath(new URL('../apps/app-theme-values/', import.meta.url))
+  const outDir = mkdtempSync(join(tmpdir(), 'granum-e2e-values-'))
+  try {
+    await build({ root: stand, configFile: join(stand, 'vite.config.ts'), logLevel: 'silent', build: { outDir, emptyOutDir: true } })
+    browser = await chromium.launch()
+    const page = await browser.newPage()
+    await page.route('http://granum.test/**', (route) => {
+      const path = new URL(route.request().url()).pathname.replace(/^\/app-theme-values\//, '')
+      const file = join(outDir, path === '' ? 'index.html' : path)
+      if (!existsSync(file))
+        return route.fulfill({ status: 404, body: '' })
+      const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript'
+      return route.fulfill({ contentType: type, body: readFileSync(file) })
+    })
+    const attribute = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    const style = (selector, property) => page.evaluate(([sel, prop]) => getComputedStyle(document.querySelector(sel))[prop], [selector, property])
+
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('http://granum.test/app-theme-values/')
+    await page.waitForSelector('[data-theme-option="tide"]')
+    check(await style('[data-card]', 'backgroundColor') === 'rgb(245, 245, 244)', `значения у темы: карточка stone по разделу темы: ${await style('[data-card]', 'backgroundColor')}`)
+
+    await page.click('[data-theme-option="tide"]')
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'tide-light', undefined, { timeout: 5000 })
+    check(await style('[data-card]', 'backgroundColor') === 'rgb(236, 254, 255)', `значения у темы: карточка tide — значение пакета темы: ${await style('[data-card]', 'backgroundColor')}`)
+    check(await style('[data-theme-option="tide"]', 'backgroundColor') === 'rgb(14, 116, 144)', `значения у темы: кнопка tide — значение stone от своего акцента: ${await style('[data-theme-option="tide"]', 'backgroundColor')}`)
+
+    await page.reload()
+    await page.waitForSelector('[data-theme-option="tide"]')
+    check(await attribute() === 'tide-light', `значения у темы: после перезагрузки выбор на корне: ${await attribute()}`)
+    check(await style('[data-card]', 'backgroundColor') === 'rgb(236, 254, 255)', `значения у темы: после перезагрузки карточка tide: ${await style('[data-card]', 'backgroundColor')}`)
+  }
+  catch (error) {
+    failures.push(`значения компонентов у темы: прогон упал: ${error?.message ?? error}`)
+  }
+  finally {
+    await browser?.close()
+    browser = undefined
+    rmSync(outDir, { recursive: true, force: true })
+  }
+}
+
+process.stdout.write(`e2e-dev (apps/app-1, apps/app-5, тема ink с режимами и дополнительная paper, ветка фолбэков, собранные листы app-theme-ink и app-5, пример переключения тем на сборке и в dev, значения компонентов у темы)\n  ${steps.join('\n  ')}\n`)
 process.stdout.write(failures.length === 0
   ? '✓ слои, HMR, режимы, дополнительные темы, фолбэки и собранные листы подтверждены в браузере\n'
   : `✗ Находок: ${failures.length}\n  - ${failures.join('\n  - ')}\n`)

@@ -71,6 +71,30 @@ describe('validateGranumConfig', () => {
     expect(() => validateGranumConfig(FULL)).not.toThrow()
   })
 
+  it('тема-объект с extends — только отличия: форма проверяется, полнота — после слияния (A-22)', () => {
+    const partial = { id: 'reef', title: 'Риф', root: {}, modes: { light: {} }, extends: 'moss' }
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [partial] })).toBeUndefined()
+    const overObject = { id: 'sale', title: 'Распродажа', root: {}, modes: {}, extends: partial }
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [overObject] })).toBeUndefined()
+    // Без extends данные обязаны быть полными; форма отличий проверяется и с ним.
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ ...partial, extends: undefined }] })?.path).toBe('themes.0.modes.light.colorScheme')
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ ...partial, version: 'next' }] })?.path).toBe('themes.0.version')
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ ...overObject, extends: { ...partial, targets: { x: 'latest' } } }] })?.path).toBe('themes.0.extends.targets.x')
+  })
+
+  it('id и title у объекта с extends — свои: от родителя метаданные не приходят', () => {
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ title: 'Риф', extends: 'moss' }] })?.path).toBe('themes.0.id')
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ id: 'reef', extends: 'moss' }] })?.path).toBe('themes.0.title')
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [{ id: 'reef', title: 'Риф', extends: { title: 'Мох', extends: 'stone' } }] })?.path).toBe('themes.0.extends.id')
+  })
+
+  it('объекты, наследующие друг друга по кругу, — ошибка конфига с путём, а не переполнение стека', () => {
+    const a: Record<string, unknown> = { id: 'a', title: 'А' }
+    const b = { id: 'b', title: 'Б', extends: a }
+    a.extends = b
+    expect(failureOf({ providers: ['@x/a'], engine, themes: [b] })?.path).toBe('themes.0.extends.extends')
+  })
+
   it('не проверяются поля инстанса движка, объектов провайдеров и ключи override режима', () => {
     const provider = { id: '@x/obj', contractVersion: 1, components: [], anything: true }
     expect(failureOf({ ...FULL, engine: { ...engine, customField: 1 }, providers: [provider] })).toBeUndefined()

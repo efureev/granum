@@ -3,7 +3,7 @@
  * `defineGranumProvider`, и `expandProviders` — рукописный объект без хелпера
  * проходит те же проверки.
  */
-import type { GranumComponentDescriptor, GranumProvider } from './types'
+import type { GranumComponentDescriptor, GranumProvider, GranumThemeCatalogEntry, GranumThemeSourceEntry } from './types'
 import {
   DuplicateComponentNameError,
   InvalidComponentNameError,
@@ -123,6 +123,11 @@ function validateComponentThemes(providerId: string, descriptor: GranumComponent
     throw new InvalidProviderError(providerId, 'invalid-theme-dir', `'themesDir' must be a non-empty path (got ${JSON.stringify(descriptor.themesDir)}).`, descriptor.name)
 }
 
+/** Родитель записи каталога; у исходника темы он в theme.json и до сборки неизвестен. */
+export function catalogExtends(entry: GranumThemeCatalogEntry | GranumThemeSourceEntry | undefined): string | undefined {
+  return entry !== undefined && 'extends' in entry ? entry.extends : undefined
+}
+
 /** Каталог: id — slug, родитель и тема по умолчанию — из того же каталога, без циклов. */
 function validateThemeContribution(provider: GranumProvider): void {
   const theme = provider.theme
@@ -142,6 +147,14 @@ function validateThemeContribution(provider: GranumProvider): void {
   for (const [id, entry] of Object.entries(catalog)) {
     if (!isThemeId(id))
       throw new InvalidProviderError(provider.id, 'invalid-theme-id', `catalog id '${id}' must be a slug /^[a-z][a-z0-9-]*$/.`)
+    // Исходник темы: метаданные и `extends` — в его theme.json, их проверяет сборка провайдера (C-43).
+    if (entry !== null && typeof entry === 'object' && 'source' in entry) {
+      if (typeof entry.source !== 'string' || entry.source.length === 0)
+        throw new InvalidProviderError(provider.id, 'invalid-theme-data', `'theme.catalog.${id}.source' must be a path to the theme source folder.`)
+      if (entry.ignore !== undefined && (!Array.isArray(entry.ignore) || !entry.ignore.every(path => typeof path === 'string' && path.length > 0)))
+        throw new InvalidProviderError(provider.id, 'invalid-theme-data', `'theme.catalog.${id}.ignore' must be an array of paths inside the theme source.`)
+      continue
+    }
     if (typeof entry?.title !== 'string' || entry.title.length === 0)
       throw new InvalidProviderError(provider.id, 'invalid-theme-data', `'theme.catalog.${id}.title' must be a non-empty string.`)
     if (typeof entry.data !== 'string' || entry.data.length === 0)
@@ -151,7 +164,7 @@ function validateThemeContribution(provider: GranumProvider): void {
   }
   for (const id of Object.keys(catalog)) {
     const chain: string[] = []
-    for (let current: string | undefined = id; current !== undefined; current = catalog[current]?.extends) {
+    for (let current: string | undefined = id; current !== undefined; current = catalogExtends(catalog[current])) {
       if (chain.includes(current))
         throw new InvalidProviderError(provider.id, 'theme-extends-unknown', `catalog themes extend each other in a cycle: ${[...chain, current].join(' -> ')}.`)
       chain.push(current)

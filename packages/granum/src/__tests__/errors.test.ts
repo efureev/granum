@@ -30,6 +30,7 @@ const INSTANCES: readonly (readonly [string, () => errors.GranumError])[] = [
   ['ProviderNotRegisteredError', () => new errors.ProviderNotRegisteredError('p', 'ref')],
   ['ThemeDataError', () => new errors.ThemeDataError('p', 'paper', 'themes/paper.json', 'expected an object')],
   ['ThemeResolutionError', () => new errors.ThemeResolutionError('unknown-theme', 'theme clay is not in the catalog', 'clay', ['paper'])],
+  ['ThemeSourceError', () => new errors.ThemeSourceError('unexpected-entry', '/themes/clay/notes.json', 'unexpected entry')],
   ['TokenParseError', () => new errors.TokenParseError('message text', 'src', 'no-tokens')],
   ['TokenRefError', () => new errors.TokenRefError('p', 'light', 'X', 'file:///x.css')],
   ['UndeclaredDependencyError', () => new errors.UndeclaredDependencyError('p', [['A', 'p:B']])],

@@ -1,0 +1,21 @@
+{
+  "name": "@granum-fixtures/theme-tide",
+  "private": true,
+  "version": "2.1.0",
+  "type": "module",
+  "description": "A theme published apart from the components it styles: a theme object that extends a catalog theme live, with a version and target packages.",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@granum-fixtures/valued-ds": "^1.0.0"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "verify": "node verify.mjs"
+  }
+}

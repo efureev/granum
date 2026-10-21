@@ -10,6 +10,40 @@ Step-by-step guides, mirrored in two languages:
 - English: [`docs/en/migration.md`](../../docs/en/migration.md)
 - Русский: [`docs/ru/migration.md`](../../docs/ru/migration.md)
 
+## From 3.9 to 3.10
+
+3.10 lets a theme own the values of components: token names are the contract of the
+component package, values belong to the theme (ADR-13 in `docs/decisions.md`). All of it
+is additive — the provider contract (2) and the manifest format (3) stay, a provider built
+with 3.10 is read by 3.9 with the same CSS — but three things behave differently:
+
+- **A theme object with `extends` is merged with its parent.** Before, `extends` only gave
+  component tokens and the object had to be complete; now the object may carry only its
+  differences, and the parent's data fills the rest. An object whose parent had tokens the
+  object lacked now gets them. The parent's data is read even if the parent is not a build
+  theme.
+- **A theme does not set hooks.** A hook (`hookTokens`) is an application knob: a theme
+  value for it is the `doctor` finding `theme-token-foreign`. Make such a token a theme
+  token of the component (read it without a fallback, let every theme give a value) or
+  set it in the application's `tokenOverrides`.
+- **The config checks a theme object with `extends` by shape only**; completeness is
+  checked after the merge — a violation there is `ThemeDataError` with `reason`. The
+  object's own `id` and `title` are required.
+- **What a theme object inherits comes as the parent's theme data**: before component
+  tokens, as for the parent itself. Only the object's own differences come after component
+  tokens. Where the parent's data and a component's `themesDir` value disagree, an heir
+  now shows what the parent shows.
+- **A theme's `@supports` fallback for a token whose value in the pair comes from a
+  component is no longer emitted**: it overrode the component value in browsers without the
+  feature.
+
+The type `GranumAppTheme` is a union of complete data and differences with `extends`:
+code that reads the data fields of such a value narrows it by `extends` first.
+
+New, optional: `version`, `targets` and `components` in theme data; a theme source folder
+and `loadThemeSource`; `{ source }` catalog entries; `granum theme copy`; the findings
+`theme-target-mismatch`, `theme-component-unknown`, `theme-token-foreign`.
+
 ## From 3.7 to 3.8
 
 3.8 builds several themes at once. One **default** theme goes into the shared sheet

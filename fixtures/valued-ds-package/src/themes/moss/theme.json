@@ -1,0 +1,19 @@
+{
+  "id": "moss",
+  "title": "Мох",
+  "description": "Копия «Камня» с правками: зелёный акцент и мягкие углы; правки «Камня» в неё не приходят.",
+  "version": "1.0.0",
+  "targets": {
+    "@granum-fixtures/valued-ds": "^1.0.0"
+  },
+  "modes": {
+    "light": {
+      "colorScheme": "light",
+      "title": "Светлый"
+    },
+    "dark": {
+      "colorScheme": "dark",
+      "title": "Тёмный"
+    }
+  }
+}

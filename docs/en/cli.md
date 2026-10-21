@@ -14,6 +14,7 @@ granum explain granum.config.ts <providerId:Component> [--json]
 granum why-css granum.config.ts <class> [--json]
 granum tokens  granum.config.ts <providerId:Component> [--deep] [--json]
 granum themes  granum.config.ts [--json]
+granum theme copy <source> <dir> --id <id> [--config granum.config.ts]
 granum prune   granum.config.ts [--json] [--strict]
 granum report  [dist/granum-report.json] [--json] [--strict]
 granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
@@ -64,6 +65,9 @@ legal but suspicious.
 | `token-fallback-only` | warn | a component reads a token only through `var(--x, fallback)` and no layer declares it: the component always renders the fallback — the token was renamed, say. Declare an intentional hook in the descriptor's `hookTokens`; `dynamicTokens` are not findings |
 | `theme-base-global` | warn | an additional theme's `baseCss` has a style rule: once loaded, its sheet stays in the document, and the rule applies to the whole page — also after switching back to the default theme. Only `@font-face`, `@property` and `@keyframes` belong there |
 | `theme-incomplete` | warn | a build theme has no value for a required token in at least one of its modes. Required are the catalog owner's registry tokens (`root` in the theme's root, `mode` in every mode) and the selected components' `requires` that some build theme defines — in every mode: the build does not know under which selector a component reads a token. A value in a mode's `@supports` fallback counts; what the providers' inlined files declare is not required. The message names the share — `theme 'sand' covers 192 of 195 required token(s) (98%)` — and the items list `<mode>:<token>` or `root:<token>`. The provider build already checks a catalog theme against the registry; component requirements are checked only here. A token no build theme defines stays `token-undefined`. The theme block of the output shows `coverage` for every theme |
+| `theme-target-mismatch` | warn | the version of a graph package does not satisfy the `targets` of a build theme (C-41): the theme is written for another version of the component package. The subject is `<theme> → <package>`; what exactly the theme lacks is named by `theme-incomplete`. A package without a version (the object form, scanned ones included) is not checked — the theme block of the output says so. The build prints the same warning to the log |
+| `theme-component-unknown` | warn | a theme sets values for a component the package does not declare: the values apply to nothing. The subject is `<theme> → <package>:<Component>` |
+| `theme-token-foreign` | warn | a component section of a theme holds a token the component does not require from outside: a hook (the application sets it, not a theme), a token the component assigns itself, a global token (its place is the theme's `root`/`modes`) or a typo. The subject is `<theme> → <package>:<Component>` |
 | `token-conflict` | warn | two package layers write the token — a component over the theme data or two components; the chain and the outcome are shown. Application values are not conflicts |
 | `component-theme-unknown` | warn | a component ships tokens for a theme that no catalog of the graph declares: they will not apply |
 | `component-mode-missing` | warn | a component has no file for a mode of the build or its ancestors: the literals come from the default mode — a forgotten `dark.json`, say; a value that is the same in every mode belongs in `root.json` |
@@ -245,7 +249,8 @@ declares the token; a token only another catalog theme has is `none`, as in `doc
 ## `themes`
 
 The graph's theme catalog from the owner's manifest index, without reading theme data: id,
-title, parent, modes with the default mode, a link to the design system.
+title, version, parent, modes with the default mode, `targets` with the check against the
+graph package, a link to the design system.
 The build themes are marked: `default` — the default one, `built` — an additional one.
 
 ```
@@ -256,10 +261,32 @@ Catalog: @acme/tokens (2 theme(s), default: slate)
 
   • clay — Clay (extends slate) [built]
       modes: light, dark (default: light)
-  • slate — Slate [default]
+  • slate — Slate 1.4.0 [default]
       modes: light, dark (default: light)
+      targets: @acme/ui ^2.0.0 ✓ 2.3.1
       docs: https://example.com/themes/slate
 ```
+
+## `theme copy`
+
+```bash
+granum theme copy <source> <dir> --id <id> [--title <title>] [--theme-version <version>]
+                  [--ignore=<path,path>] [--config granum.config.ts] [--json]
+```
+
+Writes the source of an independent theme. The source is a theme id of the config graph
+(`stone`, `@acme/ds:stone`) or a path to a theme source. The inheritance of the theme and
+the component values of the source — including those on the component side (`themesDir`)
+— are written out into the `components` section of the copy; the inheritance of modes
+stays: that is a link inside one theme. A copy has no `extends` and no `docs`; its version
+is `--theme-version` (`--version` with `theme` is a wrong call, exit code `2`), otherwise
+`0.1.0`; `targets` are the source's, and a package whose values went into the copy but which
+the source's `targets` do not name gets `^<version in the graph>` (`*` for a package
+without a version). The source and destination paths are relative to the current
+directory, `--config` or not. A non-empty destination is a refusal, exit code `1`; a wrong
+`--id` or an extra argument is exit code `2`. The values per pair of the copy equal the
+source's; later changes of the source do not reach the copy — when the link is wanted,
+take `extends`.
 
 ## `prune`
 

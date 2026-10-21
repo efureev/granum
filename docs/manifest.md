@@ -118,10 +118,12 @@
 | `catalog` | `Record<id, CatalogEntry>?` | каталог тем; ключи — id тем (C-24), отсортированы |
 | `declares` | `string[]` | все токены (с `--`), объявленные `tokensCss`, `baseCss`, реестром и темами каталога; отсортированы |
 
-`CatalogEntry = { title, description?, docs?, extends?, data, modes, defaultMode }`: `data` — путь к
-JSON `GranumThemeData` с уже разрешённым `extends` (C-27); `modes` и `defaultMode` вычислены сборкой
-из данных (C-29), режим по умолчанию в `modes` первым. Данные тем приложение читает только для
-тем сборки (T-6).
+`CatalogEntry = { title, description?, docs?, extends?, data, modes, defaultMode, version?, targets? }`:
+`data` — путь к JSON `GranumThemeData` с уже разрешённым `extends` (C-27); `modes` и `defaultMode`
+вычислены сборкой из данных (C-29), режим по умолчанию в `modes` первым; `version` и `targets` —
+версия темы и её целевые пакеты из данных (C-41). Данные тем приложение читает только для тем
+сборки и родителей тем-объектов (T-6). В файле данных значения раздела `components` лежат ещё и
+слитыми в `root`/`modes` (C-44): читатель до 3.10 раздела не знает и применит их токенами темы.
 
 ### 3.3 `components[Name]`
 
@@ -237,6 +239,8 @@ M-7).
   манифест с новым ключом там не сойдётся у него по хешу.
 - `components[Name].subcomponents` — необязательное: манифест без поля читается как
   «частей нет», а читатель, который поля не знает, ведёт себя как прежде.
+- `theme.catalog[*].version` и `targets` (granum 3.10) — необязательные: прежний читатель их не видит,
+  а значения раздела `components` в файле данных он получает слитыми (C-44).
 - `components[Name].tokens.optional` и `tokens.hooks` (granum 3.7) — необязательные:
   манифест без них не даёт находки `token-fallback-only`, а прежний читатель их не видит.
 - Удаление, переименование, изменение смысла — несовместимое: версия формата

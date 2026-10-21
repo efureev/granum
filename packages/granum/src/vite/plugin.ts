@@ -7,6 +7,7 @@
  */
 import type { Plugin, ResolvedConfig, ViteDevServer } from 'vite'
 import type { GranumConfig } from '../config'
+import type { GranumAppTheme } from '../core/resolveThemes'
 import type { EmittedCss, LayerName } from '../node/emit'
 import type { PreparedApp } from '../node/prepare'
 import type { ThemeManifestOptions } from '../node/themeManifest'
@@ -228,12 +229,20 @@ function assetFileNames(bundle: Record<string, unknown>): Map<string, string> {
   return byName
 }
 
-/** Файлы, из которых приложение собрало тему-объект: их правка перезагружает конфиг. */
-function themeSourcesOf(config: GranumConfig, root: string): string[] {
-  return (config.themes ?? [])
-    .map(entry => normalizeThemeEntry(entry).theme)
-    .flatMap(choice => (typeof choice === 'object' && choice !== null ? choice.sources ?? [] : []))
-    .map(file => resolve(root, file))
+/** Файлы, из которых приложение собрало тему-объект и его родителей-объекты: их правка перезагружает конфиг. */
+export function themeSourcesOf(config: GranumConfig, root: string): string[] {
+  const files = new Set<string>()
+  const visit = (choice: unknown, seen: readonly unknown[]): void => {
+    if (typeof choice !== 'object' || choice === null || seen.includes(choice))
+      return
+    const theme = choice as GranumAppTheme
+    for (const file of theme.sources ?? [])
+      files.add(resolve(root, file))
+    visit(theme.extends, [...seen, choice])
+  }
+  for (const entry of config.themes ?? [])
+    visit(normalizeThemeEntry(entry).theme, [])
+  return [...files]
 }
 
 /**
@@ -717,6 +726,11 @@ export function granum(config: GranumConfig, options: GranumPluginOptions = {}):
           log(`warning: components: 'imports' needs appSources.dirs — the selection is empty`)
         else if (w.kind === 'app-sources-unset')
           log(`warning: appSources is not set — classes in the application markup are not scanned and get no CSS; set appSources: { dirs: ['src'] }, or dirs: [] if the markup has no classes of its own`)
+      }
+      // Выход за `targets` виден без `doctor` (A-38): тема написана под другие версии пакетов.
+      for (const w of app.resolution.warnings) {
+        if (w.kind === 'theme-target-mismatch')
+          log(`warning: theme '${w.theme}' is written for ${w.providerId} ${w.range}, the build has ${w.version} — run 'granum doctor' to see what the theme misses`)
       }
       writeComponentTypes(app)
 

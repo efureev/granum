@@ -1,0 +1,9 @@
+{
+  "id": "reef",
+  "title": "Риф",
+  "description": "Своя тема приложения поверх «Мха».",
+  "extends": "moss",
+  "modes": {
+    "light": {}
+  }
+}

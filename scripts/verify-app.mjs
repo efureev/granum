@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Сверка собранного приложения с `expected.mjs`: подстроки в CSS и JS
- * из `dist/assets`, плюс проверки отчёта `granum-report.json`. Запускается
+ * из `dist/assets`, значения токенов по блокам пар, плюс проверки отчёта
+ * `granum-report.json`. Запускается
  * из каталога приложения: `yarn workspace <name> verify`.
  */
 import { spawnSync } from 'node:child_process'
@@ -12,6 +13,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { extractLayerBlocks } from '@feugene/granum/node'
 import { auditFailure } from './audit-dist.mjs'
+import { tokenValue } from './lib/cssValues.mjs'
 import { pageStylesheets } from './lib/pageStylesheets.mjs'
 
 const dir = process.cwd()
@@ -45,6 +47,16 @@ function match(haystack, { present = [], absent = [] }, field, layers) {
 if (expected.css) {
   const css = read('.css')
   match(css, expected.css, 'css', extractLayerBlocks(css, 'granum').blocks)
+}
+// Значение токена под селектором пары: подстрока по всей склейке не различит,
+// из какого блока пришло значение, — тема могла показать чужое.
+if (expected.values) {
+  const css = read('.css')
+  for (const { what, selector, token, value } of expected.values) {
+    const found = tokenValue(css, selector, token)
+    if (found !== value)
+      failures.push(`ЗНАЧЕНИЕ: ${what}\n      ${selector} ${token}: ожидали ${JSON.stringify(value)}, нашли ${JSON.stringify(found)}`)
+  }
 }
 if (expected.js)
   match(read('.js'), expected.js, 'js')
@@ -123,6 +135,8 @@ else {
       failures.push(`doctor: находок \`${code}\` — ${got}, объявлено в expected.doctor — ${want}${messages.length ? `\n      ${messages.join('\n      ')}` : ''}`)
     }
   }
+  // Число находок не говорит, о чём они: предметы сверяются отдельно.
+  expected.doctor?.check?.(report, (ok, message) => { if (!ok) failures.push(`doctor: ${message}`) })
 }
 }
 

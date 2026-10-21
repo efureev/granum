@@ -65,9 +65,10 @@ export interface GranumComponentDescriptor<Name extends string = string> {
   readonly dynamicTokens?: readonly string[]
   /**
    * Хуки: токены, которые компонент читает только через `var(--x, запасное)`, а
-   * задать их вправе тема или приложение. БЕЗ `--`, допускается `*` в конце.
-   * Объявление снимает находку `token-fallback-only`: запасное значение — норма,
-   * а не недосмотр.
+   * задать их вправе приложение. Тема хук не задаёт: значение, которое даёт тема,
+   * делает токен токеном темы. БЕЗ `--`, допускается `*` в конце. Объявление
+   * снимает находку `token-fallback-only`: запасное значение — норма, а не
+   * недосмотр.
    */
   readonly hookTokens?: readonly string[]
   /**
@@ -136,9 +137,25 @@ export interface GranumThemeData {
   readonly baseCss?: readonly string[]
   /** granum не интерпретирует: поле уходит в `virtual:granum/themes` как есть. */
   readonly extensions?: Readonly<Record<string, unknown>>
+  /** Версия темы: `MAJOR.MINOR.PATCH[-pre]`. Своя у темы, не версия пакета. */
+  readonly version?: string
+  /** Пакеты, под версии которых тема написана: id провайдера → диапазон semver. */
+  readonly targets?: Readonly<Record<string, string>>
+  /**
+   * Значения токенов компонентов, которыми владеет тема: id провайдера → имя
+   * компонента → значения. Имена токенов — контракт пакета компонентов.
+   */
+  readonly components?: Readonly<Record<string, Readonly<Record<string, GranumThemeComponentValues>>>>
 }
 
-/** Запись каталога тем провайдера. */
+/** Значения токенов одного компонента под темой. Ключи — БЕЗ `--`. */
+export interface GranumThemeComponentValues {
+  readonly root?: Readonly<Record<string, string>>
+  /** Режим темы → токены компонента в нём. */
+  readonly modes?: Readonly<Record<string, Readonly<Record<string, string>>>>
+}
+
+/** Запись каталога тем провайдера: данные, собранные заранее. */
 export interface GranumThemeCatalogEntry {
   readonly title: string
   readonly description?: string
@@ -147,6 +164,17 @@ export interface GranumThemeCatalogEntry {
   readonly extends?: string
   /** Путь к JSON `GranumThemeData` относительно корня раскладки; у записи с `extends` — только отличия. */
   readonly data: string
+}
+
+/**
+ * Запись каталога исходником темы: метаданные и `extends` — из её `theme.json`,
+ * читает и проверяет сборка провайдера.
+ */
+export interface GranumThemeSourceEntry {
+  /** Путь к папке исходника относительно корня раскладки. */
+  readonly source: string
+  /** Файлы исходника, которые не данные темы: пути относительно папки. */
+  readonly ignore?: readonly string[]
 }
 
 export interface GranumThemeContribution {
@@ -159,7 +187,7 @@ export interface GranumThemeContribution {
   /** Тема, если приложение не выбрало свою. */
   readonly defaultTheme?: string
   /** Каталог тем: id → запись. */
-  readonly catalog?: Readonly<Record<string, GranumThemeCatalogEntry>>
+  readonly catalog?: Readonly<Record<string, GranumThemeCatalogEntry | GranumThemeSourceEntry>>
 }
 
 /**

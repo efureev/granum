@@ -32,6 +32,7 @@ export function getThemeManifest(resolution: GranumResolution, options: ThemeMan
       return {
         id: entry.theme.id,
         title: entry.theme.title,
+        ...(entry.theme.data.version !== undefined ? { version: entry.theme.data.version } : {}),
         modes: entry.modes.map(modeEntry),
         defaultMode: entry.defaultMode,
         ...(href !== undefined ? { href } : {}),

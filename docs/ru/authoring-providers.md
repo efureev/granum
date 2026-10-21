@@ -65,7 +65,7 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 | `dependencies` | компоненты, чей код этот компонент импортирует; короткая форма — тот же провайдер, `id:Name` — чужой |
 | `safelist` | только классы, которые собираются в JS в рантайме; литералы шаблона сюда не пишутся — их извлечёт сборка |
 | `dynamicTokens` | токены, чьё имя собирается в рантайме; обрезка их не удалит, пока компонент в сборке |
-| `hookTokens` | хуки: токены, которые компонент читает только через `var(--x, запасное)`, а задать их вправе тема или приложение. Без объявления такой токен, не заданный ни одним слоем, — находка `doctor` `token-fallback-only` |
+| `hookTokens` | хуки: ручки приложения — токены, которые компонент читает только через `var(--x, запасное)`. Задаёт их приложение (override, режим `define`), тема — никогда: значение хука в теме — находка `doctor` `theme-token-foreign`. Без объявления такой токен, не заданный ни одним слоем, — находка `token-fallback-only` |
 | `cssFiles` | CSS, читаемый как есть; путь относительно `config.ts`, внутри директории компонента. `styles.css` рядом с `<style>` SFC склеивается с ним в один файл: сначала объявленный |
 | `themesDir` | папка токенов компонента по темам: `<тема>/root.{json,css}`, `<тема>/modes/<режим>.{json,css}`; ключи без `--` |
 | `group` | общие чанки нескольких компонентов кладутся в `groups/<g>/shared/` |
@@ -140,14 +140,15 @@ export default defineGranumProvider({
   (`default-mode-missing`). `extends` режима — режим той же темы, цикл —
   `mode-extends-cycle`.
 - Тема с `extends` в каталоге хранит в исходнике только отличия. Сборка
-  сливает их с родителем: токены — по ключу, `fallbacks` режима и `baseCss`
+  сливает их с родителем: токены — по ключу, раздел `components` — по пакету,
+  компоненту и токену, `fallbacks` режима и `baseCss`
   заменяются целиком, `extensions` сливаются на верхнем уровне; id, `title`,
   `docs` берутся из записи каталога. В `dist` уходят полные данные.
 - Реестр (`registry`) — `{ "<токен>": "root" | "mode" }`. Сборка проверяет по нему
   каждую тему: токен `root` есть в `root`, токен `mode` — в итоговых токенах каждого
   режима. Нехватка — `theme-incomplete` с перечнем вида `dark:xh-bg`.
 - В манифест уходит индекс каталога: `title`, `extends`, `docs`, путь к данным,
-  режимы (режим по умолчанию первым) и `defaultMode` — CLI перечисляет темы, не
+  режимы (режим по умолчанию первым), `defaultMode`, `version` и `targets` — CLI перечисляет темы, не
   читая данных. `theme.declares` включает реестр и все темы каталога.
 
 Владелец каталога в графе приложения один, и ему не нужны компоненты: пакет
@@ -170,6 +171,31 @@ components/XhButton/themes/
 полными. Примеры — фикстуры [`themes-package`](../../fixtures/themes-package/README.md),
 [`themed-ds-package`](../../fixtures/themed-ds-package/README.md) и
 [`themed-companion-package`](../../fixtures/themed-companion-package/README.md).
+
+**Значения компонентов — у темы.** Дизайн-система, которая ведёт свои темы, кладёт
+значения своих компонентов в раздел `components` темы, а не в `themesDir`: новую
+тему тогда пишут без правки пакета компонентов, а `doctor` сверяет значения с
+требованиями компонентов. Тему удобно держать исходником — папкой (раскладка — в
+[темах и токенах](./themes-and-tokens.md)) — и подключать в каталог записью
+`{ source }`: метаданные, `extends`, версия и `targets` берутся из её `theme.json`.
+`defaultTheme` такой дизайн-системе не нужен: основную тему выбирает приложение
+списком `themes`. Сборка без `themes` у каталога без `defaultTheme` возьмёт
+единственную тему каталога, а из нескольких не выберет — `unknown-theme`.
+
+```ts
+theme: {
+  registry: 'themes/registry.json',
+  catalog: {
+    stone: { source: 'themes/stone', ignore: ['notes.json'] },
+    ember: { source: 'themes/ember' },     // extends: 'stone' — в её theme.json
+  },
+},
+```
+
+Исходник читает только сборка провайдера: у несобранного провайдера такая запись —
+`theme-source-unbuilt`. Пример — фикстура
+[`valued-ds-package`](../../fixtures/valued-ds-package/README.md); тема, выпущенная
+отдельным пакетом, — [`theme-tide-package`](../../fixtures/theme-tide-package/README.md).
 
 Правила `engine` пишутся в типах granum (`GranumRule`, `GranumVariant`,
 `GranumPreflight`) — форма та же, что у правил UnoCSS, но без импорта чужих

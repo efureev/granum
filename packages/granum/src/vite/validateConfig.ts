@@ -6,7 +6,7 @@ import type { GranumAppSources, GranumConfig, GranumCssOptions, GranumJsOptions,
 import type { GranumModeData, GranumModeFallback, GranumTokenRef } from '../contract'
 import type { GranumActivation, GranumAppTheme, GranumModeDefinition, GranumThemeEntry, GranumThemeModes } from '../core/resolveThemes'
 import { GranumError } from '../core/errors'
-import { checkThemeData, isModeName } from '../core/themeData'
+import { checkThemeData, isModeName, isThemeId } from '../core/themeData'
 import { isDialect } from '../engine/dialect'
 
 export class InvalidConfigError extends GranumError {
@@ -34,7 +34,7 @@ function keysOf<T>() {
 }
 
 const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'themes', 'activation', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
-const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'extends', 'sources'])
+const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'version', 'targets', 'components', 'extends', 'sources'])
 const THEME_ENTRY_KEYS = keysOf<GranumThemeEntry>()(['theme', 'default', 'modes'])
 const THEME_MODES_KEYS = keysOf<GranumThemeModes>()(['names', 'define', 'tokenOverrides', 'strictTokens'])
 const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme', 'fallbacks'])
@@ -158,8 +158,14 @@ function validateEngine(engine: unknown): void {
     throw new InvalidConfigError('engine.vocabulary', 'expected a non-empty fingerprint of the generated name set (vocabularyFingerprint)')
 }
 
-/** Тема-объект приложения: полные данные плюс `extends` и `sources`. */
-function validateAppTheme(value: unknown, path: string): void {
+/**
+ * Тема-объект приложения: данные плюс `extends` и `sources`. Без `extends` данные
+ * полные; с ним — только отличия: форма проверяется здесь, целиком — после
+ * слияния с родителем в резолвере (A-22).
+ */
+function validateAppTheme(value: unknown, path: string, visiting: readonly unknown[] = []): void {
+  if (visiting.includes(value))
+    throw new InvalidConfigError(path, 'theme objects extend each other in a cycle')
   if (typeof value === 'string') {
     if (value.trim().length === 0)
       throw new InvalidConfigError(path, 'expected a theme id or a theme object')
@@ -183,12 +189,21 @@ function validateAppTheme(value: unknown, path: string): void {
       }
     }
   }
+  // `id` и `title` у объекта всегда свои: от родителя метаданные не приходят (C-27).
+  if (!isThemeId(value.id))
+    throw new InvalidConfigError(`${path}.id`, `expected a slug /^[a-z][a-z0-9-]*$/, got ${JSON.stringify(value.id)}`)
+  if (typeof value.title !== 'string' || value.title.length === 0)
+    throw new InvalidConfigError(`${path}.title`, 'expected a non-empty string')
   const { extends: base, sources, ...data } = value
-  if (base !== undefined && (typeof base !== 'string' || base.length === 0))
-    throw new InvalidConfigError(`${path}.extends`, 'expected the id of a catalog theme whose component tokens this theme builds on')
+  if (base !== undefined) {
+    if (isRecord(base))
+      validateAppTheme(base, `${path}.extends`, [...visiting, value])
+    else if (typeof base !== 'string' || base.length === 0)
+      throw new InvalidConfigError(`${path}.extends`, 'expected the id of a catalog theme or a theme object this theme builds on')
+  }
   if (sources !== undefined && (!Array.isArray(sources) || !sources.every(file => typeof file === 'string')))
     throw new InvalidConfigError(`${path}.sources`, 'expected an array of file paths')
-  const issue = checkThemeData(data)
+  const issue = checkThemeData(data, { partial: base !== undefined })
   if (issue)
     throw new InvalidConfigError(issue.path ? `${path}.${issue.path}` : path, issue.details)
 }

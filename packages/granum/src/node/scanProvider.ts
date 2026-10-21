@@ -15,6 +15,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION } from '../contract'
 import { sortedUnique } from '../core/dedupe'
+import { SCANNED_MANIFEST_WARNING } from '../core/providerNode'
 import { themeTokenNames } from '../core/themeData'
 import { GRANUM_VERSION } from '../version'
 import { scanCssDeclarations } from './cssDeclarations'
@@ -24,8 +25,6 @@ import { computeManifestHash } from './manifest'
 import { packageSubcomponents } from './subcomponents'
 import { componentThemesDirPath, readComponentThemesDir, readObjectCatalog } from './themeFiles'
 import { extractRequiredTokenUses, fallbackOnlyTokens, scanTokenConsumption } from './tokenScan'
-
-export const SCANNED_MANIFEST_WARNING = 'scanned-provider'
 
 /** Директория раскладки объектного провайдера, если `baseUrl` — существующий `file:`-каталог. */
 export function providerDistDir(provider: GranumProvider): string | undefined {

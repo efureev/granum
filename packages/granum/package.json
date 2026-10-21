@@ -107,8 +107,10 @@
     "@antfu/eslint-config": "^9.1.0",
     "@feugene/granum-engine-wind": "3.9.0",
     "@types/node": "^26.1.1",
+    "@types/semver": "^7.7.1",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
+    "semver": "^7.8.5",
     "typescript": "^6.0.3",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

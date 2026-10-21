@@ -212,6 +212,16 @@ describe('granum() с настоящим Vite', async () => {
     expect(app.report).toBeUndefined()
   })
 
+  it('тема вне targets — строка в логе сборки; версия темы — в манифесте рантайма (A-38, T-4)', async () => {
+    const tide = { id: 'tide', title: 'Прилив', extends: 'kit', version: '2.1.0', targets: { '@t/kit': '^0.9.0' } }
+    const entry = `import 'virtual:granum.css'\nimport manifest from 'virtual:granum/themes'\nconsole.log(JSON.stringify(manifest))`
+    const app = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: [{ theme: tide, modes: ['light', 'dark'] }] }, `<template><div/></template>`, entry)
+    expect(app.logs).toContain(`warning: theme 'tide' is written for @t/kit ^0.9.0, the build has 1.0.0 — run 'granum doctor' to see what the theme misses`)
+    expect(app.js).toMatch(/"id": "tide",\s*"title": "Прилив",\s*"version": "2\.1\.0"/)
+    const inRange = await buildApp(providerRoot, { components: ['@t/kit:Card'], themes: [{ theme: { ...tide, targets: { '@t/kit': '^1.0.0' } }, modes: ['light'] }] }, `<template><div/></template>`)
+    expect(inRange.logs.some(line => line.includes('is written for'))).toBe(false)
+  })
+
   /**
    * Имена реэкспортов зависят от селекции, а не от пакета, поэтому амбиентным
    * `d.ts` их не выразить: точные объявления пишет плагин. Запись только

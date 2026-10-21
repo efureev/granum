@@ -1,7 +1,7 @@
 import type { GranumLoadedManifest } from '../contract'
 import type { GranumAppTheme, ResolvedThemes, ResolveThemesInput } from '../core/resolveThemes'
 import { describe, expect, it } from 'vitest'
-import { ThemeResolutionError } from '../core/errors'
+import { ThemeDataError, ThemeResolutionError } from '../core/errors'
 import { toProviderNode } from '../core/providerNode'
 import { additionalThemes, planThemes, resolveThemes } from '../core/resolveThemes'
 import { INK, makeManifest, PAPER, themeData } from './helpers'
@@ -225,5 +225,94 @@ describe('токены компонентов чужих тем', () => {
     const providers = [owner(), ds].map(toProviderNode)
     const r = resolveThemes(providers, {}, providers[1]!.components, DATA)
     expect(r.warnings).toEqual([{ kind: 'component-theme-unknown', providerId: '@p/ui', component: 'Chart', theme: 'unknown' }])
+  })
+
+  it('промежуточный объект цепочки темы сборки — известная тема, а не чужая', () => {
+    const brand: GranumAppTheme = { id: 'brand', title: 'Бренд', extends: 'paper' }
+    const sale: GranumAppTheme = { id: 'sale', title: 'Распродажа', extends: brand }
+    const ds = makeManifest('@p/ui', { Chart: { tokens: { themes: { brand: { modes: { light: { x: '1' } } } }, consumes: [], dynamic: [] } } })
+    const providers = [owner(), ds].map(toProviderNode)
+    const r = resolveThemes(providers, { themes: [sale] }, providers[1]!.components, DATA)
+    expect(r.warnings.filter(w => w.kind === 'component-theme-unknown')).toEqual([])
+  })
+})
+
+describe('тема-объект с extends дополняется из родителя (A-22, INV-THEME-14)', () => {
+  /** Только отличия: форма неполна, как у исходника с `extends`. */
+  const brand: GranumAppTheme = {
+    id: 'brand',
+    title: 'Бренд',
+    root: { 'p-radius': '9px' },
+    modes: { light: { tokens: { 'p-accent': '#ff0000' } } },
+    extends: 'paper',
+  }
+
+  it('частичный объект над темой каталога получает остальные значения родителя', () => {
+    const data = main(resolve({ themes: [brand] })).theme.data
+    expect(data.root).toEqual({ 'p-radius': '9px', 'p-ring': PAPER.root['p-ring'] })
+    expect(data.modes.light).toEqual({ colorScheme: 'light', tokens: { ...PAPER.modes.light!.tokens, 'p-accent': '#ff0000' } })
+    expect(data.modes.dark).toEqual(PAPER.modes.dark)
+    expect(data.title).toBe('Бренд')
+  })
+
+  it('родитель не обязан быть темой сборки: его данные читаются ради наследника', () => {
+    const r = resolve({ themes: [brand] })
+    expect(r.themes.map(entry => entry.theme.id)).toEqual(['brand'])
+    expect(main(r).theme.chain).toEqual(['brand', 'paper'])
+  })
+
+  it('объект над объектом: цепочка раскрывается до темы каталога', () => {
+    const sale: GranumAppTheme = { id: 'sale', title: 'Распродажа', modes: { dark: { tokens: { 'p-bg': '#220000' } } }, extends: brand }
+    const theme = main(resolve({ themes: [sale] })).theme
+    expect(theme.chain).toEqual(['sale', 'brand', 'paper'])
+    expect(theme.data.root['p-radius']).toBe('9px')
+    expect(theme.data.modes.dark!.tokens['p-bg']).toBe('#220000')
+    expect(theme.data.modes.light!.tokens['p-accent']).toBe('#ff0000')
+  })
+
+  it('полные данные с extends и без него дают одно и то же', () => {
+    const full: GranumAppTheme = { ...PAPER, id: 'twin', title: 'Двойник' }
+    const withBase = main(resolve({ themes: [{ ...full, extends: 'paper' }] })).theme.data
+    const without = main(resolve({ themes: [full] })).theme.data
+    expect(withBase).toEqual(without)
+  })
+
+  it('данные после слияния проверяются целиком: нарушение — ThemeDataError с причиной', () => {
+    const broken: GranumAppTheme = { ...brand, modes: { dim: { tokens: { 'p-bg': '#000' } } } }
+    let error: unknown
+    try {
+      resolve({ themes: [broken] })
+    }
+    catch (cause) {
+      error = cause
+    }
+    expect(error).toBeInstanceOf(ThemeDataError)
+    expect((error as ThemeDataError).reason).toBe('invalid-theme-data')
+  })
+
+  it('объект без extends проверяется и в резолвере: его зовут и без проверки конфига', () => {
+    let error: unknown
+    try {
+      resolve({ themes: [{ ...PAPER, id: 'raw', title: 'Сырая', root: { '--p-radius': '6px' } }] })
+    }
+    catch (cause) {
+      error = cause
+    }
+    expect(error).toBeInstanceOf(ThemeDataError)
+    expect((error as ThemeDataError).reason).toBe('token-key-prefix')
+  })
+
+  it('объекты, наследующие друг друга по кругу, — theme-extends-cycle, а не переполнение стека', () => {
+    const a = { id: 'a', title: 'А', extends: 'paper' } as { id: string, title: string, extends: GranumAppTheme | string }
+    const b: GranumAppTheme = { id: 'b', title: 'Б', extends: a as GranumAppTheme }
+    a.extends = b
+    expect(reasonOf(() => resolve({ themes: [b] }))).toBe('theme-extends-cycle')
+  })
+
+  it('отличия наследника по targets сливаются с родительскими по пакету (C-27)', () => {
+    const withTargets = { ...DATA, '@p/ds': { ...DATA['@p/ds'], paper: { ...PAPER, targets: { '@p/ds': '^1.0.0' } } } }
+    const heir: GranumAppTheme = { id: 'heir', title: 'Наследник', extends: 'paper', targets: { '@p/ui': '^2.0.0' } }
+    const r = resolveThemes([owner()].map(toProviderNode), { themes: [heir] }, [], withTargets)
+    expect(main(r).theme.data.targets).toEqual({ '@p/ds': '^1.0.0', '@p/ui': '^2.0.0' })
   })
 })

@@ -66,7 +66,7 @@ package: list `@feugene/granum` in `peerDependencies`, otherwise the build write
 | `dependencies` | components whose code this component imports; the short form means the same provider, `id:Name` another one |
 | `safelist` | only classes assembled in JS at runtime; template literals are not listed here — the build extracts them |
 | `dynamicTokens` | tokens whose name is assembled at runtime; pruning keeps them while the component is in the build |
-| `hookTokens` | hooks: tokens the component reads only through `var(--x, fallback)`, which a theme or the application may set. Without the declaration such a token, set by no layer, is the `doctor` finding `token-fallback-only` |
+| `hookTokens` | hooks: application knobs — tokens the component reads only through `var(--x, fallback)`. The application sets them (an override, a `define` mode), a theme never does: a hook value in a theme is the `doctor` finding `theme-token-foreign`. Without the declaration such a token, set by no layer, is the finding `token-fallback-only` |
 | `cssFiles` | CSS read as is; path relative to `config.ts`, inside the component directory. A `styles.css` next to an SFC `<style>` is merged with it into one file, the declared CSS first |
 | `themesDir` | folder of the component's tokens per theme: `<theme>/root.{json,css}`, `<theme>/modes/<mode>.{json,css}`; keys without `--` |
 | `group` | shared chunks of several components go to `groups/<g>/shared/` |
@@ -141,14 +141,15 @@ for a provider theme and an application theme.
   (`default-mode-missing`). A mode's `extends` names a mode of the same theme; a cycle is
   `mode-extends-cycle`.
 - A theme with `extends` in the catalog keeps only its differences in the source. The build
-  merges them with the parent: tokens key by key, a mode's `fallbacks` and `baseCss`
+  merges them with the parent: tokens key by key, the `components` section by package,
+  component and token, a mode's `fallbacks` and `baseCss`
   are replaced whole, `extensions` merge at the top level; id, `title`,
   `docs` come from the catalog entry. Complete data goes to `dist`.
 - The registry (`registry`) is `{ "<token>": "root" | "mode" }`. The build checks every
   theme against it: a `root` token is in `root`, a `mode` token is in the final tokens of
   every mode. A gap is `theme-incomplete` with a list like `dark:xh-bg`.
 - The manifest gets the catalog index: `title`, `extends`, `docs`, the data path,
-  the modes (default first) and `defaultMode` — the CLI lists themes without
+  the modes (default first), `defaultMode`, `version` and `targets` — the CLI lists themes without
   reading the data. `theme.declares` covers the registry and every catalog theme.
 
 There is one catalog owner in an application graph, and it needs no components: the
@@ -171,6 +172,32 @@ form of a provider (tests, local development) does not merge data: its `data` mu
 complete. Examples are the fixtures [`themes-package`](../../fixtures/themes-package/README.md),
 [`themed-ds-package`](../../fixtures/themed-ds-package/README.md) and
 [`themed-companion-package`](../../fixtures/themed-companion-package/README.md).
+
+**Component values belong to the theme.** A design system that keeps themes of its own
+puts the values of its components into the `components` section of the theme, not into
+`themesDir`: a new theme is then written without editing the component package, and
+`doctor` checks the values against what the components require. A theme is easiest to
+keep as a source — a folder (the layout is in [themes and tokens](./themes-and-tokens.md))
+— and to put into the catalog as `{ source }`: the metadata, `extends`, the version and
+`targets` come from its `theme.json`. Such a design system needs no `defaultTheme`: the
+application picks the default theme with its `themes` list. A build without `themes`, on a
+catalog without `defaultTheme`, takes the only catalog theme and does not choose among
+several — `unknown-theme`.
+
+```ts
+theme: {
+  registry: 'themes/registry.json',
+  catalog: {
+    stone: { source: 'themes/stone', ignore: ['notes.json'] },
+    ember: { source: 'themes/ember' },     // extends: 'stone' — in its theme.json
+  },
+},
+```
+
+Only the provider build reads a source: in an unbuilt provider such an entry is
+`theme-source-unbuilt`. The example is the fixture
+[`valued-ds-package`](../../fixtures/valued-ds-package/README.md); a theme published as a
+package of its own is [`theme-tide-package`](../../fixtures/theme-tide-package/README.md).
 
 `engine` rules are written in granum types (`GranumRule`, `GranumVariant`,
 `GranumPreflight`) — the same shape as UnoCSS rules, but without importing

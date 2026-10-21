@@ -8,7 +8,7 @@ import { build, createServer } from 'vite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { granum } from '../vite/plugin'
+import { granum, themeSourcesOf } from '../vite/plugin'
 import { testEngine } from './testEngine'
 
 /**
@@ -156,6 +156,17 @@ describe('granum() на dev-сервере', async () => {
     await waitFor(() => restart.mock.calls.length > 0, 'server restart')
     expect(restart).toHaveBeenCalledTimes(1)
   }, 30_000)
+
+  it('файлы родителей-объектов тоже наблюдаются: правка родителя меняет наследника', () => {
+    const brand = { id: 'brand', title: 'Бренд', extends: 'kit', sources: ['themes/brand/theme.json'] }
+    const sale = { id: 'sale', title: 'Распродажа', extends: brand, sources: ['themes/sale/theme.json'] }
+    const files = themeSourcesOf({ providers: [], engine: testEngine(), themes: [{ theme: sale }, 'kit'] }, '/app')
+    expect(files.sort()).toEqual(['/app/themes/brand/theme.json', '/app/themes/sale/theme.json'])
+    // Цикл объектов назовёт резолвер; сбор файлов в него не уходит.
+    const loop: Record<string, unknown> = { id: 'a', title: 'А', sources: ['a.json'] }
+    loop.extends = { id: 'b', title: 'Б', extends: loop, sources: ['b.json'] }
+    expect(themeSourcesOf({ providers: [], engine: testEngine(), themes: [loop as never] }, '/app').sort()).toEqual(['/app/a.json', '/app/b.json'])
+  })
 
   it('компонент из корня пакета — ошибка и в dev: Vite покажет её оверлеем', async () => {
     const app = await startApp(providerRoot)

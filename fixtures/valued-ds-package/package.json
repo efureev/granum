@@ -1,0 +1,23 @@
+{
+  "name": "@granum-fixtures/valued-ds",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A design system with its own themes from theme sources: component values live in the themes, not in the components.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./granum.manifest.json": "./dist/granum.manifest.json",
+    "./components/VdButton": "./dist/components/VdButton/index.js",
+    "./components/VdCard": "./dist/components/VdCard/index.js",
+    "./components/VdGroup": "./dist/components/VdGroup/index.js",
+    "./themes/*": "./dist/themes/*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "verify": "node ../../scripts/verify-fixture.mjs && node ../../packages/granum/dist/bin.js codegen --check --prefix=Vd --exports=import"
+  }
+}

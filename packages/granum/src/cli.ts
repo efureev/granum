@@ -4,16 +4,18 @@ import type { GranumBuildReport } from './node/report'
  * `0` — чисто; `1` — нарушения (`error`, с `--strict` и `warn`)
  * или ошибка выполнения; `2` — неверный вызов.
  */
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { formatCodegenReport, parseCodegenTargets, runCodegenCommand } from './cli/codegen'
 import { loadGranumConfigFile } from './cli/loadConfig'
+import { isThemeId } from './core/themeData'
 import { formatAuditDistReport, formatDoctorReport, formatExplainReport, formatThemesReport, formatTokenPruneReport, formatTokensReport, formatWhyCssReport, granumAuditDist, granumDoctor, granumExplain, granumThemes, granumTokenPrune, granumTokens, granumWhyCss } from './node/diagnostics/index'
 import { prepareApp } from './node/prepare'
+import { copyTheme } from './node/themeCopy'
 import { GRANUM_VERSION } from './version'
 
-export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'themes', 'prune', 'report', 'codegen', 'audit'] as const
+export const CLI_COMMANDS = ['doctor', 'explain', 'why-css', 'tokens', 'themes', 'theme', 'prune', 'report', 'codegen', 'audit'] as const
 export type CliCommand = typeof CLI_COMMANDS[number]
 
 export interface CliIo {
@@ -31,6 +33,8 @@ usage:
   granum why-css <config> <class> [--json]
   granum tokens  <config> <providerId:Component> [--deep] [--json]
   granum themes  <config> [--json]
+  granum theme copy <source> <dir> --id <id> [--title <title>] [--theme-version <version>]
+                 [--ignore=<path,path>] [--config <config>] [--json]
   granum prune   <config> [--json] [--strict]
   granum report  [<report.json>] [--json] [--strict]
   granum audit   [<dist-dir>] [--json] [--strict] [--root=<dir>]
@@ -51,6 +55,11 @@ usage:
   'codegen' runs in a provider package: it regenerates the barrel, the
   component subpaths and manifest export in package.json and the provider
   registry from src/components (marked blocks <granum:components…>).
+  'theme copy' writes the source of an independent theme: <source> is a theme
+  of the graph of --config (id or providerId:id) or a theme source folder; the
+  inheritance of the theme and the component values for it are written out,
+  the inheritance of modes stays. A copy does not follow its source — a parent
+  does: use 'extends' when the theme must follow it.
 
 flags:
   --json      structured report instead of text
@@ -86,6 +95,7 @@ const COMMAND_FLAGS: Readonly<Record<CliCommand, { readonly bool?: readonly stri
   'why-css': {},
   'tokens': { bool: ['--deep'] },
   'themes': {},
+  'theme': { value: ['--id', '--title', '--theme-version', '--ignore', '--config'] },
   'prune': { bool: ['--strict'] },
   'report': { bool: ['--strict'] },
   'audit': { bool: ['--strict'], value: ['--root'] },
@@ -152,7 +162,8 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
   const cwd = io.cwd ?? process.cwd()
   const json = flags.has('--json')
 
-  if (command === '-v' || flags.has('--version')) {
+  // У `theme copy` версия темы — `--theme-version`; `--version` там — ошибка, а не версия granum.
+  if (command === '-v' || (flags.has('--version') && command !== 'theme')) {
     io.stdout(GRANUM_VERSION)
     return 0
   }
@@ -206,6 +217,37 @@ export async function runGranumCli(argv: readonly string[], io: CliIo): Promise<
       emit(io, json, report, () => formatBuildReport(report))
       const bad = report.classes.unmatched.length > 0 || report.tokens.undefined.length > 0
       return flags.has('--strict') && bad ? 1 : 0
+    }
+
+    if (command === 'theme') {
+      const [action, source, dest] = positionals
+      if (action !== 'copy' || !source || !dest || !values.has('--id') || positionals.length > 3) {
+        io.stderr(`granum theme: expected 'theme copy <source> <dir> --id <id>'\n\n${USAGE}`)
+        return 2
+      }
+      if (flags.has('--version')) {
+        io.stderr(`granum theme copy: the version of the copy is '--theme-version'; '--version' prints the version of granum\n\n${USAGE}`)
+        return 2
+      }
+      if (!isThemeId(values.get('--id'))) {
+        io.stderr(`granum theme copy: '--id' must be a slug /^[a-z][a-z0-9-]*$/, got '${values.get('--id')}'\n\n${USAGE}`)
+        return 2
+      }
+      const loaded = values.has('--config') ? await loadGranumConfigFile(values.get('--config')!, cwd) : undefined
+      // Путь к исходнику — от текущей папки, как и папка копии; иначе это id темы графа.
+      const sourcePath = resolve(cwd, source)
+      const result = copyTheme({
+        source: existsSync(join(sourcePath, 'theme.json')) ? sourcePath : source,
+        dest: resolve(cwd, dest),
+        id: values.get('--id')!,
+        ...(values.has('--title') ? { title: values.get('--title')! } : {}),
+        ...(values.has('--theme-version') ? { version: values.get('--theme-version')! } : {}),
+        ...(values.has('--ignore') ? { ignore: values.get('--ignore')!.split(',').map(path => path.trim()).filter(Boolean) } : {}),
+        ...(loaded ? { config: loaded.config, root: loaded.root } : { root: cwd }),
+      })
+      emit(io, json, { dir: result.dir, files: result.files, id: result.data.id }, () =>
+        `granum theme copy: '${result.data.id}' — ${result.files.length} file(s) in ${result.dir}\n${result.files.map(file => `  ${file}`).join('\n')}`)
+      return 0
     }
 
     const [configPath, subject] = positionals

@@ -56,7 +56,7 @@ export function parseRegistry(providerId: string, file: string, text: string): R
 }
 
 /** Данные темы с диска; `partial` — исходник темы с `extends` в каталоге. */
-export function readThemeDataFile(providerId: string, themeId: string, file: string, options: { readonly partial?: boolean } = {}): GranumThemeData {
+export function readThemeDataFile(providerId: string, themeId: string, file: string, options: { readonly partial?: boolean, readonly flattened?: boolean } = {}): GranumThemeData {
   let raw: unknown
   try {
     raw = readJsonFile(file)
@@ -200,12 +200,17 @@ export function readObjectComponentThemes(provider: GranumProvider, baseDir?: st
 /**
  * Индекс каталога объектного провайдера по данным с диска. Данные
  * объектной формы обязаны быть полными: дополнять их из родителя умеет
- * только сборка провайдера.
+ * только сборка провайдера. Запись `{ source }` в индекс не входит: раскрыть
+ * исходник некому, а ошибку получает только сборка, которой эта тема нужна (C-43).
+ * Данные могут быть записаны сборкой 3.10 — со значениями раздела, слитыми в
+ * `root`/`modes` (C-44).
  */
 export function readObjectCatalog(provider: GranumProvider, baseDir: string, onData?: (data: GranumThemeData) => void): Record<string, GranumManifestCatalogEntry> {
   const out: Record<string, GranumManifestCatalogEntry> = {}
   for (const [id, entry] of Object.entries(provider.theme?.catalog ?? {}).sort(([a], [b]) => a.localeCompare(b, 'en'))) {
-    const data = readThemeDataFile(provider.id, id, join(baseDir, entry.data))
+    if ('source' in entry)
+      continue
+    const data = readThemeDataFile(provider.id, id, join(baseDir, entry.data), { flattened: true })
     onData?.(data)
     out[id] = {
       title: entry.title,
@@ -215,7 +220,18 @@ export function readObjectCatalog(provider: GranumProvider, baseDir: string, onD
       data: entry.data,
       modes: themeModeOrder(data),
       defaultMode: data.defaultMode ?? DEFAULT_MODE,
+      ...(data.version !== undefined ? { version: data.version } : {}),
+      ...(data.targets !== undefined ? { targets: data.targets } : {}),
     }
   }
   return out
+}
+
+/** Исходник темы читает только сборка провайдера (C-43): у несобранного провайдера его нечем раскрыть. */
+export function themeSourceUnbuilt(providerId: string, id: string, source: string): InvalidProviderError {
+  return new InvalidProviderError(
+    providerId,
+    'theme-source-unbuilt',
+    `catalog theme '${id}' is a theme source (${source}); sources are read by the provider build — build the provider, or pass the theme as { title, data }.`,
+  )
 }

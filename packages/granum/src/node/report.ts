@@ -1,9 +1,10 @@
-import type { ProviderClassSource, ReextractReason } from './dialects'
 /**
  * Отчёт сборки приложения: считается
  * теми же функциями, что и эмиссия, поэтому не может назвать значение,
  * которого в сборке нет.
  */
+import type { ThemeTargetCheck } from '../core/resolveThemes'
+import type { ProviderClassSource, ReextractReason } from './dialects'
 import type { EmittedCss, LayerName } from './emit'
 import type { PreparedApp } from './prepare'
 import { Buffer } from 'node:buffer'
@@ -50,7 +51,16 @@ export interface GranumBuildReport {
     /** Основная тема. */
     readonly defaultTheme: string | null
     readonly themeSource: string | null
-    readonly themes: readonly { readonly id: string, readonly default: boolean, readonly modes: readonly string[], readonly modesSource: string }[]
+    readonly themes: readonly {
+      readonly id: string
+      readonly default: boolean
+      readonly modes: readonly string[]
+      readonly modesSource: string
+      /** Версия темы (C-41); поля нет — тема без версии. */
+      readonly version?: string
+      /** Исход сверки `targets` по пакетам (A-38); поля нет — у темы `targets` нет. */
+      readonly targets?: readonly ThemeTargetCheck[]
+    }[]
   }
   readonly classes: {
     readonly input: number
@@ -275,6 +285,8 @@ export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundle
         default: entry.isDefault,
         modes: entry.modes.map(mode => mode.name),
         modesSource: entry.modesSource,
+        ...(entry.theme.data.version !== undefined ? { version: entry.theme.data.version } : {}),
+        ...(entry.theme.targets.length > 0 ? { targets: entry.theme.targets } : {}),
       })),
     },
     classes: {

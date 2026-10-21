@@ -191,6 +191,13 @@ export type InvalidProviderReason
     | 'theme-incomplete'
     | 'invalid-theme-dir'
     | 'legacy-token-definitions'
+    | 'invalid-theme-version'
+    | 'invalid-theme-targets'
+    | 'invalid-theme-component-mode'
+    | 'theme-token-collision'
+    | 'theme-components-untargeted'
+    | 'theme-id-mismatch'
+    | 'theme-source-unbuilt'
 
 /**
  * Провайдер объявлен некорректно. Бросается при регистрации, а не
@@ -222,6 +229,7 @@ export type ThemeResolutionReason
     | 'theme-missing'
     | 'activation-collision'
     | 'theme-data-missing'
+    | 'theme-extends-cycle'
 
 /**
  * Тему или режимы нельзя собрать из конфига и графа. Это ошибка резолюции, а
@@ -245,15 +253,52 @@ export class ThemeResolutionError extends GranumError {
 /** Данные темы провайдера не читаются или не проходят схему на стороне приложения. */
 export class ThemeDataError extends GranumError {
   readonly code = 'theme-data' as const
+  /** Причина нарушения формы (`theme-token-collision`, …); у файла, который не читается, — нет. */
+  readonly reason?: string
 
   constructor(
     readonly providerId: string,
     readonly themeId: string,
     readonly path: string,
     details: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown, reason?: string },
   ) {
     super(`Cannot use the data of theme '${themeId}' of provider '${providerId}' (${path}): ${details}`, options)
+    if (options?.reason !== undefined)
+      this.reason = options.reason
+  }
+}
+
+export type ThemeSourceReason
+  = | 'theme-json-missing'
+    | 'theme-json-invalid'
+    | 'token-file-invalid'
+    | 'duplicate-value-file'
+    | 'unknown-mode-file'
+    | 'empty-component-dir'
+    | 'unexpected-entry'
+    | 'theme-data-invalid'
+
+/**
+ * Исходник темы (C-42) не читается: файл или папка, которых раскладка не знает,
+ * файл режима не из `theme.json`, пустая папка компонента. Молча пропущенный
+ * файл — потерянные значения, поэтому загрузчик строг.
+ */
+export class ThemeSourceError extends GranumError {
+  readonly code = 'theme-source' as const
+  /** У `theme-data-invalid` — причина нарушения данных (`theme-components-untargeted`, …). */
+  readonly dataReason?: string
+
+  constructor(
+    readonly reason: ThemeSourceReason,
+    /** Файл или папка, о которых речь. */
+    readonly path: string,
+    details: string,
+    options?: { cause?: unknown, dataReason?: string },
+  ) {
+    super(`Cannot read the theme source (${path}): ${details}`, options)
+    if (options?.dataReason !== undefined)
+      this.dataReason = options.dataReason
   }
 }
 

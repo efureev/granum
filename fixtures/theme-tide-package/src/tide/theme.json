@@ -1,0 +1,14 @@
+{
+  "id": "tide",
+  "title": "Прилив",
+  "description": "Внешняя тема для valued-ds: морской акцент поверх «Камня».",
+  "version": "2.1.0",
+  "targets": {
+    "@granum-fixtures/valued-ds": "^1.0.0"
+  },
+  "extends": "stone",
+  "modes": {
+    "light": {},
+    "dark": {}
+  }
+}

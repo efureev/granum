@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -284,6 +284,49 @@ describe('granum cli: вызов и коды выхода', () => {
     expect(await runGranumCli(['themes', 'granum.config.mjs'], text.io)).toBe(0)
     expect(text.out.join('\n')).toContain('• night — Night (extends kit) [default]')
     expect(text.out.join('\n')).toContain('• kit — Kit [built]')
+  })
+
+  it('theme copy: исходник независимой темы по id графа; неверный вызов — 2', async () => {
+    const root = appDir()
+    const t = io(root)
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/moss', '--id', 'moss', '--title', 'Мох', '--config', 'granum.config.mjs'], t.io)).toBe(0)
+    expect(t.out.join('\n')).toContain(`granum theme copy: 'moss'`)
+    const theme = JSON.parse(readFileSync(join(root, 'themes/moss/theme.json'), 'utf8'))
+    expect(theme).toMatchObject({ id: 'moss', title: 'Мох', version: '0.1.0', modes: { light: { colorScheme: 'light' } } })
+    expect(JSON.parse(readFileSync(join(root, 'themes/moss/root.json'), 'utf8'))).toEqual({ space: '8px' })
+    expect(theme.extends).toBeUndefined()
+    const json = io(root)
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/clay', '--id=clay', '--theme-version=1.0.0', '--config=granum.config.mjs', '--json'], json.io)).toBe(0)
+    expect(JSON.parse(json.out.join('\n'))).toMatchObject({ id: 'clay', files: expect.arrayContaining(['theme.json']) })
+    for (const args of [['theme', 'copy', 'kit', 'x'], ['theme', 'paste', 'kit', 'x', '--id', 'x'], ['theme', 'copy', '--id', 'x']]) {
+      const bad = io(root)
+      expect(await runGranumCli(args, bad.io), args.join(' ')).toBe(2)
+    }
+    // Непустая папка назначения — отказ выполнения, а не неверный вызов.
+    const busy = io(root)
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/moss', '--id', 'moss', '--config', 'granum.config.mjs'], busy.io)).toBe(1)
+  })
+
+  it('theme copy: --version, лишний аргумент и неверный --id — неверный вызов, а не версия granum и не отказ', async () => {
+    const root = appDir()
+    const version = io(root)
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/a', '--id', 'a', '--version', '--config', 'granum.config.mjs'], version.io)).toBe(2)
+    expect(version.out).toEqual([])
+    expect(version.err[0]).toContain('--theme-version')
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/b', 'extra', '--id', 'b', '--config', 'granum.config.mjs'], io(root).io)).toBe(2)
+    const id = io(root)
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/c', '--id', 'Moss', '--config', 'granum.config.mjs'], id.io)).toBe(2)
+    expect(id.err[0]).toContain('--id')
+    expect(existsSync(join(root, 'themes'))).toBe(false)
+  })
+
+  it('theme copy: путь к исходнику — от текущей папки, как и папка копии, даже с --config из другой', async () => {
+    const root = appDir()
+    expect(await runGranumCli(['theme', 'copy', 'kit', 'themes/moss', '--id', 'moss', '--config', 'granum.config.mjs'], io(root).io)).toBe(0)
+    mkdirSync(join(root, 'sub'))
+    const t = io(join(root, 'sub'))
+    expect(await runGranumCli(['theme', 'copy', '../themes/moss', 'out', '--id', 'fern', '--config', '../granum.config.mjs'], t.io), t.err.join('\n')).toBe(0)
+    expect(JSON.parse(readFileSync(join(root, 'sub/out/theme.json'), 'utf8')).id).toBe('fern')
   })
 
   it('prune: 0 всегда, 1 с --strict при наличии удаляемых', async () => {

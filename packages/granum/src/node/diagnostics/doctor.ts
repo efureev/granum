@@ -4,7 +4,7 @@
  * не раскрыта, граница нарушена); `warn` — законно, но подозрительно; падает
  * только под `--strict`.
  */
-import type { ModesSource, ResolvedThemeWarning, ThemeSource } from '../../core/resolveThemes'
+import type { ModesSource, ResolvedThemeWarning, ThemeSource, ThemeTargetCheck } from '../../core/resolveThemes'
 import type { TokenNature } from '../../core/themeData'
 import type { ProviderClassSource } from '../dialects'
 import type { PreparedApp } from '../prepare'
@@ -22,6 +22,7 @@ import { packageSubcomponents } from '../subcomponents'
 import { themeCoverage } from '../themeCoverage'
 import { parseRegistry } from '../themeFiles'
 import { findFallbackOnlyTokens, findUndefinedTokens, tokenDeclarations } from '../undefinedTokens'
+import { formatTargetCheck } from './themes'
 
 export interface DoctorProviderInfo {
   readonly id: string
@@ -92,6 +93,9 @@ export type DoctorDiagnosticCode
     | 'token-undefined'
     | 'token-fallback-only'
     | 'theme-incomplete'
+    | 'theme-target-mismatch'
+    | 'theme-component-unknown'
+    | 'theme-token-foreign'
     | 'safelist-redundant'
     | 'safelist-dead'
     | 'css-double-delivery'
@@ -127,6 +131,10 @@ export interface DoctorThemeInfo {
   readonly modesSource: ModesSource
   /** Полнота темы: обязательных токенов и покрытых во всех её режимах. В отчётах прежних версий поля нет. */
   readonly coverage?: { readonly required: number, readonly covered: number }
+  /** Версия темы (C-41). */
+  readonly version?: string
+  /** Сверка `targets` с пакетами графа (A-38); поля нет — у темы `targets` нет. */
+  readonly targets?: readonly ThemeTargetCheck[]
 }
 
 export interface DoctorReport {
@@ -164,6 +172,9 @@ function themeWarningSubject(w: ResolvedThemeWarning): string {
     case 'component-theme-unknown': return `${w.providerId}:${w.component}`
     case 'mode-extends-unresolved': return `${w.theme}/${w.mode}`
     case 'mode-extends-cycle': return `${w.theme}/${w.chain.join(' → ')}`
+    case 'theme-target-mismatch': return `${w.theme} → ${w.providerId}`
+    case 'theme-component-unknown': return `${w.theme} → ${w.providerId}:${w.component}`
+    case 'theme-token-foreign': return `${w.theme} → ${w.providerId}:${w.component}`
   }
 }
 
@@ -175,6 +186,14 @@ export function formatThemeWarning(w: ResolvedThemeWarning): string {
       return `modes.define.${w.mode} of theme '${w.theme}' extends "${w.base}", which is neither a mode of that theme nor a defined mode — it inherits the default mode instead`
     case 'mode-extends-cycle':
       return `cycle in modes.define[].extends of theme '${w.theme}': ${w.chain.join(' → ')} — the chain is cut at the default mode`
+    case 'theme-target-mismatch':
+      return `theme '${w.theme}' is written for ${w.providerId} ${w.range}, the build has ${w.version} — check what changed; 'theme-incomplete' names the missing values`
+    case 'theme-component-unknown':
+      return `theme '${w.theme}' sets values for component ${w.component}, which ${w.providerId} does not declare — the values apply to nothing; remove them or fix the name`
+    case 'theme-token-foreign':
+      return w.place === 'hook'
+        ? `theme '${w.theme}' sets '--${w.token}', a hook of ${w.providerId}:${w.component} — a theme does not set hooks: the value it gives makes the token a theme token`
+        : `theme '${w.theme}' sets '--${w.token}' in the values of ${w.providerId}:${w.component}, which the component does not require from outside — a hook, a token it assigns itself, a global token (its place is root/modes of the theme) or a typo`
   }
 }
 
@@ -516,6 +535,8 @@ export async function granumDoctor(app: PreparedApp): Promise<DoctorReport> {
         })),
         modesSource: entry.modesSource,
         coverage: { required: coverage[i]?.required ?? 0, covered: coverage[i]?.covered ?? 0 },
+        ...(entry.theme.data.version !== undefined ? { version: entry.theme.data.version } : {}),
+        ...(entry.theme.targets.length > 0 ? { targets: entry.theme.targets } : {}),
       })),
       warnings: resolution.themes.warnings,
     },
@@ -580,6 +601,9 @@ const CODE_SEVERITY: readonly DoctorDiagnosticCode[] = [
   'token-undefined',
   'token-fallback-only',
   'theme-incomplete',
+  'theme-target-mismatch',
+  'theme-token-foreign',
+  'theme-component-unknown',
   'token-conflict',
   'theme-base-global',
   'override-skipped',
@@ -712,7 +736,9 @@ export function formatDoctorReport(report: DoctorReport, options: DoctorFormatOp
   for (const theme of t.themes) {
     const role = theme.default ? 'default, main sheet' : 'own sheet'
     const coverage = theme.coverage && theme.coverage.required > 0 ? `, coverage ${coveragePercent(theme.coverage)}% (${theme.coverage.covered}/${theme.coverage.required})` : ''
-    push(`${theme.id} (${role}) — modes: [${theme.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[theme.modesSource]})${coverage}`)
+    push(`${theme.id}${theme.version ? ` ${theme.version}` : ''} (${role}) — modes: [${theme.modes.map(m => m.name).join(', ') || '—'}] (source: ${MODES_SOURCE_TEXT[theme.modesSource]})${coverage}`)
+    if (theme.targets)
+      push(`  targets: ${theme.targets.map(formatTargetCheck).join(', ')}`)
     for (const m of theme.modes)
       push(`  • ${m.name} → ${m.value} (${m.colorScheme}${m.origin === 'define' ? ', modes.define' : ''}, ${m.tokens} token(s))`)
   }

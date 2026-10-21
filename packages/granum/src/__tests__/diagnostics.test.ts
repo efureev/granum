@@ -751,6 +751,36 @@ describe('doctor: режим без значения в данных темы', 
   })
 })
 
+describe('doctor: значения темы и её целевые пакеты (A-37, A-38, D-2, D-10)', () => {
+  it('выход за targets, чужой токен и неизвестный компонент — находки; блок тем печатает версию и targets', async () => {
+    const theme = themeData('t', { light: { 'p-bg': '#fff', 'c-shade': '#eee' } }, {
+      version: '1.2.0',
+      targets: { '@p/ds': '^1.0.0', '@p/absent': '^1.0.0' },
+      components: { '@p/ds': { Card: { modes: { light: { 'c-glow': 'none' } } }, Ghost: { root: { 'g-x': '1px' } } } },
+    })
+    const { root, provider } = catalogProvider({
+      themes: { t: theme },
+      components: { Card: { tokens: { consumes: ['--c-shade', '--c-glow'], requires: [], optional: ['--c-shade', '--c-glow'], hooks: ['--c-shade', '--c-glow'], dynamic: [] } } },
+    })
+    const report = await granumDoctor(await prepareTestApp({ providers: [provider], themes: ['t'] }, root))
+    const codes = (code: string) => report.diagnostics.filter(d => d.code === code).map(d => d.subject)
+    expect(codes('theme-target-mismatch')).toEqual(['t → @p/ds'])
+    // `c-glow` — хук в разделе, `c-shade` — хук в режиме темы: по находке на токен.
+    expect(codes('theme-token-foreign')).toEqual(['t → @p/ds:Card', 't → @p/ds:Card'])
+    expect(codes('theme-component-unknown')).toEqual(['t → @p/ds:Ghost'])
+    expect(report.themes.themes[0]).toMatchObject({
+      version: '1.2.0',
+      targets: [
+        { providerId: '@p/ds', range: '^1.0.0', version: '0.0.0', status: 'mismatch' },
+        { providerId: '@p/absent', range: '^1.0.0', status: 'absent' },
+      ],
+    })
+    const text = formatDoctorReport(report)
+    expect(text).toContain('t 1.2.0 (default, main sheet)')
+    expect(text).toContain('targets: @p/ds ^1.0.0 ✗ 0.0.0, @p/absent ^1.0.0 (not in the graph)')
+  })
+})
+
 describe('дополнительные темы в диагностике', () => {
   it('конфликт режимонезависимого токена дополнительной темы назван как токены темы, а не режим', async () => {
     const { root, provider } = catalogProvider({ components: { Card: { themes: { ink: { root: { 'p-radius': '1px' }, modes: {} } } } } })

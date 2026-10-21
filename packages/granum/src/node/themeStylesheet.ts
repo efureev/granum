@@ -17,7 +17,7 @@ import { planThemes } from '../core/resolveThemes'
 import { readCss } from './css'
 import { wrapLayers, wrapThemeSheet } from './emit'
 import { resolveInlinedCssSources } from './inlinedCss'
-import { loadProviderInputs, materializeThemes, readComponentThemes, readPlannedThemeData } from './prepare'
+import { loadProviderInputs, materializeThemes, plannedThemeDataPicks, readComponentThemes, readOwnerRegistry, readPlannedThemeData } from './prepare'
 import { emitThemeCss } from './themeCss'
 
 export interface ThemeStylesheetOptions {
@@ -77,8 +77,9 @@ export function resolveThemeOnly(options: ThemeResolutionOptions): GranumResolut
     components: nodes.filter(node => !donors.has(node.id)).map(node => ({ provider: node.id, names: 'all' as const })),
     ...(themes !== undefined ? { themes } : {}),
     ...(options.activation !== undefined ? { activation: options.activation } : {}),
-    themeData: readPlannedThemeData(plan.themes.map(planned => planned.pick), nodes),
+    themeData: readPlannedThemeData(plannedThemeDataPicks(plan), nodes),
     componentThemes: readComponentThemes(inputs),
+    themeRegistry: readOwnerRegistry(plan),
   })
 }
 

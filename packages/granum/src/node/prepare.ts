@@ -6,13 +6,15 @@
  */
 import type { GranumConfig } from '../config'
 import type { GranumComponentThemeTokens, GranumProvider, GranumProviderInput, GranumThemeData } from '../contract'
-import type { ProviderNode } from '../core/providerNode'
+import type { ProviderNode, ThemeCatalogNode } from '../core/providerNode'
 import type { GranumResolution } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
-import type { GranumModeDefinition, GranumThemeConfig, GranumThemeModes, ThemePick } from '../core/resolveThemes'
+import type { GranumAppTheme, GranumModeDefinition, GranumThemeConfig, GranumThemeModes, ThemePick, ThemePlan } from '../core/resolveThemes'
+import type { TokenNature } from '../core/themeData'
 import type { EngineInput, GranumEngine } from '../engine/types'
 import type { AppSourcesScan } from './appSources'
 import type { ProviderEngineDecision } from './dialects'
+import { readFileSync } from 'node:fs'
 import { resolve as resolvePath } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -23,14 +25,14 @@ import { ownerOf, ownsThemes, toProviderNode, uniqueDeclarers } from '../core/pr
 import { splitComponentKey } from '../core/registry'
 import { resolveGranum } from '../core/resolve'
 import { APP_THEME_SOURCE, normalizeThemeEntry, planThemes } from '../core/resolveThemes'
-import { checkThemeData } from '../core/themeData'
+import { checkThemeData, unflattenThemeComponents } from '../core/themeData'
 import { scanAppSources } from './appSources'
 import { parseCssTokenBlocks, tokenSetFromCssSync } from './cssTokens'
 import { reconcileProviderEngines } from './dialects'
 import { resolveProviderPath } from './inlinedCss'
 import { loadPackageManifest } from './manifest'
 import { collectProviderInstances, scanObjectProvider } from './scanProvider'
-import { readJsonFile, readObjectComponentThemes } from './themeFiles'
+import { parseRegistry, readJsonFile, readObjectComponentThemes, themeSourceUnbuilt } from './themeFiles'
 
 export interface PreparedApp {
   readonly config: GranumConfig
@@ -278,8 +280,72 @@ export function materializeThemes(themes: readonly GranumThemeConfig[] | undefin
 }
 
 /**
- * Данные тем, которые собирает сборка: темы каталога из `themes`.
- * Остальные темы каталога не читаются.
+ * Темы каталога, чьи данные нужны сборке: темы из `themes` и родители
+ * тем-объектов по `extends` — их данные дополняют объект (A-22). Остальные
+ * темы каталога не читаются.
+ */
+export function plannedThemeDataPicks(plan: ThemePlan): ThemePick[] {
+  const picks: ThemePick[] = []
+  const parentsOf = (theme: GranumAppTheme, visiting: readonly GranumAppTheme[] = []): void => {
+    const base = theme.extends
+    // Цикл назовёт резолвер (`theme-extends-cycle`); здесь только не уйти в него.
+    if (typeof base === 'object') {
+      if (!visiting.includes(base))
+        parentsOf(base, [...visiting, theme])
+      return
+    }
+    const entry = base === undefined ? undefined : plan.owner?.theme.catalog[base]
+    if (entry)
+      picks.push({ kind: 'catalog', providerId: plan.owner!.id, id: base!, data: entry.data })
+  }
+  for (const planned of plan.themes) {
+    picks.push(planned.pick)
+    if (planned.pick.kind === 'app')
+      parentsOf(planned.pick.theme)
+  }
+  return picks
+}
+
+/** Реестр владельца каталога для резолюции; не читается — пусто: об этом скажет `doctor` (`registry-invalid`). */
+export function readOwnerRegistry(plan: ThemePlan): Record<string, TokenNature> {
+  const owner = plan.owner
+  if (owner?.theme.registry === undefined)
+    return {}
+  const url = resolveProviderPath(owner.theme.registry, owner.baseUrl)
+  const file = url.startsWith('file:') ? fileURLToPath(url) : url
+  try {
+    return parseRegistry(owner.id, file, readFileSync(file, 'utf8'))
+  }
+  catch {
+    return {}
+  }
+}
+
+/**
+ * Запись каталога `{ source }` просканированного провайдера: в синтетический
+ * манифест она не попадает — раскрыть исходник некому, — а в план тем входит,
+ * чтобы выбор этой темы дал `theme-source-unbuilt`, а не `unknown-theme` (C-43).
+ */
+function withUnbuiltSources(nodes: readonly ProviderNode[], loaded: readonly GranumProviderInput[]): ProviderNode[] {
+  const sources = new Map<string, Record<string, ThemeCatalogNode>>()
+  for (const input of loaded) {
+    if (isLoadedManifest(input))
+      continue
+    const entries = Object.entries(input.theme?.catalog ?? {}).flatMap(([id, entry]): [string, ThemeCatalogNode][] =>
+      'source' in entry ? [[id, { title: id, data: '', source: entry.source }]] : [])
+    if (entries.length > 0)
+      sources.set(input.id, Object.fromEntries(entries))
+  }
+  return nodes.map((node) => {
+    const extra = sources.get(node.id)
+    return extra !== undefined && node.form === 'manifest' ? { ...node, theme: { ...node.theme, catalog: { ...extra, ...node.theme.catalog } } } : node
+  })
+}
+
+/**
+ * Данные тем по плану ({@link plannedThemeDataPicks}). Данные `dist` несут
+ * значения раздела ещё и слитыми (C-44): копии с тем же значением на том же
+ * месте разводятся по месту, иная копия — коллизия.
  */
 export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], providers: readonly ProviderNode[]): Record<string, Record<string, GranumThemeData>> {
   const out: Record<string, Record<string, GranumThemeData>> = {}
@@ -287,6 +353,9 @@ export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], 
     if (pick?.kind !== 'catalog' || out[pick.providerId]?.[pick.id])
       continue
     const provider = providers.find(p => p.id === pick.providerId)!
+    const source = provider.theme.catalog[pick.id]?.source
+    if (source !== undefined)
+      throw themeSourceUnbuilt(provider.id, pick.id, source)
     const url = resolveProviderPath(pick.data, provider.baseUrl)
     const file = url.startsWith('file:') ? fileURLToPath(url) : url
     let raw: unknown
@@ -296,11 +365,11 @@ export function readPlannedThemeData(picks: readonly (ThemePick | undefined)[], 
     catch (cause) {
       throw new ThemeDataError(pick.providerId, pick.id, file, (cause as Error).message, { cause })
     }
-    const issue = checkThemeData(raw)
+    const issue = checkThemeData(raw, { flattened: true })
     if (issue)
-      throw new ThemeDataError(pick.providerId, pick.id, file, `${issue.path ? `'${issue.path}': ` : ''}${issue.details}`)
+      throw new ThemeDataError(pick.providerId, pick.id, file, `${issue.path ? `'${issue.path}': ` : ''}${issue.details}`, { reason: issue.reason })
     const byTheme = out[pick.providerId] ??= {}
-    byTheme[pick.id] = raw as GranumThemeData
+    byTheme[pick.id] = unflattenThemeComponents(raw as GranumThemeData)
   }
   return out
 }
@@ -400,15 +469,16 @@ export async function prepareApp(config: GranumConfig, root: string): Promise<Pr
   }
 
   const themes = materializeThemes(config.themes, root)
-  const nodes = inputs.map(toProviderNode)
+  const nodes = withUnbuiltSources(inputs.map(toProviderNode), loaded)
   const plan = planThemes(nodes, themes !== undefined ? { themes } : {})
   const resolution = resolveGranum({
     providers: inputs,
     ...(components !== undefined ? { components } : {}),
     ...(themes !== undefined ? { themes } : {}),
     ...(config.activation !== undefined ? { activation: config.activation } : {}),
-    themeData: readPlannedThemeData(plan.themes.map(planned => planned.pick), nodes),
+    themeData: readPlannedThemeData(plannedThemeDataPicks(plan), nodes),
     componentThemes: readComponentThemes(inputs),
+    themeRegistry: readOwnerRegistry(plan),
   })
   for (const w of resolution.warnings) {
     if (w.kind === 'provider-without-manifest')

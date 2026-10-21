@@ -1,0 +1,4 @@
+{
+  "vd-button-bg": "var(--vd-accent)",
+  "vd-button-fg": "var(--vd-accent-fg)"
+}

@@ -16,6 +16,10 @@ export interface GranumManifestCatalogEntry {
   /** Режимы темы: режим по умолчанию первым. */
   readonly modes: readonly string[]
   readonly defaultMode: string
+  /** Версия темы (C-41). */
+  readonly version?: string
+  /** Пакеты, под версии которых тема написана: id провайдера → диапазон semver. */
+  readonly targets?: Readonly<Record<string, string>>
 }
 
 export interface GranumManifestTheme {

@@ -122,7 +122,11 @@ manifest is produced only by the build.
 | `ThemeResolutionError (theme-owner-missing)` | a package has component tokens per theme, and its theme-owner dependency does not resolve from the package directory; install it or add it to `providers` |
 | `ThemeResolutionError (theme-missing)` | `activation` is set, but the build has no themes: no provider of the graph declares a catalog and `themes` has no theme object. There is nothing to activate; add the theme owner or drop the option |
 | `ThemeResolutionError (activation-collision)` | two pairs coincide: a `define` named like a mode of its theme, an `activation.value` template without `{mode}`, or without `{theme}` in a build of several themes with same-named modes |
-| `ThemeDataError` | the data JSON of a build theme cannot be read or fails the schema; the field path is in the message. Rebuild the provider |
+| `ThemeDataError` | the data JSON of a build theme cannot be read or fails the schema; the field path is in the message. Rebuild the provider. For a theme object with `extends` — a violation after the merge with its parent, the cause is in `reason`: `theme-token-collision` (a value has one place — a section or `root`/`modes`), `invalid-theme-component-mode`, `theme-components-untargeted` (the section package is not named in `targets`) |
+| `ThemeSourceError` | a theme source cannot be read; the path is in the message, the cause in `reason`: `theme-json-missing` (no folder or no `theme.json`), `theme-json-invalid` (not JSON, an unknown key, a mode with `tokens` — mode tokens live in `modes/<mode>.json`), `token-file-invalid` (not a JSON object of strings, a key with `--`, CSS not as one flat block), `duplicate-value-file` (`.json` and `.css` of one name), `unknown-mode-file` (a file of a mode `theme.json` does not declare — declare it, with an empty entry if need be), `empty-component-dir`, `unexpected-entry` (a stray file or folder — name it in `ignore`), `theme-data-invalid` (the data fail the check; the violation is in `dataReason`) |
+| `InvalidProviderError (theme-source-unbuilt)` | a `{ source }` catalog theme of an unbuilt provider is picked: only the provider build resolves a source — build it. Such an entry that is not picked is no error |
+| `ThemeResolutionError (theme-extends-cycle)` | theme objects extend each other in a cycle; the chain is in the message |
+| `InvalidProviderError (theme-id-mismatch)` | the id in the source's `theme.json` differs from the catalog key |
 | `InvalidProviderError (theme-incomplete)` | at provider build: a theme does not set registry tokens; the list looks like `dark:xh-bg`, `root:xh-radius` |
 | `InvalidProviderError (invalid-theme-dir)` | a `themesDir` folder is not named by a theme id, a file is not named by a mode, an extra file, or both `.json` and `.css` for one mode |
 | `InvalidProviderError (legacy-token-definitions)` | contract 1 theme keys are left in the provider: `theme.themes`, `defaultThemes`, `tokenDefinitions`, `tokenDefinitionsRef` |
@@ -145,6 +149,15 @@ whose block sits under `:where(:root)`, or an ancestor — or gets none: the mai
 even if the component reads it under one mode's selector: another mode's pair without a
 value does not get it. Add the value to the theme data, point `extends` at a catalog theme
 with the component tokens, or set the token in `modes.tokenOverrides` of its entry.
+
+`theme-target-mismatch` — the theme is written for other versions of a package than the
+build has: its `targets` range misses the version of the package manifest. The build
+prints it too. Check what changed in the package: `theme-incomplete` names the values the
+theme lacks. `theme-component-unknown` — the theme sets values for a component the package
+does not declare: a removed component or a typo. `theme-token-foreign` — the theme sets a
+token the component does not require from outside: a hook (a theme does not set hooks —
+leave it to the application), a token the component assigns itself, a global token in a
+component section (its place is `root`/`modes`) or a typo.
 
 ## A token override does not work
 

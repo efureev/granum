@@ -26,6 +26,8 @@ export interface GranumModeEntry {
 export interface GranumThemeManifestEntry {
   readonly id: string
   readonly title: string
+  /** Версия темы из её данных (C-41); у темы без версии нет. */
+  readonly version?: string
   /** Режимы в порядке блоков CSS: режим по умолчанию первым. */
   readonly modes: readonly GranumModeEntry[]
   readonly defaultMode: string
@@ -86,6 +88,7 @@ export interface GranumThemeManifestInput {
   readonly themes: readonly {
     readonly id: string
     readonly title: string
+    readonly version?: string
     readonly modes: readonly { readonly name: string, readonly title?: string, readonly colorScheme: 'light' | 'dark' }[]
     readonly defaultMode: string
     readonly href?: string
@@ -119,6 +122,7 @@ export function createThemeManifest(input: GranumThemeManifestInput): GranumThem
     return {
       id: theme.id,
       title: theme.title,
+      ...(theme.version !== undefined ? { version: theme.version } : {}),
       modes: ordered.map(mode => ({
         name: mode.name,
         ...(mode.title !== undefined ? { title: mode.title } : {}),

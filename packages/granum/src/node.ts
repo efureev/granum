@@ -41,12 +41,14 @@ export {
   writeManifestSync,
 } from './node/manifest'
 export type { PreparedApp, PreparedWarning } from './node/prepare'
-export { loadProviderInputs, materializeAppModes, materializeThemes, prepareApp, readComponentThemes, readPlannedThemeData, scanProviderInputs } from './node/prepare'
+export { loadProviderInputs, materializeAppModes, materializeThemes, plannedThemeDataPicks, prepareApp, readComponentThemes, readOwnerRegistry, readPlannedThemeData, scanProviderInputs } from './node/prepare'
 export type { PruneCssResult } from './node/pruneCssDeclarations'
 export { pruneCssDeclarations } from './node/pruneCssDeclarations'
 export type { BuildReportOptions, GranumBuildReport, LayerSize } from './node/report'
 export { buildReport, bundleLayerSizes } from './node/report'
 export { collectProviderInstances, providerDistDir, scanObjectProvider } from './node/scanProvider'
+export type { CopyThemeOptions, CopyThemeResult } from './node/themeCopy'
+export { copyTheme } from './node/themeCopy'
 export type { ThemeCss } from './node/themeCss'
 export { emitThemeCss } from './node/themeCss'
 export {
@@ -59,6 +61,8 @@ export {
   readThemeDataFile,
 } from './node/themeFiles'
 export { getThemeManifest, resolveThemeManifest } from './node/themeManifest'
+export type { LoadThemeSourceOptions } from './node/themeSource'
+export { loadThemeSource } from './node/themeSource'
 export type { ThemeResolutionOptions, ThemeStylesheet, ThemeStylesheetOptions, ThemeStylesheetParts } from './node/themeStylesheet'
 export { emitThemeStylesheet } from './node/themeStylesheet'
 export type { PlanTokenPruneInput, PrunableSection, TokenKeepReason, TokenPrunePlan } from './node/tokenPrune'

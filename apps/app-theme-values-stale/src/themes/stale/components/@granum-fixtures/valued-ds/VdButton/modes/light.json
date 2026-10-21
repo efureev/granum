@@ -1,0 +1,5 @@
+{
+  "vd-button-bg": "var(--vd-accent)",
+  "vd-button-fg": "var(--vd-accent-fg)",
+  "vd-button-shadow": "0 1px 0 #000"
+}

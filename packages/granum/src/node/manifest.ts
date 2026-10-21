@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { GRANUM_CONTRACT_VERSION, GRANUM_MANIFEST_VERSION, isValidComponentName } from '../contract'
 import { InvalidManifestError, ManifestNotFoundError, UnsupportedContractVersionError, UnsupportedManifestVersionError } from '../core/errors'
+import { isValidRange, isVersion } from '../core/semver'
 import { isModeName, isThemeId } from '../core/themeData'
 import { isDialect } from '../engine/dialect'
 
@@ -384,6 +385,14 @@ function validateSchema(raw: Record<string, unknown>, file?: string): GranumMani
       const defaultMode = expectString(entry.defaultMode, `${at}.defaultMode`, file)
       if (modes[0] !== defaultMode)
         throw schema(`${at}.modes`, `the default mode '${defaultMode}' must come first`, file)
+      if (entry.version !== undefined && !isVersion(entry.version))
+        throw schema(`${at}.version`, `expected MAJOR.MINOR.PATCH with an optional pre-release`, file)
+      if (entry.targets !== undefined) {
+        for (const [provider, range] of Object.entries(expectRecord(entry.targets, `${at}.targets`, file))) {
+          if (!isValidRange(range))
+            throw schema(`${at}.targets.${provider}`, `expected a semver range`, file)
+        }
+      }
     }
   }
   for (const [name, value] of Object.entries(components)) {
