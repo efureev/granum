@@ -73,6 +73,27 @@ export const xhButtonConfig = defineGranumComponent(import.meta.url, {
 Первый аргумент — `import.meta.url` модуля `config.ts`: по нему сборка
 находит директорию компонента и исходники `cssFiles`.
 
+### Хуки из своего реестра токенов
+
+Перечислять каждый хук в `hookTokens` руками не обязательно. Провайдер, который ведёт
+свой реестр токенов компонентов — имя, вид, значение по умолчанию, — может заполнять
+`hookTokens` на сборке: обернуть провайдер перед `granumProvider()` функцией, которая
+дописывает каждому дескриптору хуки из его реестра. Тогда в `config.ts` остаются только
+хуки чужого реестра — токены соседа, которые компонент читает.
+
+```ts
+// vite.config.ts провайдера
+granumProvider({
+  provider: withRegistryHookTokens(provider, srcDir),
+  engine: windEngine(),
+})
+```
+
+Формат реестра granum не читает: в манифест попадает итоговый `hookTokens` (поле
+`tokens.hooks`). Так устроен `@feugene/granularity`: реестр — `tokens.json` рядом с
+компонентом, хук — запись вида `hook`, обёртка — `withRegistryHookTokens` из
+`@feugene/granularity-test-kit`.
+
 ## Провайдер
 
 ```ts

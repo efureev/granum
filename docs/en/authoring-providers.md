@@ -74,6 +74,27 @@ package: list `@feugene/granum` in `peerDependencies`, otherwise the build write
 The first argument is the `import.meta.url` of the `config.ts` module: the
 build uses it to find the component directory and the `cssFiles` sources.
 
+### Hooks from your own token registry
+
+You do not have to list every hook in `hookTokens` by hand. A provider that keeps its
+own registry of component tokens — name, kind, default value — can fill `hookTokens` at
+build time: wrap the provider before `granumProvider()` in a function that adds to every
+descriptor the hooks from its registry. Then `config.ts` keeps only the hooks of a foreign
+registry — tokens of a neighbour that the component reads.
+
+```ts
+// the provider's vite.config.ts
+granumProvider({
+  provider: withRegistryHookTokens(provider, srcDir),
+  engine: windEngine(),
+})
+```
+
+granum does not read the registry format: the manifest gets the resulting `hookTokens`
+(the `tokens.hooks` field). This is how `@feugene/granularity` works: the registry is
+`tokens.json` next to the component, a hook is an entry of kind `hook`, the wrapper is
+`withRegistryHookTokens` from `@feugene/granularity-test-kit`.
+
 ## Provider
 
 ```ts
