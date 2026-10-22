@@ -179,7 +179,9 @@ Whose values they are is checked against the manifests of the graph, not against
 selection: a theme is written for the whole package. A package missing from the graph —
 its section is skipped. A section may name a group (`group` of the descriptor) instead of
 a component: the tokens of a shared SFC belong to no single component, and a group token
-is one that some component of the group requires. Neither a component nor a group —
+is one that some component of the group requires. A group value is one for the whole
+group: a value that differs per component is that component's own token. A component
+with the same name takes the section. Neither a component nor a group —
 `theme-component-unknown`. A token the component does not require from outside —
 `theme-token-foreign`: a hook, a token the
 component assigns itself, a global registry token (its place is `root`/`modes`) or a
