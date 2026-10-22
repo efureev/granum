@@ -154,7 +154,7 @@ with the component tokens, or set the token in `modes.tokenOverrides` of its ent
 build has: its `targets` range misses the version of the package manifest. The build
 prints it too. Check what changed in the package: `theme-incomplete` names the values the
 theme lacks. `theme-component-unknown` — the theme sets values for a component the package
-does not declare: a removed component or a typo. `theme-token-foreign` — the theme sets a
+declares neither as a component nor as a group: a removed component or a typo. `theme-token-foreign` — the theme sets a
 token the component does not require from outside: a hook (a theme does not set hooks —
 leave it to the application), a token the component assigns itself, a global token in a
 component section (its place is `root`/`modes`) or a typo.

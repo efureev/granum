@@ -76,6 +76,26 @@ describe('принадлежность значений темы (A-37, INV-THEM
     expect(warningsFor(data)).toEqual([{ kind: 'theme-component-unknown', theme: 'stone', providerId: UI, component: 'Panel' }])
   })
 
+  it('раздел группы общего SFC: токены, которые требует компонент группы, находок не дают', () => {
+    const charts = makeManifest('@acme/charts', {
+      Line: { group: 'Frame', tokens: { consumes: ['--frame-grid', '--line-width'], requires: ['--frame-grid', '--line-width'], dynamic: [] } },
+      Bar: { group: 'Frame', tokens: { consumes: ['--frame-grid'], requires: ['--frame-grid'], dynamic: [] } },
+      Plain: { tokens: { consumes: ['--plain-bg'], requires: ['--plain-bg'], dynamic: [] } },
+    }, { version: '1.0.0' })
+    const data = stone({
+      '@acme/charts': {
+        Frame: { root: { 'frame-grid': '1px', 'frame-typo': '2px' } },
+        Line: { root: { 'line-width': '2px' } },
+        Group: { root: { 'group-x': '1' } },
+      },
+    }, { targets: { [UI]: '^1.0.0', '@acme/charts': '^1.0.0' } })
+
+    expect(warningsFor(data, [], [owner, ui, charts])).toEqual([
+      { kind: 'theme-token-foreign', theme: 'stone', providerId: '@acme/charts', component: 'Frame', token: 'frame-typo', place: 'section' },
+      { kind: 'theme-component-unknown', theme: 'stone', providerId: '@acme/charts', component: 'Group' },
+    ])
+  })
+
   it('хук компонента селекции в root/modes темы — находка; у невыбранного компонента — нет', () => {
     const data = stone(undefined, { root: { 'btn-shadow': 'none' } })
     expect(warningsFor(data, ['Button'])).toEqual([

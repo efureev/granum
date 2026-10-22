@@ -460,15 +460,18 @@ function checkThemeValues(
         fromSections.add(token)
       if (!provider)
         continue
+      // Раздел называет компонент, а без такого компонента — группу общего SFC:
+      // токены группы требует каждый её компонент, и владельца среди них нет.
       const component = provider.components.find(c => c.name === name)
-      if (!component) {
+      const members = component ? [component] : provider.components.filter(c => c.group === name)
+      if (members.length === 0) {
         warnings.push({ kind: 'theme-component-unknown', theme: theme.id, providerId, component: name })
         continue
       }
       // Объектный провайдер до медленного пути: требований ещё нет, судить не по чему.
-      if (provider.form === 'object' && component.consumesTokens.length === 0)
+      if (provider.form === 'object' && members.every(member => member.consumesTokens.length === 0))
         continue
-      const required = new Set(component.requiresTokens)
+      const required = new Set(members.flatMap(member => member.requiresTokens))
       for (const token of tokens) {
         if (!required.has(`--${token}`) || Object.hasOwn(registry, token))
           warnings.push({ kind: 'theme-token-foreign', theme: theme.id, providerId, component: name, token, place: 'section' })

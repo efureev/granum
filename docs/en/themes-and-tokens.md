@@ -177,8 +177,11 @@ Section values are theme data: the same layer and the same mode chains as
 
 Whose values they are is checked against the manifests of the graph, not against the
 selection: a theme is written for the whole package. A package missing from the graph —
-its section is skipped. A missing component — `theme-component-unknown`. A token the
-component does not require from outside — `theme-token-foreign`: a hook, a token the
+its section is skipped. A section may name a group (`group` of the descriptor) instead of
+a component: the tokens of a shared SFC belong to no single component, and a group token
+is one that some component of the group requires. Neither a component nor a group —
+`theme-component-unknown`. A token the component does not require from outside —
+`theme-token-foreign`: a hook, a token the
 component assigns itself, a global registry token (its place is `root`/`modes`) or a
 typo. A theme does not set hooks at all: a value the theme gives makes the token a theme
 token, and a hook in `root`/`modes` of the theme is the same finding. The values apply
