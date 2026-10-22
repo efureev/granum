@@ -9,6 +9,12 @@ import type { GranumEngine } from './engine/types'
 
 export type GranumPruneMode = 'off' | 'report' | 'on'
 
+/**
+ * Обрезка по умолчанию — `on` (ADR-14): в CSS только токены, достижимые от
+ * потребления выбранных компонентов, приложения и `keep` (T-2).
+ */
+export const DEFAULT_PRUNE_MODE: GranumPruneMode = 'on'
+
 export interface GranumAppSources {
   /** Директории исходников приложения относительно корня Vite. */
   readonly dirs: readonly string[]
@@ -17,6 +23,10 @@ export interface GranumAppSources {
 }
 
 export interface GranumPruneTokensOptions {
+  /**
+   * `on` (по умолчанию) — недостижимые токены уходят из слоёв `tokens` и
+   * `themes`; `report` — только план в отчёте; `off` — эмиссия как есть.
+   */
   readonly mode?: GranumPruneMode
   /**
    * Токены (без `--`), сохраняемые безусловно; строка с `*` в конце — префикс,
@@ -116,4 +126,9 @@ export interface GranumConfig {
  */
 export function defineGranumConfig(config: GranumConfig): GranumConfig {
   return config
+}
+
+/** Режим обрезки конфига с умолчанием `on`. */
+export function pruneModeOf(config: Pick<GranumConfig, 'pruneTokens'>): GranumPruneMode {
+  return config.pruneTokens?.mode ?? DEFAULT_PRUNE_MODE
 }

@@ -18,5 +18,7 @@ export default defineGranumConfig({
   components: ['@granum-fixtures/heavy:XhPanel'],
   themes: [{ theme: 'heavy', modes: ['light', 'dark'] }],
   appSources: { dirs: ['src'] },
+  // Как у `bench-one`: набор обязан совпадать, и обрезка там выключена явно.
+  pruneTokens: { mode: 'off' },
   css: { split: true },
 })

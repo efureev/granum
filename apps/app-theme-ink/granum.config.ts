@@ -15,4 +15,7 @@ export default defineGranumConfig({
     { theme: 'paper', modes: ['light', 'dark'] },
   ],
   appSources: { dirs: ['src'] },
+  // Стенд держит фолбэки и каскад режимов на всём наборе токенов темы, а не
+  // только на прочитанных компонентами: обрезка (по умолчанию она включена) выключена.
+  pruneTokens: { mode: 'off' },
 })

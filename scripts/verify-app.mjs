@@ -13,7 +13,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { extractLayerBlocks } from '@feugene/granum/node'
 import { auditFailure } from './audit-dist.mjs'
-import { tokenValue } from './lib/cssValues.mjs'
+import { declaredTokens, tokenValue } from './lib/cssValues.mjs'
 import { pageStylesheets } from './lib/pageStylesheets.mjs'
 
 const dir = process.cwd()
@@ -57,6 +57,18 @@ if (expected.values) {
     if (found !== value)
       failures.push(`ЗНАЧЕНИЕ: ${what}\n      ${selector} ${token}: ожидали ${JSON.stringify(value)}, нашли ${JSON.stringify(found)}`)
   }
+}
+// Точный состав токенов в слоях: подстроками «есть» и «нет» не доказать, что
+// лишнего нет, — перечислить всё, чего быть не должно, нельзя.
+if (expected.tokens) {
+  const { blocks } = extractLayerBlocks(read('.css'), 'granum')
+  const css = expected.tokens.layers.map(layer => blocks.get(layer) ?? '').join('\n')
+  // Порядок блоков и токенов задаёт сборка, а не ожидание: сравнение без него.
+  const canonical = blocksOf => JSON.stringify(Object.entries(blocksOf).sort(([a], [b]) => (a < b ? -1 : 1)).map(([key, tokens]) => [key, Object.entries(tokens).sort(([a], [b]) => (a < b ? -1 : 1))]))
+  const found = canonical(declaredTokens(css, expected.tokens.ignore))
+  const want = canonical(expected.tokens.exact)
+  if (found !== want)
+    failures.push(`ТОКЕНЫ в слоях ${expected.tokens.layers.join(', ')}: ${expected.tokens.what}\n      ожидали ${want}\n      нашли   ${found}`)
 }
 if (expected.js)
   match(read('.js'), expected.js, 'js')

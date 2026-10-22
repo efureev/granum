@@ -24,7 +24,7 @@ export default defineGranumConfig({
   appSources: { dirs: ['src'] },
   css: { layers: true, layerPrefix: 'granum' },
   js: { guard: 'error' },
-  pruneTokens: { mode: 'off' },
+  pruneTokens: { mode: 'on', keep: ['xh-brand-*'] },
   report: { file: 'granum-report.json' },
 })
 ```
@@ -45,7 +45,8 @@ export default defineGranumConfig({
 | `css.layers` | `true` | обёртки `@layer`; `false` — плоская конкатенация в том же порядке |
 | `js.guard` | `'error'` | импорт компонента вне селекции: ошибка, предупреждение или ничего |
 | `js.dts` | — | куда писать объявления для `virtual:granum/components`, например `src/granum.d.ts` |
-| `pruneTokens.mode` | `'off'` | `'report'` — план в отчёте, `'on'` — обрезка слоёв `tokens` и `themes` |
+| `pruneTokens.mode` | `'on'` | обрезка слоёв `tokens` и `themes`: остаются токены, достижимые от потребления компонентов, приложения и `keep`; `'report'` — только план в отчёте, `'off'` — эмиссия как есть |
+| `pruneTokens.keep` | — | токены, сохраняемые безусловно (без `--`; `*` в конце — префикс, или `RegExp`): то, что приложение берёт в обход сборки |
 | `report.file` | `'granum-report.json'` | отчёт сборки в `outDir`; `false` — не писать |
 | `report.brotli` | `false` | считать ли размеры слоёв в brotli: качество 11 — 151 мс на 222 kB против 2 мс у gzip |
 

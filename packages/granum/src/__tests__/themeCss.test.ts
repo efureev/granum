@@ -27,6 +27,14 @@ function blockOf(css: string, selector: string): string | undefined {
   return css.slice(at, css.indexOf('}', at) + 1)
 }
 
+/**
+ * Устройство эмиссии тем — без обрезки: фикстуры здесь не потребляют токены, и
+ * обрезка по умолчанию (`on`) сняла бы всё, что тест проверяет.
+ */
+function prepareUnpruned(config: Parameters<typeof prepareTestApp>[0], root: string): Promise<PreparedApp> {
+  return prepareTestApp({ pruneTokens: { mode: 'off' }, ...config }, root)
+}
+
 async function layers(app: PreparedApp): Promise<{ tokens: string, themes: string, base: string }> {
   const { layers } = await emitCss(app)
   return layers
@@ -35,7 +43,7 @@ async function layers(app: PreparedApp): Promise<{ tokens: string, themes: strin
 describe('корень и режимы', () => {
   it('литералы root — в tokens под корнем без атрибута и парами темы; формулы root — под :where(:root) и парами', async () => {
     const { root, provider } = catalogProvider()
-    const app = await prepareTestApp({ providers: [provider] }, root)
+    const app = await prepareUnpruned({ providers: [provider] }, root)
     const { tokens, themes } = await layers(app)
     expect(blockOf(tokens, ':root:not([data-theme]), [data-theme="paper-light"]')).toContain('--p-radius: 6px;')
     expect(tokens).not.toContain('--p-ring')
@@ -46,7 +54,7 @@ describe('корень и режимы', () => {
 
   it('режим по умолчанию первым под :root и парой, остальные под парой; color-scheme в блоке', async () => {
     const { root, provider } = catalogProvider()
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 'ink', modes: ['light', 'dark', 'dim'] }] }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 'ink', modes: ['light', 'dark', 'dim'] }] }, root))
     const light = blockAt(themes, ':where(:root), [data-theme="ink-light"]')
     const dark = blockAt(themes, '[data-theme="ink-dark"]')
     const dim = blockAt(themes, '[data-theme="ink-dim"]')
@@ -59,7 +67,7 @@ describe('корень и режимы', () => {
 
   it('классов .light/.dark нет; данных других тем нет', async () => {
     const { root, provider } = catalogProvider()
-    const { css } = await emitCss(await prepareTestApp({ providers: [provider], themes: ['ink'] }, root))
+    const { css } = await emitCss(await prepareUnpruned({ providers: [provider], themes: ['ink'] }, root))
     expect(css).not.toMatch(/\.(?:light|dark)\b/)
     expect(css).not.toContain('paper-')
     expect(css).not.toContain('#2563eb')
@@ -73,7 +81,7 @@ describe('формулы режимов', () => {
       dark: { 'p-bg': '#000', 'p-soft': 'color-mix(in oklab, var(--p-bg) 90%, black)', 'p-edge': 'var(--p-soft)' },
     })
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }] }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }] }, root))
     expect(blockOf(themes, ':where(:root), [data-theme="t-light"], [data-theme="t-dark"]')).toContain('--p-soft:')
     expect(blockOf(themes, ':where(:root), [data-theme="t-light"]')).not.toContain('--p-soft')
     expect(blockOf(themes, ':where(:root), [data-theme="t-light"]')).toContain('--p-edge: var(--p-bg);')
@@ -89,7 +97,7 @@ describe('фолбэки, системная схема', () => {
 
   it('@supports после всех режимов, под селектором режима; у режима по умолчанию — корень без атрибута и пара', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }] }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }] }, root))
     const supports = themes.indexOf('@supports not (color: oklch(0 0 0)) {')
     expect(supports).toBeGreaterThan(themes.indexOf('[data-theme="t-dark"] {'))
     expect(themes.slice(supports)).toContain(':root:not([data-theme]), [data-theme="t-light"] {\n    --p-bg: white;')
@@ -98,7 +106,7 @@ describe('фолбэки, системная схема', () => {
   it('режим приложения: фолбэки базы, затем свои — свои перекрывают по токену', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
     const ocean = { extends: 'light', tokens: { 'p-bg': '#012' }, fallbacks: [{ supports: 'not (color: oklch(0 0 0))', tokens: { 'p-bg': 'navy' } }] }
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: { define: { ocean, plain: { extends: 'light' } } } }] }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 't', modes: { define: { ocean, plain: { extends: 'light' } } } }] }, root))
     const inherited = themes.indexOf('[data-theme="t-ocean"] {\n    --p-bg: white;')
     const own = themes.indexOf('[data-theme="t-ocean"] {\n    --p-bg: navy;')
     expect(inherited).toBeGreaterThan(-1)
@@ -109,7 +117,7 @@ describe('фолбэки, системная схема', () => {
 
   it('system: media — тёмный режим по prefers-color-scheme, пока атрибут не выставлен', async () => {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }], activation: { system: 'media' } }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }], activation: { system: 'media' } }, root))
     expect(themes).toContain('@media (prefers-color-scheme: dark) {\n  :root:not([data-theme]) {\n    color-scheme: dark;\n    --p-bg: #000;')
   })
 })
@@ -120,7 +128,7 @@ describe('каскад в браузере, которому нужен фолб
 
   async function pageCss(theme: ReturnType<typeof themeData>, system?: 'media'): Promise<string[]> {
     const { root, provider } = catalogProvider({ themes: { t: theme } })
-    const { tokens, themes } = await layers(await prepareTestApp({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }], ...(system ? { activation: { system } } : {}) }, root))
+    const { tokens, themes } = await layers(await prepareUnpruned({ providers: [provider], themes: [{ theme: 't', modes: ['light', 'dark'] }], ...(system ? { activation: { system } } : {}) }, root))
     return [tokens, themes]
   }
 
@@ -159,7 +167,7 @@ describe('формулы дополнительной темы на корне �
   const THIN = '0 0 0 1px var(--p-accent)'
 
   async function sheets(config: Parameters<typeof prepareTestApp>[0], root: string): Promise<{ tokens: string, themes: string, extra: string }> {
-    const css = await emitCss(await prepareTestApp(config, root))
+    const css = await emitCss(await prepareUnpruned(config, root))
     return { tokens: css.layers.tokens, themes: css.layers.themes, extra: Object.values(css.themeSheets).map(bare).join('\n') }
   }
 
@@ -222,7 +230,7 @@ describe('режим приложения поверх режима темы —
     const { root, provider } = catalogProvider({
       components: { Card: { themes: { paper: { modes: { dark: { 'c-shade': '#020617' } } } } } },
     })
-    const app = await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', modes: { define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'p-fg': '#4fd1e0' } } } } }] }, root)
+    const app = await prepareUnpruned({ providers: [provider], themes: [{ theme: 'paper', modes: { define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'p-fg': '#4fd1e0' } } } } }] }, root)
     const block = blockOf((await layers(app)).themes, '[data-theme="paper-ocean"]')!
     expect(block).toContain('--p-bg: #000000;')
     expect(block).toContain('--c-shade: #020617;')
@@ -232,7 +240,7 @@ describe('режим приложения поверх режима темы —
 
   it('override режима лежит в его блоке после данных и токенов компонента', async () => {
     const { root, provider } = catalogProvider()
-    const app = await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'], tokenOverrides: { light: { 'p-bg': '#fafafa' }, root: { 'p-radius': '1px' } } } }] }, root)
+    const app = await prepareUnpruned({ providers: [provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'], tokenOverrides: { light: { 'p-bg': '#fafafa' }, root: { 'p-radius': '1px' } } } }] }, root)
     const { tokens, themes } = await layers(app)
     expect(blockOf(themes, ':where(:root), [data-theme="paper-light"]')).toContain('--p-bg: #fafafa;')
     expect(blockOf(tokens, ':root:not([data-theme]), [data-theme="paper-light"], [data-theme="paper-dark"]')).toContain('--p-radius: 1px;')
@@ -242,7 +250,7 @@ describe('режим приложения поверх режима темы —
 describe('дополнительная тема', () => {
   it('полные блоки пар, никогда под :root; формулы под списком её пар; в общем листе её нет', async () => {
     const { root, provider } = catalogProvider()
-    const app = await prepareTestApp({ providers: [provider], themes: [{ theme: 'ink', default: true }, { theme: 'paper', modes: ['light', 'dark'] }] }, root)
+    const app = await prepareUnpruned({ providers: [provider], themes: [{ theme: 'ink', default: true }, { theme: 'paper', modes: ['light', 'dark'] }] }, root)
     const css = await emitCss(app)
     expect(css.layers.themes).not.toContain('paper-')
     const sheet = css.themeSheets.paper!
@@ -264,7 +272,7 @@ describe('дополнительная тема', () => {
 
   it('режимы дополнительной темы — по правилу набора: без modes — только режим по умолчанию', async () => {
     const { root, provider } = catalogProvider()
-    const app = await prepareTestApp({ providers: [provider], themes: [{ theme: 'ink', default: true }, 'paper'] }, root)
+    const app = await prepareUnpruned({ providers: [provider], themes: [{ theme: 'ink', default: true }, 'paper'] }, root)
     const { additional } = emitThemeCss(app.resolution)
     expect(additional.map(sheet => sheet.id)).toEqual(['paper'])
     expect(additional[0]!.themes.join('\n')).toContain('[data-theme="paper-light"]')
@@ -277,7 +285,7 @@ describe('дополнительная тема', () => {
     const { root, provider } = catalogProvider({
       themes: { paper: { ...PAPER, baseCss: [font] }, ink: { ...INK, baseCss: [font, own], extends: 'paper' } },
     })
-    const css = await emitCss(await prepareTestApp({ providers: [provider], themes: [{ theme: 'paper', default: true }, 'ink'] }, root))
+    const css = await emitCss(await prepareUnpruned({ providers: [provider], themes: [{ theme: 'paper', default: true }, 'ink'] }, root))
     expect(css.layers.base.split(font)).toHaveLength(2)
     expect(css.layers.base).not.toContain(own)
     expect(css.themeSheets.ink).toContain(own)
@@ -289,7 +297,7 @@ describe('без тем', () => {
   it('провайдер без каталога: слой themes пуст', async () => {
     const { root, provider } = catalogProvider({ themes: {}, defaultTheme: 'x' })
     const bare = { ...provider, manifest: { ...provider.manifest, theme: { declares: [] } } }
-    const { themes } = await layers(await prepareTestApp({ providers: [bare] }, root))
+    const { themes } = await layers(await prepareUnpruned({ providers: [bare] }, root))
     expect(themes).toBe('')
   })
 })
@@ -302,12 +310,12 @@ describe('селектор тёмных режимов для движка', () 
       return TEST_ENGINE.generate(input)
     } }
     const { root, provider } = catalogProvider()
-    await emitCss(await prepareTestApp({ providers: [provider], engine, themes: [{ theme: 'ink', modes: ['light', 'dark', 'dim'] }] }, root))
+    await emitCss(await prepareUnpruned({ providers: [provider], engine, themes: [{ theme: 'ink', modes: ['light', 'dark', 'dim'] }] }, root))
     expect(seen.at(-1)).toBe('[data-theme="ink-dark"], [data-theme="ink-dim"]')
-    await emitCss(await prepareTestApp({ providers: [provider], engine, themes: [{ theme: 'ink', modes: ['light'] }] }, root))
+    await emitCss(await prepareUnpruned({ providers: [provider], engine, themes: [{ theme: 'ink', modes: ['light'] }] }, root))
     expect(seen.at(-1)).toBeUndefined()
     // Тёмные пары дополнительной темы — тоже: утилиты `dark:` живут в общем листе.
-    await emitCss(await prepareTestApp({ providers: [provider], engine, themes: [{ theme: 'ink', default: true, modes: ['light'] }, { theme: 'paper', modes: ['light', 'dark'] }] }, root))
+    await emitCss(await prepareUnpruned({ providers: [provider], engine, themes: [{ theme: 'ink', default: true, modes: ['light'] }, { theme: 'paper', modes: ['light', 'dark'] }] }, root))
     expect(seen.at(-1)).toBe('[data-theme="paper-dark"]')
   })
 })

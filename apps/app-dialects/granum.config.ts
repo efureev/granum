@@ -24,4 +24,7 @@ export default defineGranumConfig({
   providers: ['@granum-fixtures/atoms'],
   components: ['@granum-fixtures/atoms:AtBox'],
   appSources: { dirs: ['src'] },
+  // Правила пакета здесь нарочно не находятся, и токен темы никто не читает —
+  // обрезка (по умолчанию она включена) сняла бы тему, доставку которой стенд проверяет.
+  pruneTokens: { mode: 'off' },
 })

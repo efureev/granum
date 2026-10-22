@@ -333,7 +333,8 @@ describe('granum cli: вызов и коды выхода', () => {
     const root = appDir({ config: `import { engine } from './granum.engine.mjs'\nexport default { providers: ['@x/kit'], engine: engine(), components: ['@x/kit:Card'], themes: [{ theme: 'kit', modes: { tokenOverrides: { light: { extra: '1' } } } }] }\n` })
     const t = io(root)
     expect(await runGranumCli(['prune', 'granum.config.mjs', '--json'], t.io)).toBe(0)
-    expect(JSON.parse(t.out[0]!).mode).toBe('off')
+    // Без `pruneTokens` — умолчание `on` (ADR-14).
+    expect(JSON.parse(t.out[0]!).mode).toBe('on')
   })
 
   it('report: читает dist/granum-report.json по умолчанию, --strict падает на unmatched', async () => {

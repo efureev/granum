@@ -20,4 +20,7 @@ export default defineGranumConfig({
   providers: ['@granum-fixtures/atoms', '@granum-fixtures/plain'],
   components: ['@granum-fixtures/atoms:AtBox', '@granum-fixtures/plain:PlCard'],
   appSources: { dirs: ['src'] },
+  // Стенд проверяет, что доехали токены обоих пакетов, а не только те, что
+  // читают выбранные компоненты: обрезка (по умолчанию она включена) выключена.
+  pruneTokens: { mode: 'off' },
 })

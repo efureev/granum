@@ -8,8 +8,8 @@ shipped to the distribution is not used".
 | Stand | Contents | Purpose |
 |---|---|---|
 | `bench-zero` | bare Vue, no granum, no provider | the denominator: the price of an empty app with the same tooling |
-| `bench-one` | the granum plugin and one `XhPanel` from the `heavy` fixture (the graph pulls four more) | the subject: the full price of a component on top of the foundation |
-| `bench-pruned` | the same plus `pruneTokens: { mode: 'on' }` | the effect of token pruning |
+| `bench-one` | the granum plugin and one `XhPanel` from the `heavy` fixture (the graph pulls four more), pruning turned off explicitly (`pruneTokens: { mode: 'off' }`) | the subject: the full price of a component on top of the foundation |
+| `bench-pruned` | the same with pruning — granum's default (`pruneTokens: { mode: 'on' }`) | the effect of token pruning |
 
 The tooling of the stands is identical except for the plugin and the
 provider chunk group: only then is the difference of distributions the price

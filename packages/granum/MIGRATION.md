@@ -10,6 +10,21 @@ Step-by-step guides, mirrored in two languages:
 - English: [`docs/en/migration.md`](../../docs/en/migration.md)
 - Русский: [`docs/ru/migration.md`](../../docs/ru/migration.md)
 
+## From 3.11 to 3.12
+
+**Token pruning is on by default** (ADR-14 in `docs/decisions.md`). Without `pruneTokens` the
+build now removes from the `tokens` and `themes` layers every declaration that nothing reaches:
+the CSS of the selected components, the engine output, `consumes` and `dynamicTokens` of the
+manifests, the application sources (`appSources`), the application's values and `keep`. A theme
+that carries the values of every component of a package gives the application only what its
+components read.
+
+- A token the application reads past the build — a name assembled at runtime, a token from a CMS
+  or from a file outside `appSources` — goes to `keep` (`pruneTokens: { keep: ['brand-*'] }`).
+  `granum prune granum.config.ts` prints what is removed and why.
+- The previous emission is one line away: `pruneTokens: { mode: 'off' }`.
+- The report and `granum prune` now print `mode: 'on'` for a config without `pruneTokens`.
+
 ## From 3.9 to 3.10
 
 3.10 lets a theme own the values of components: token names are the contract of the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ruleBlocks, tokenValue } from '../lib/cssValues.mjs'
+import { declaredTokens, ruleBlocks, tokenValue } from '../lib/cssValues.mjs'
 
 const CSS = [
   '@layer granum.themes{:where(:root),[data-theme=stone-light]{--a:#fff;--b:var(--a)}[data-theme=stone-dark]{--a:#000}}',
@@ -27,5 +27,16 @@ describe('значения токенов по блокам собранного
     expect(tokenValue(CSS, '[data-theme=stone-dark]', '--c')).toBeUndefined()
     // Селектор сравнивается целиком: `stone-light` не совпадает с `stone-light-hc`.
     expect(tokenValue(CSS, '[data-theme=stone-light]', '--d')).toBeUndefined()
+  })
+})
+
+describe('declaredTokens', () => {
+  it('токены каждого блока с селекторами и at-правилами; прочие объявления — мимо', () => {
+    const css = ':where(:root),[data-theme=stone-light]{--vd-accent:#57534e;color-scheme:light;--lightningcss-light:initial}'
+      + '@supports not (color:color-mix(in srgb,red,red)){[data-theme=stone-light]{--vd-hover:#444}}'
+    expect(declaredTokens(css, [/^--lightningcss-/])).toEqual({
+      ':where(:root),[data-theme=stone-light]': { '--vd-accent': '#57534e' },
+      '@supports not (color:color-mix(in srgb,red,red)) [data-theme=stone-light]': { '--vd-hover': '#444' },
+    })
   })
 })

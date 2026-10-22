@@ -24,7 +24,7 @@ export default defineGranumConfig({
   appSources: { dirs: ['src'] },
   css: { layers: true, layerPrefix: 'granum' },
   js: { guard: 'error' },
-  pruneTokens: { mode: 'off' },
+  pruneTokens: { mode: 'on', keep: ['xh-brand-*'] },
   report: { file: 'granum-report.json' },
 })
 ```
@@ -45,7 +45,8 @@ export default defineGranumConfig({
 | `css.layers` | `true` | `@layer` wrappers; `false` — flat concatenation in the same order |
 | `js.guard` | `'error'` | importing a component outside the selection: error, warning or nothing |
 | `js.dts` | — | where to write the declarations for `virtual:granum/components`, e.g. `src/granum.d.ts` |
-| `pruneTokens.mode` | `'off'` | `'report'` — plan in the report, `'on'` — prune the `tokens` and `themes` layers |
+| `pruneTokens.mode` | `'on'` | prune the `tokens` and `themes` layers: tokens reachable from the consumption of components, the application and `keep` stay; `'report'` — only the plan in the report, `'off'` — the emission as is |
+| `pruneTokens.keep` | — | tokens kept unconditionally (without `--`; a trailing `*` is a prefix, or a `RegExp`): what the application takes past the build |
 | `report.file` | `'granum-report.json'` | build report in `outDir`; `false` — do not write |
 | `report.brotli` | `false` | whether to measure layer sizes in brotli: quality 11 is 151 ms on 222 kB against 2 ms for gzip |
 

@@ -8,6 +8,7 @@
 import type { EngineOutput } from '../engine/types'
 import type { PreparedApp } from './prepare'
 import type { PrunableSection, TokenPrunePlan } from './tokenPrune'
+import { pruneModeOf } from '../config'
 import { sortedUnique } from '../core/dedupe'
 import { CssReadError } from '../core/errors'
 import { themeSheetMarker } from '../runtime/sheets'
@@ -182,7 +183,7 @@ export async function emitCss(app: PreparedApp): Promise<EmittedCss> {
   const safelistRedundant = resolution.safelist.filter(c => resolution.classes.includes(c))
 
   // 4. Обрезка: `off` не читает лишнего и не меняет ни байта.
-  const mode = config.pruneTokens?.mode ?? 'off'
+  const mode = pruneModeOf(config)
   let prune: TokenPrunePlan | undefined
   let tokensSections = sections.filter(s => s.source.kind === 'tokens').map(s => s.css)
   if (mode !== 'off') {

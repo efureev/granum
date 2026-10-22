@@ -44,7 +44,8 @@ function fixture(): { root: string, manifest: ReturnType<typeof makeManifest> } 
 async function run(config: Partial<GranumConfig> = {}): Promise<{ css: Awaited<ReturnType<typeof emitCss>>, app: Awaited<ReturnType<typeof prepareTestApp>> }> {
   const { root, manifest } = fixture()
   // Оба режима фикстуры явно: без `modes.names` сборка берёт только режим по умолчанию.
-  const app = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'] } }], ...config }, root)
+  // Обрезка выключена, пока тест не просит её сам: проверяется устройство эмиссии.
+  const app = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'] } }], pruneTokens: { mode: 'off' }, ...config }, root)
   return { css: await emitCss(app), app }
 }
 
@@ -180,6 +181,15 @@ describe('emitCss: обрезка токенов', () => {
     // `--space` держит правило base (inlined-rule); `--derived` — потребление Card (usage).
     expect(on.css.prune?.kept.get('space')?.kind).toBe('inlined-rule')
     expect(on.css.prune?.kept.get('derived')?.kind).toBe('usage')
+  })
+
+  it('без `pruneTokens` обрезка включена (ADR-14)', async () => {
+    const { root, manifest } = fixture()
+    const config = { providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'] } }], components: ['@x/kit:Card'] }
+    const byDefault = await emitCss(await prepareTestApp(config, root))
+    const on = await emitCss(await prepareTestApp({ ...config, pruneTokens: { mode: 'on' } }, root))
+    expect(byDefault.css).toBe(on.css)
+    expect(byDefault.prune?.removable).toEqual(['accent', 'dark-unused', 'unused'])
   })
 
   it('токен, на который ссылается только вывод движка, не режется', async () => {

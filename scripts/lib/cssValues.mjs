@@ -38,3 +38,20 @@ export function tokenValue(css, selector, token) {
   }
   return value
 }
+
+/**
+ * Все объявления токенов (`--x`): ключ — at-правила и селекторы блока, значение —
+ * токены блока с их значениями. Точный состав, а не поиск по имени: так видно
+ * и лишний токен, и токен не под тем селектором.
+ */
+export function declaredTokens(css, ignore = []) {
+  const out = {}
+  for (const block of ruleBlocks(css)) {
+    const key = [...block.at, block.selectors.join(',')].join(' ')
+    for (const [name, value] of block.declarations) {
+      if (name.startsWith('--') && !ignore.some(pattern => pattern.test(name)))
+        (out[key] ??= {})[name] = value
+    }
+  }
+  return out
+}

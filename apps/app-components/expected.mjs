@@ -52,6 +52,7 @@ export default {
      */
     check(report.classes.app.includes('p-[var(--xxx-space-2)]'), `classes.app: ${report.classes.app}`)
     check(!report.classes.app.includes('max-w-md'), `classes.app содержит класс, которого нет ни у одного компонента: ${report.classes.app}`)
-    check(report.prune === null, `prune: ${JSON.stringify(report.prune)}`)
+    // Обрезка — умолчание (ADR-14): у пакета есть токены, которых не читает ни один его компонент.
+    check(report.prune?.mode === 'on' && JSON.stringify(report.prune.removable) === JSON.stringify(['xxx-font-sm', 'xxx-muted']), `prune: ${JSON.stringify(report.prune)}`)
   },
 }

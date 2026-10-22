@@ -10,6 +10,7 @@ import type { PreparedApp } from './prepare'
 import { Buffer } from 'node:buffer'
 import { relative } from 'node:path'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
+import { pruneModeOf } from '../config'
 import { sortedUnique } from '../core/dedupe'
 import { GRANUM_VERSION } from '../version'
 import { extractLayerBlocks } from './cssLayerBlocks'
@@ -298,7 +299,7 @@ export function buildReportFromBundles(app: PreparedApp, css: EmittedCss, bundle
     },
     tokens: { undefined: tokenUndefined },
     prune: css.prune
-      ? { mode: app.config.pruneTokens?.mode ?? 'off', removable: css.prune.removable, deadPatterns: css.prune.deadPatterns, kept: css.prune.kept.size }
+      ? { mode: pruneModeOf(app.config), removable: css.prune.removable, deadPatterns: css.prune.deadPatterns, kept: css.prune.kept.size }
       : null,
     sizesSource: fromBundle ? 'bundle' : 'emission',
     sizes: fromBundle ?? emissionSizes,

@@ -15,4 +15,8 @@ export default defineGranumConfig({
   themes: [{ theme: 'paper', modes: ['light', 'dark'] }],
   activation: { system: 'media' },
   appSources: { dirs: ['src'] },
+  // Стенд проверяет устройство эмиссии темы — блоки режимов, `color-scheme`,
+  // фолбэки под медиазапросом — на токенах, которых компонент не читает:
+  // обрезка (по умолчанию она включена) сняла бы их.
+  pruneTokens: { mode: 'off' },
 })

@@ -169,11 +169,12 @@ the theme entry's `modes.tokenOverrides.root`, or the other way round; the overr
 
 ## After pruning a variable resolves to nothing
 
-`pruneTokens.mode: 'on'` removed a token the application reads itself. Make
-sure `appSources.dirs` cover every source that consumes tokens; for names
-assembled at runtime add `keep` in the config or `dynamicTokens` in the
-component descriptor. Debugging: `granum prune granum.config.ts` prints what
-is removed and why.
+Pruning — it is on by default (`pruneTokens.mode: 'on'`) — removed a token the
+application reads itself. Make sure `appSources.dirs` cover every source that
+consumes tokens; for names assembled at runtime and tokens from a CMS add `keep` in
+the config or `dynamicTokens` in the component descriptor. Debugging: `granum prune
+granum.config.ts` prints what is removed and why. The previous emission as a whole —
+`pruneTokens: { mode: 'off' }`.
 
 ## `@apply` in the output
 

@@ -5,6 +5,7 @@ import type { PreparedApp } from '../prepare'
  */
 import type { TokenKeepReason } from '../tokenPrune'
 import { Buffer } from 'node:buffer'
+import { pruneModeOf } from '../../config'
 import { readCss } from '../css'
 import { scanCssDeclarations } from '../cssDeclarations'
 import { generateEngineCss } from '../emit'
@@ -70,7 +71,7 @@ export async function granumTokenPrune(app: PreparedApp): Promise<TokenPruneRepo
   })
 
   return {
-    mode: config.pruneTokens?.mode ?? 'off',
+    mode: pruneModeOf(config),
     files,
     kept: [...plan.kept.entries()].map(([token, reason]) => ({ token, reason })).sort((a, b) => a.token.localeCompare(b.token, 'en')),
     removed: plan.removable,

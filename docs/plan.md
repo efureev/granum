@@ -203,6 +203,17 @@ INV-THEME-4, INV-THEME-11…15. Нормативная часть написан
 | 11.2 Документы: `themes-and-tokens.md`, `troubleshooting.md`, `cli.md` ru/en; пакетный `SPEC.md` | `check:docs`, `check:spec` |
 | 11.3 Релиз `3.11.0` обоих пакетов | CHANGELOG, тег |
 
+## Этап 12 — Обрезка токенов по умолчанию (S)
+
+Решение — [ADR-14](./decisions.md), требования — `spec.md` T-2, T-3; инварианты INV-TOK-1…3.
+
+| Задача | Результат |
+|---|---|
+| 12.1 Умолчание `pruneTokens.mode` — `on`: одна точка (`pruneModeOf`) для эмиссии, отчёта, `granum prune` | тест «без `pruneTokens` обрезка включена» |
+| 12.2 Стенды: `app-theme-one-light` и `-dark` — один компонент, одна тема, один режим, точный состав токенов и режимы друг в друга не протекают; `bench-one` и `bench-split` выключают обрезку явно | `verify:apps` |
+| 12.3 Документы: `usage-in-apps`, `themes-and-tokens`, `troubleshooting`, `measuring-weight` ru/en; `MIGRATION.md` «From 3.11 to 3.12»; пакетный `SPEC.md` | `check:docs`, `check:spec` |
+| 12.4 Релиз `3.12.0` обоих пакетов | CHANGELOG, тег |
+
 ## Порядок и зависимости этапов
 
 ```

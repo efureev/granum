@@ -239,6 +239,9 @@ try {
       { theme: 'ink', default: true, modes: { names: ['light', 'dark', 'dim', 'ocean'], define: { ocean: { extends: 'dark', colorScheme: 'dark', tokens: { 'th-fg': OVERRIDE } } }, tokenOverrides: { dark: { 'th-line': '#123456' } } } },
       { theme: 'paper', modes: ['light', 'dark'] },
     ],
+    // Каскад проверяется на токенах тем, которых не читает ни один компонент:
+    // обрезка (по умолчанию она включена) сняла бы их.
+    pruneTokens: { mode: 'off' },
   }, appsRoot)
   const emitted = await emitCss(app)
   // Лист дополнительной темы — раньше общего: каскад от порядка листов не зависит.

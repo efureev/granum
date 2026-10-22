@@ -427,9 +427,21 @@ Reachability follows the "token → tokens in its value" graph, so
 `--soft: color-mix(…, var(--danger))` keeps `--danger`. A token needed by one
 mode is kept in all of them.
 
-Rollout order: `mode: 'report'` → look at the plan in the report or
-`granum prune` → `mode: 'on'`. Mode `off` changes the emission by not a single byte.
-The [`bench-pruned`](./measuring-weight.md) stand shows the effect.
+A theme carrying the values of every component of a package (the `components` section)
+is cut the same way: with one component, one theme and one mode the CSS keeps exactly
+that component's tokens and the tokens they refer to, with this theme's values in this
+mode. Without pruning, themes and modes outside the build do not ship either, but the
+values of the theme's other components and its roles stay. The `apps/app-theme-one-light`
+and `apps/app-theme-one-dark` pair holds the exact set: each build has its own mode's
+values and no trace of the other.
+
+Pruning is on by default (`mode: 'on'`, ADR-14): a config without `pruneTokens` gets
+only what is reachable in its CSS. What is removed and why is in the build report and in
+`granum prune`. A token the application takes past the build (a name assembled at runtime,
+a token from a CMS or from a file outside `appSources`) goes to `keep`. `mode: 'report'`
+keeps the emission and only writes the plan, `mode: 'off'` changes the emission by not a
+single byte. The [`bench-pruned`](./measuring-weight.md) stand shows the effect against
+`bench-one`, where pruning is turned off explicitly.
 
 ## Runtime
 
