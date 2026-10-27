@@ -214,6 +214,18 @@ INV-THEME-4, INV-THEME-11…15. Нормативная часть написан
 | 12.3 Документы: `usage-in-apps`, `themes-and-tokens`, `troubleshooting`, `measuring-weight` ru/en; `MIGRATION.md` «From 3.11 to 3.12»; пакетный `SPEC.md` | `check:docs`, `check:spec` |
 | 12.4 Релиз `3.12.0` обоих пакетов | CHANGELOG, тег |
 
+## Этап 13 — Файл поверх значений и точки входа для Node (S)
+
+Требования — `spec.md` A-29, C-13, T-7 (файл `tokenOverridesRef`) и B-4, B-16 (точка входа
+`env: 'node'`).
+
+| Задача | Результат |
+|---|---|
+| 13.1 `modes.tokenOverridesRef.<область>` — CSS-файл значений поверх слоёв темы: форма проверяется, как у `define[*].tokensRef`; файл читается от корня приложения, литеральные `tokenOverrides` той же области важнее | `validateConfig.test.ts`; `emitCss.test.ts` — файл и литерал, `unknown-mode`, `multiple-blocks`, нечитаемый файл; `themeStylesheet.test.ts` — тот же путь без приложения |
+| 13.2 `entries` провайдера — путь или `{ path, env? }`: точка входа `env: 'node'` не корень проверки границы, встроенные модули Node с ней внешние; модуль, общий с браузерной точкой входа, проверяется | `buildPlugin.test.ts` — Node-вход с `node:fs` собирается и импорт остаётся в выводе, общий модуль — `BoundaryViolationError`, неверное значение — `invalid-entry`; `graph.test.ts` — модули только Node-входов |
+| 13.3 Документы: `themes-and-tokens`, `usage-in-apps`, `authoring-providers` ru/en; пакетный `SPEC.md` | `check:docs`, `check:spec` |
+| 13.4 Релиз `3.13.0` обоих пакетов | CHANGELOG, тег |
+
 ## Порядок и зависимости этапов
 
 ```

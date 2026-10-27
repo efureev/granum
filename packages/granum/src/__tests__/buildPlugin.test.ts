@@ -8,7 +8,7 @@ import { build, parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { granumProvider } from '../build/plugin'
 import { defineGranumComponent, defineGranumProvider } from '../contract'
-import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidManifestError, PackageExportsError, ThemeSourceError, UndeclaredDependencyError } from '../core/errors'
+import { BoundaryViolationError, CssReadError, EngineDialectMismatchError, InvalidManifestError, InvalidProviderError, PackageExportsError, ThemeSourceError, UndeclaredDependencyError } from '../core/errors'
 import { readManifestSync, writeManifestSync } from '../node/manifest'
 import { subcomponentsFromExports } from '../node/subcomponents'
 import { granum } from '../vite/plugin'
@@ -323,6 +323,48 @@ describe('granumProvider с настоящим Vite', () => {
     await expect(run(makeFixture({ nodeImport: true }))).rejects.toBeInstanceOf(BoundaryViolationError)
     const { logs } = await run(makeFixture({ nodeImport: true }), { boundaryCheck: 'warn' })
     expect(logs.some(l => l.includes('node:fs'))).toBe(true)
+  })
+
+  describe('точка входа для Node (entries с env: node)', () => {
+    function withEntries(files: Record<string, string>): Fixture {
+      const fixture = makeFixture({})
+      for (const [file, code] of Object.entries(files)) {
+        mkdirSync(join(fixture.root, file, '..'), { recursive: true })
+        writeFileSync(join(fixture.root, file), code)
+      }
+      return fixture
+    }
+    const READ = `import { readFileSync } from 'node:fs'\nexport const read = (p: string): string => readFileSync(p, 'utf8')\n`
+
+    it('собирается, а её node:-импорты остаются в выводе, а не заглушкой', async () => {
+      const fixture = withEntries({ 'src/node.ts': `${READ}export { loadThemeSource } from '@feugene/granum/node'\n` })
+      const { dist } = await run(fixture, { entries: { node: { path: 'src/node.ts', env: 'node' } } })
+      expect(importsOf(readFileSync(join(dist, 'node.js'), 'utf8'))).toEqual(expect.arrayContaining(['node:fs', '@feugene/granum/node']))
+    })
+
+    it('модуль, общий с браузерной точкой входа, остаётся под проверкой границы', async () => {
+      const fixture = withEntries({
+        'src/shared.ts': READ,
+        'src/node.ts': `export { read } from './shared'\n`,
+        'src/browser.ts': `export { read } from './shared'\n`,
+      })
+      await expect(run(fixture, { entries: { node: { path: 'src/node.ts', env: 'node' }, browser: 'src/browser.ts' } })).rejects.toBeInstanceOf(BoundaryViolationError)
+      await expect(run(fixture, { entries: { node: { path: 'src/node.ts', env: 'node' }, browser: { path: 'src/browser.ts', env: 'browser' } } })).rejects.toBeInstanceOf(BoundaryViolationError)
+    })
+
+    it('строкой точка входа браузерная, как прежде', async () => {
+      const fixture = withEntries({ 'src/node.ts': READ })
+      await expect(run(fixture, { entries: { node: 'src/node.ts' } })).rejects.toBeInstanceOf(BoundaryViolationError)
+    })
+
+    it('значение не путь и не { path, env } — invalid-entry', () => {
+      const fixture = makeFixture({})
+      for (const value of [{ path: 'src/node.ts', env: 'server' }, { env: 'node' }, 42]) {
+        const make = (): unknown => granumProvider({ provider: fixture.provider, engine: testEngine(), entries: { node: value as never } })
+        expect(make).toThrow(InvalidProviderError)
+        expect(() => make()).toThrow(/entries\.node/)
+      }
+    })
   })
 
   it('объявленный CSS отсутствует — CssReadError с провайдером и компонентом', async () => {

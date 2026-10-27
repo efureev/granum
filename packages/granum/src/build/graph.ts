@@ -271,6 +271,37 @@ export async function analyzeBundle(
   return { components, violations, browserFiles: [...browserFiles].sort() }
 }
 
+/**
+ * Модули чанков, до которых доходят только точки входа `nodeEntries` (имена
+ * файлов): Node-код провайдера. Чанк, достижимый и из браузерной точки входа,
+ * в набор не входит — его модули остаются под проверкой границы.
+ */
+export function nodeOnlyModules(bundle: BundleLike, nodeEntries: ReadonlySet<string>): Set<string> {
+  const reach = (roots: Iterable<string>): Set<string> => {
+    const seen = new Set<string>()
+    const queue = [...roots]
+    while (queue.length > 0) {
+      const file = queue.pop()!
+      const chunk = bundle[file]
+      if (seen.has(file) || !isChunk(chunk))
+        continue
+      seen.add(file)
+      queue.push(...chunk.imports, ...chunk.dynamicImports)
+    }
+    return seen
+  }
+  const browserRoots = Object.values(bundle).filter(isChunk).filter(chunk => chunk.isEntry && !nodeEntries.has(chunk.fileName)).map(chunk => chunk.fileName)
+  const browser = reach(browserRoots)
+  const modules = new Set<string>()
+  for (const file of reach(nodeEntries)) {
+    if (browser.has(file))
+      continue
+    for (const id of (bundle[file] as BundleChunkLike).moduleIds ?? [])
+      modules.add(id)
+  }
+  return modules
+}
+
 function basename(file: string): string {
   return file.slice(file.lastIndexOf('/') + 1)
 }

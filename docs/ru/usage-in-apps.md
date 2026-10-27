@@ -38,6 +38,7 @@ export default defineGranumConfig({
 | `themes[i].modes.names` | режим по умолчанию темы и её `define` | набор режимов темы (краткая форма — массив имён); режим по умолчанию всегда первый |
 | `themes[i].modes.define` | — | режимы приложения поверх режимов темы: `{ extends, tokens, tokensRef, title, colorScheme }` |
 | `themes[i].modes.tokenOverrides` | — | значения поверх всех слоёв темы: `root` — режимонезависимые, остальные ключи — режимы |
+| `themes[i].modes.tokenOverridesRef` | — | те же области из CSS-файлов: путь или `{ url, selector?, strict? }`; литеральные `tokenOverrides` важнее |
 | `themes[i].modes.strictTokens` | `false` | override токена, которого нет ни в данных темы, ни в токенах компонентов, отбрасывается |
 | `activation.attribute`, `activation.value` | `'data-theme'`, `'{theme}-{mode}'` | атрибут на корне и шаблон пары — общие на все темы |
 | `activation.system` | `'none'` | `'media'` — тёмный режим основной темы по `prefers-color-scheme`, пока атрибут не выставлен |

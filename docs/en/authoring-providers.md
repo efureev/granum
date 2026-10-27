@@ -332,6 +332,26 @@ The plugin:
    manifest and the subpath of every component (`PackageExportsError`);
 8. writes `dist/granum.manifest.json`.
 
+An extra entry in `entries` is a path or `{ path, env }`. `env: 'node'` marks an
+entry for Node only — reading files, `@feugene/granum/node`:
+
+```ts
+granumProvider({
+  provider,
+  engine: windEngine(),
+  entries: {
+    'theme/apply': 'src/theme/apply.ts',
+    'theme/node': { path: 'src/theme/node.ts', env: 'node' },
+  },
+})
+```
+
+Such an entry is not a root of the boundary check, and with it Node built-ins stay
+external in the build — otherwise Vite would replace them with an empty stub. A module
+the entry shares with a browser entry is still checked: browser code does not become
+Node code by being imported from Node. Any other value is
+`InvalidProviderError('invalid-entry')`.
+
 Importing a constant or a type from another component's directory is not a
 dependency and need not be declared: edges are computed from code that landed
 in another component's chunks.

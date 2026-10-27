@@ -86,6 +86,7 @@ themes: [{
       sepia: { extends: 'light', tokensRef: new URL('./src/sepia.css', import.meta.url).href },
     },
     tokenOverrides: { root: { 'th-radius': '4px' }, dark: { 'th-bg': '#050505' } },
+    tokenOverridesRef: { dark: './src/theme/dark-overrides.css' },
     strictTokens: true,
   },
 }]
@@ -104,8 +105,11 @@ themes: [{
 `selector`.
 
 `tokenOverrides.root` ложится в режимонезависимые значения своей темы,
-`tokenOverrides.<режим>` — в её режим; режим вне набора — `unknown-mode`. При
-`strictTokens: true` override токена, которого нет ни в данных темы, ни в токенах
+`tokenOverrides.<режим>` — в её режим; режим вне набора — `unknown-mode`.
+`tokenOverridesRef.<область>` берёт те же значения из CSS-файла — путь от корня
+приложения, URL или `{ url, selector?, strict? }`, один плоский блок, как у
+`tokensRef`; файл ложится в ту же область, а литеральные `tokenOverrides` области
+важнее. При `strictTokens: true` override токена, которого нет ни в данных темы, ни в токенах
 компонентов, отбрасывается, а в отчёт попадает `override-skipped`. Значения одной
 темы не трогают другую.
 

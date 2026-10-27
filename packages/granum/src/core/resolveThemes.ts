@@ -64,6 +64,11 @@ export interface GranumThemeModes {
   readonly define?: Readonly<Record<string, GranumModeDefinition>>
   /** `root` — режимонезависимые токены, остальные ключи — режимы. Ключи токенов без `--`. */
   readonly tokenOverrides?: Readonly<Record<string, Readonly<Record<string, string>>>>
+  /**
+   * Те же области из CSS-файлов; материализуются node-слоем до резолюции в
+   * `tokenOverrides`. Литеральные `tokenOverrides` той же области важнее.
+   */
+  readonly tokenOverridesRef?: Readonly<Record<string, GranumTokenRef | string>>
   /** Override токена, которого нет ни в данных темы, ни в токенах компонентов, отбрасывается. */
   readonly strictTokens?: boolean
 }

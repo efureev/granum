@@ -38,6 +38,7 @@ export default defineGranumConfig({
 | `themes[i].modes.names` | the theme's default mode and its `define` | the theme's mode set (the short form is an array of names); the default mode always comes first |
 | `themes[i].modes.define` | — | application modes on top of the theme's modes: `{ extends, tokens, tokensRef, title, colorScheme }` |
 | `themes[i].modes.tokenOverrides` | — | values on top of every layer of the theme: `root` — mode-independent, other keys — modes |
+| `themes[i].modes.tokenOverridesRef` | — | the same scopes from CSS files: a path or `{ url, selector?, strict? }`; literal `tokenOverrides` win |
 | `themes[i].modes.strictTokens` | `false` | an override of a token present neither in the theme data nor in component tokens is dropped |
 | `activation.attribute`, `activation.value` | `'data-theme'`, `'{theme}-{mode}'` | the attribute on the root and the pair template — shared by all themes |
 | `activation.system` | `'none'` | `'media'` — the default theme's dark mode by `prefers-color-scheme` until the attribute is set |

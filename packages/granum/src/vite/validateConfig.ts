@@ -36,7 +36,7 @@ function keysOf<T>() {
 const ROOT_KEYS = keysOf<GranumConfig>()(['providers', 'components', 'themes', 'activation', 'engine', 'css', 'appSources', 'pruneTokens', 'js', 'report'])
 const APP_THEME_KEYS = keysOf<GranumAppTheme>()(['id', 'title', 'description', 'docs', 'root', 'modes', 'defaultMode', 'baseCss', 'extensions', 'version', 'targets', 'components', 'extends', 'sources'])
 const THEME_ENTRY_KEYS = keysOf<GranumThemeEntry>()(['theme', 'default', 'modes'])
-const THEME_MODES_KEYS = keysOf<GranumThemeModes>()(['names', 'define', 'tokenOverrides', 'strictTokens'])
+const THEME_MODES_KEYS = keysOf<GranumThemeModes>()(['names', 'define', 'tokenOverrides', 'tokenOverridesRef', 'strictTokens'])
 const MODE_DEFINITION_KEYS = keysOf<GranumModeDefinition>()(['extends', 'tokens', 'tokensRef', 'title', 'colorScheme', 'fallbacks'])
 const MODE_DATA_KEYS = keysOf<GranumModeData>()(['title', 'colorScheme', 'extends', 'tokens', 'fallbacks'])
 const FALLBACK_KEYS = keysOf<GranumModeFallback>()(['supports', 'tokens'])
@@ -236,13 +236,9 @@ function validateThemeModes(modes: unknown, path: string): void {
     if (definition.colorScheme !== undefined && definition.colorScheme !== 'light' && definition.colorScheme !== 'dark')
       throw new InvalidConfigError(`${at}.colorScheme`, `expected 'light' or 'dark'`)
     const ref = definition.tokensRef
-    if (ref !== undefined && typeof ref !== 'string') {
-      if (!isRecord(ref))
-        throw new InvalidConfigError(`${at}.tokensRef`, `expected a CSS URL or { url, selector?, strict? }`)
-      if ('as' in ref)
-        throw new InvalidConfigError(`${at}.tokensRef.as`, `unknown option — removed: the tokens of a defined mode are emitted under its pair '<theme>-${name}' set by activation; 'as' has had no effect since granum 3.0`)
-      rejectUnknownKeys(ref, TOKEN_REF_KEYS, `${at}.tokensRef`)
-    }
+    if (isRecord(ref) && 'as' in ref)
+      throw new InvalidConfigError(`${at}.tokensRef.as`, `unknown option — removed: the tokens of a defined mode are emitted under its pair '<theme>-${name}' set by activation; 'as' has had no effect since granum 3.0`)
+    validateTokenRef(ref, `${at}.tokensRef`)
     if (definition.tokens !== undefined) {
       if (!isRecord(definition.tokens))
         throw new InvalidConfigError(`${at}.tokens`, 'expected an object of token values')
@@ -272,8 +268,23 @@ function validateThemeModes(modes: unknown, path: string): void {
         throw new InvalidConfigError(`${path}.tokenOverrides.${scope}.${token}`, 'expected a string value')
     }
   }
+  if (modes.tokenOverridesRef !== undefined && !isRecord(modes.tokenOverridesRef))
+    throw new InvalidConfigError(`${path}.tokenOverridesRef`, 'expected an object: root and mode names → CSS files of token values')
+  for (const [scope, ref] of Object.entries(modes.tokenOverridesRef ?? {}))
+    validateTokenRef(ref, `${path}.tokenOverridesRef.${scope}`)
   if (modes.strictTokens !== undefined && typeof modes.strictTokens !== 'boolean')
     throw new InvalidConfigError(`${path}.strictTokens`, 'expected a boolean')
+}
+
+/** Ссылка на CSS-файл токенов: URL или `{ url, selector?, strict? }`. */
+function validateTokenRef(ref: unknown, at: string): void {
+  if (ref === undefined || typeof ref === 'string')
+    return
+  if (!isRecord(ref))
+    throw new InvalidConfigError(at, `expected a CSS URL or { url, selector?, strict? }`)
+  rejectUnknownKeys(ref, TOKEN_REF_KEYS, at)
+  if (typeof ref.url !== 'string')
+    throw new InvalidConfigError(`${at}.url`, 'expected the URL or path of a CSS file')
 }
 
 /** Запись `themes` в полной форме — объект с ключом `theme`; иначе это сама тема. */

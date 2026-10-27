@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { CssReadError, TokenRefError } from '../core/errors'
+import { CssReadError, ThemeResolutionError, TokenRefError } from '../core/errors'
 import { resolveTokenValue } from '../core/resolve'
 import { emitCss, LAYER_NAMES, wrapLayer, wrapLayers } from '../node/emit'
 import { buildReport, buildReportFromBundles } from '../node/report'
@@ -339,6 +339,45 @@ describe('prepareApp: tokensRef режимов приложения', () => {
     expect((failed as TokenRefError).cause).toMatchObject({ reason: 'multiple-blocks', available: [':root', '.alt'] })
     const app = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { define: { two: { extends: 'dark', tokensRef: { url: 'src/themes/two.css', selector: '.alt' } } } } }] }, root)
     expect(resolveTokenValue(app.resolution, 'two', 'app-fg')).toBe('#eee')
+  })
+})
+
+describe('prepareApp: tokenOverridesRef записи темы', () => {
+  it('файл ложится в свою область поверх слоёв темы, литералы той же области важнее', async () => {
+    const { root, manifest } = fixture()
+    mkdirSync(join(root, 'src/themes'), { recursive: true })
+    writeFileSync(join(root, 'src/themes/root.css'), ':root{--accent:blue}')
+    writeFileSync(join(root, 'src/themes/dark.css'), ':root{--bg:#050505;--app-fg:#eee}')
+    const app = await prepareTestApp({
+      providers: [manifest],
+      themes: [{ theme: 'kit', modes: {
+        names: ['light', 'dark'],
+        tokenOverrides: { dark: { 'app-fg': '#fff' } },
+        tokenOverridesRef: { root: 'src/themes/root.css', dark: { url: 'src/themes/dark.css' } },
+      } }],
+    }, root)
+    expect(resolveTokenValue(app.resolution, 'light', 'accent')).toBe('blue')
+    expect(resolveTokenValue(app.resolution, 'dark', 'bg')).toBe('#050505')
+    expect(resolveTokenValue(app.resolution, 'dark', 'app-fg')).toBe('#fff')
+    expect(resolveTokenValue(app.resolution, 'light', 'bg')).toBe('#fff')
+  })
+
+  it('область вне набора режимов — unknown-mode, как у tokenOverrides', async () => {
+    const { root, manifest } = fixture()
+    writeFileSync(join(root, 'sepia.css'), ':root{--bg:#f4ecd8}')
+    const failed = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { tokenOverridesRef: { sepia: 'sepia.css' } } }] }, root).catch((e: unknown) => e)
+    expect(failed).toBeInstanceOf(ThemeResolutionError)
+    expect(failed).toMatchObject({ reason: 'unknown-mode' })
+  })
+
+  it('нет файла — TokenRefError с областью; несколько блоков без selector — multiple-blocks', async () => {
+    const { root, manifest } = fixture()
+    const missing = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'], tokenOverridesRef: { dark: 'none.css' } } }] }, root).catch((e: unknown) => e)
+    expect(missing).toBeInstanceOf(TokenRefError)
+    expect(missing).toMatchObject({ themeName: 'dark', url: 'none.css' })
+    writeFileSync(join(root, 'two.css'), ':root{--bg:#111}\n.alt{--bg:#222}')
+    const twice = await prepareTestApp({ providers: [manifest], themes: [{ theme: 'kit', modes: { names: ['light', 'dark'], tokenOverridesRef: { dark: 'two.css' } } }] }, root).catch((e: unknown) => e)
+    expect((twice as TokenRefError).cause).toMatchObject({ reason: 'multiple-blocks', available: [':root', '.alt'] })
   })
 })
 

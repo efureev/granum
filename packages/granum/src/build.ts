@@ -8,5 +8,5 @@ export type { AssetInfoLike, ChunkInfoLike, ComponentSource, ModuleOwner } from 
 export { classifyModule, classifyOutputFile, collectComponentSources, componentEntryFileName, granumAssetFileNames, granumChunkFileNames } from './build/layout'
 export type { PackageDependencyFields } from './build/peers'
 export { collectDonorIds, findMissingPeers } from './build/peers'
-export type { GranumProviderPluginOptions } from './build/plugin'
+export type { GranumProviderEntry, GranumProviderPluginOptions } from './build/plugin'
 export { granumProvider } from './build/plugin'

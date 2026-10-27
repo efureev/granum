@@ -31,8 +31,8 @@ export interface GranumTokenSet {
 }
 
 /**
- * Ссылка на CSS с одним плоским блоком токенов: `modes.define[*].tokensRef`
- * приложения. Читается на сборке строго.
+ * Ссылка на CSS с одним плоским блоком токенов: `modes.define[*].tokensRef` и
+ * `modes.tokenOverridesRef.<область>` приложения. Читается на сборке строго.
  */
 export interface GranumTokenRef {
   /** Абсолютный URL после `define*`-хелперов; во вводе допустим относительный путь. */

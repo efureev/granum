@@ -115,6 +115,13 @@ describe('emitThemeStylesheet', () => {
     const sheet = await emitThemeStylesheet({ providers: [provider], themes: [{ theme: 'paper', modes: { define: { ocean: { extends: 'dark', tokensRef: 'ocean.css' } } } }], root })
     expect(sheet.layers.themes).toMatch(/\[data-theme="paper-ocean"\] \{[^}]*--p-bg: #012;/)
   })
+
+  it('tokenOverridesRef читается от root, как у сборки приложения', async () => {
+    const { root, provider } = catalogProvider()
+    writeFileSync(join(root, 'dark.css'), ':root{--p-bg:#034}')
+    const sheet = await emitThemeStylesheet({ providers: [provider], themes: [{ theme: 'paper', modes: { names: ['light', 'dark'], tokenOverridesRef: { dark: 'dark.css' } } }], root })
+    expect(sheet.layers.themes).toMatch(/\[data-theme="paper-dark"\] \{[^}]*--p-bg: #034;/)
+  })
 })
 
 describe('resolveThemeManifest', () => {

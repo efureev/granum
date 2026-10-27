@@ -36,9 +36,21 @@ import { loadThemeSource } from '../node/themeSource'
 import { extractRequiredTokenUses, fallbackOnlyTokens, scanTokenConsumption } from '../node/tokenScan'
 import { GRANUM_VERSION } from '../version'
 import { expandApply } from './apply'
-import { analyzeBundle, findUndeclaredEdges } from './graph'
+import { analyzeBundle, findUndeclaredEdges, nodeOnlyModules } from './graph'
 import { collectComponentSources, componentEntryFileName, GRANUM_CONTRACT_CHUNK, granumAssetFileNames, granumChunkFileNames } from './layout'
 import { findMissingPeers } from './peers'
+
+/** Дополнительная точка входа провайдера. */
+export interface GranumProviderEntry {
+  /** Путь относительно корня пакета. */
+  readonly path: string
+  /**
+   * `node` — точка входа только для Node: она не корень проверки границы
+   * browser/node, а встроенные модули Node в сборке остаются внешними. По
+   * умолчанию `browser`.
+   */
+  readonly env?: 'browser' | 'node'
+}
 
 export interface GranumProviderPluginOptions {
   /** Объект контракта провайдера — браузерный entry пакета. */
@@ -47,8 +59,8 @@ export interface GranumProviderPluginOptions {
   readonly sourceDir?: string
   /** Корневой entry пакета (`index`). По умолчанию `src/index.ts`, если существует; `false` — не добавлять. */
   readonly indexEntry?: string | false
-  /** Дополнительные entry: имя → путь относительно корня пакета. */
-  readonly entries?: Readonly<Record<string, string>>
+  /** Дополнительные entry: имя → путь относительно корня пакета или `{ path, env }`. */
+  readonly entries?: Readonly<Record<string, string | GranumProviderEntry>>
   /** Неучтённое ребро графа компонентов: ошибка (по умолчанию) или предупреждение. */
   readonly dependencyCheck?: 'error' | 'warn'
   /** Нарушение границы browser/node в бандле. По умолчанию `error`. */
@@ -119,17 +131,39 @@ function ownContract(): { readonly entry: string, readonly runtime: string, read
 }
 
 /**
+ * Встроенные модули Node — внешние, когда у провайдера есть точка входа для
+ * Node: иначе Vite подменил бы их в ней пустой заглушкой.
+ */
+const NODE_EXTERNAL: readonly (string | RegExp)[] = [/^node:/, ...builtinModules]
+
+/**
  * `external` пользователя плюс правило ядра — в той форме, в какой его задал
  * пользователь. Слиянием конфигов Vite этого не выразить: оно склеивает
  * массивы, и функция превращается в `[fn, RegExp]`, которого rolldown не
  * принимает.
  */
-function withGranumExternal(user: Rolldown.InputOptions['external']): NonNullable<Rolldown.InputOptions['external']> {
+function withGranumExternal(user: Rolldown.InputOptions['external'], nodeBuiltins: boolean): NonNullable<Rolldown.InputOptions['external']> {
+  const own: (string | RegExp)[] = nodeBuiltins ? [GRANUM_EXTERNAL, ...NODE_EXTERNAL] : [GRANUM_EXTERNAL]
   if (user === undefined)
-    return [GRANUM_EXTERNAL]
+    return own
   if (typeof user === 'function')
-    return (id, parent, isResolved) => GRANUM_EXTERNAL.test(id) || user(id, parent, isResolved)
-  return [...(Array.isArray(user) ? user : [user]), GRANUM_EXTERNAL]
+    return (id, parent, isResolved) => own.some(rule => typeof rule === 'string' ? rule === id : rule.test(id)) || user(id, parent, isResolved)
+  return [...(Array.isArray(user) ? user : [user]), ...own]
+}
+
+/** Значение `entries`: путь или `{ path, env }`. */
+function parseEntry(providerId: string, name: string, value: unknown): { readonly name: string, readonly path: string, readonly env: 'browser' | 'node' } {
+  if (typeof value === 'string')
+    return { name, path: value, env: 'browser' }
+  const entry = value as Partial<GranumProviderEntry> | null
+  if (entry === null || typeof entry !== 'object' || typeof entry.path !== 'string' || (entry.env !== undefined && entry.env !== 'browser' && entry.env !== 'node'))
+    throw new InvalidProviderError(providerId, 'invalid-entry', `entries.${name} must be a path or { path, env? } with env 'browser' or 'node'.`)
+  return { name, path: entry.path, env: entry.env ?? 'browser' }
+}
+
+/** Id модуля для сверки `transform` с `moduleIds` чанков: без запроса, с прямыми слэшами. */
+function moduleKey(id: string): string {
+  return normalizePath(id.replace(/[?#].*$/, ''))
 }
 
 /**
@@ -210,7 +244,11 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
   let hasIndex = false
   let analysis: BundleAnalysis | undefined
   /** Нарушения границы, замеченные на графе модулей: Vite подменяет `node:*` в браузерной сборке заглушкой, и в выводе их уже нет. */
-  let graphViolations: BoundaryViolation[] = []
+  let graphViolations: { readonly violation: BoundaryViolation, readonly module: string }[] = []
+  /** Модули, до которых доходят только точки входа для Node: их нарушения границы не считаются. */
+  let nodeOnly = new Set<string>()
+  const extraEntries = Object.entries(options.entries ?? {}).map(([name, value]) => parseEntry(provider.id, name, value))
+  const nodeEntryFiles = new Set(extraEntries.filter(entry => entry.env === 'node').map(entry => `${entry.name}.js`))
   /** Точки входа granum, оставшиеся внешними в `dist`. */
   let granumImports: string[] = []
   const contract = ownContract()
@@ -256,8 +294,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       }
       for (const { descriptor, entry: file } of sources())
         entry[`components/${descriptor.name}/index`] = file
-      for (const [name, file] of Object.entries(options.entries ?? {}))
-        entry[name] = resolve(root, file)
+      for (const { name, path } of extraEntries)
+        entry[name] = resolve(root, path)
 
       return {
         build: {
@@ -296,7 +334,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
     // Опции rolldown — уже после слияния конфигов: `external` здесь в той
     // форме, в какой его задал пользователь (см. `withGranumExternal`).
     options(input) {
-      return { ...input, external: withGranumExternal(input.external) }
+      return { ...input, external: withGranumExternal(input.external, nodeEntryFiles.size > 0) }
     },
 
     configResolved(config: ResolvedConfig): void {
@@ -312,6 +350,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
      */
     buildStart(): void {
       graphViolations = []
+      nodeOnly = new Set()
       analysis = undefined
       granumImports = []
       // Части составных компонентов выводятся из `exports`: `codegen` посреди
@@ -329,7 +368,7 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       for (const specifier of collectImportSpecifiers(code)) {
         const kind = boundaryKind(specifier)
         if (kind)
-          graphViolations.push({ file: relative(root, id.replace(/[?#].*$/, '')), specifier, kind })
+          graphViolations.push({ violation: { file: relative(root, id.replace(/[?#].*$/, '')), specifier, kind }, module: moduleKey(id) })
       }
       return null
     },
@@ -349,6 +388,9 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
       // попадает, остальное — рантайм-зависимость пакета.
       granumImports = sortedUnique(Object.values(typed).flatMap(item =>
         item.type === 'chunk' ? [...item.imports, ...item.dynamicImports].filter(spec => GRANUM_PACKAGE.test(spec)) : []))
+
+      if (nodeEntryFiles.size > 0)
+        nodeOnly = new Set([...nodeOnlyModules(typed, nodeEntryFiles)].map(moduleKey))
 
       analysis = await analyzeBundle(typed, provider.components, engine, {
         ...(hasIndex ? { indexEntry: 'index.js' } : {}),
@@ -412,7 +454,8 @@ export function granumProvider(options: GranumProviderPluginOptions): Plugin {
         log(`warning: ${error.message}`)
       }
 
-      const violations = dedupeViolations([...graphViolations, ...analysis.violations])
+      const browserGraphViolations = graphViolations.filter(item => !nodeOnly.has(item.module)).map(item => item.violation)
+      const violations = dedupeViolations([...browserGraphViolations, ...analysis.violations])
       if (violations.length > 0) {
         const error = new BoundaryViolationError(provider.id, violations)
         if ((options.boundaryCheck ?? 'error') === 'error')

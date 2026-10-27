@@ -198,6 +198,7 @@ export type InvalidProviderReason
     | 'theme-components-untargeted'
     | 'theme-id-mismatch'
     | 'theme-source-unbuilt'
+    | 'invalid-entry'
 
 /**
  * Провайдер объявлен некорректно. Бросается при регистрации, а не
@@ -431,7 +432,7 @@ export class TokenParseError extends GranumError {
   }
 }
 
-/** Файл токенов (`themesDir` компонента, `modes.define[*].tokensRef`) не читается; провайдер, компонент и тема — в полях. */
+/** Файл токенов (`themesDir` компонента, `modes.define[*].tokensRef`, `modes.tokenOverridesRef`) не читается; провайдер, компонент и тема — в полях. */
 export class TokenRefError extends GranumError {
   readonly code = 'token-ref' as const
 

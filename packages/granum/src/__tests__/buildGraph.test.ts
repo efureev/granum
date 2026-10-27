@@ -1,6 +1,6 @@
 import type { BundleLike } from '../build/graph'
 import { describe, expect, it } from 'vitest'
-import { analyzeBundle, findUndeclaredEdges } from '../build/graph'
+import { analyzeBundle, findUndeclaredEdges, nodeOnlyModules } from '../build/graph'
 import { defineGranumComponent } from '../contract'
 import { testEngine } from './testEngine'
 
@@ -146,5 +146,19 @@ describe('модуль компонента в общем чанке групп�
     // Свой модуль в общем чанке ребром на себя не становится.
     expect(analysis.components.get('XhGrid')!.edges).toEqual([])
     expect(findUndeclaredEdges('@x/heavy', groupDescriptors, analysis)).toEqual([['XhTable', '@x/heavy:XhGrid']])
+  })
+})
+
+describe('nodeOnlyModules', () => {
+  it('модули чанков, до которых доходят только точки входа для Node; общий с браузером чанк не входит', () => {
+    const split: BundleLike = {
+      'index.js': chunk('index.js', '', ['chunks/shared.js'], { moduleIds: ['/pkg/src/index.ts'] }),
+      'theme/node.js': chunk('theme/node.js', '', ['chunks/shared.js', 'chunks/read.js'], { isEntry: true, moduleIds: ['/pkg/src/theme/node.ts'] }),
+      'chunks/shared.js': chunk('chunks/shared.js', '', [], { moduleIds: ['/pkg/src/shared.ts'] }),
+      'chunks/read.js': chunk('chunks/read.js', '', [], { dynamicImports: ['chunks/lazy.js'], moduleIds: ['/pkg/src/read.ts'] }),
+      'chunks/lazy.js': chunk('chunks/lazy.js', '', [], { moduleIds: ['/pkg/src/lazy.ts'] }),
+    }
+    expect([...nodeOnlyModules(split, new Set(['theme/node.js']))].sort()).toEqual(['/pkg/src/lazy.ts', '/pkg/src/read.ts', '/pkg/src/theme/node.ts'])
+    expect(nodeOnlyModules(split, new Set())).toEqual(new Set())
   })
 })

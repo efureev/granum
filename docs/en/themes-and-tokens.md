@@ -88,6 +88,7 @@ themes: [{
       sepia: { extends: 'light', tokensRef: new URL('./src/sepia.css', import.meta.url).href },
     },
     tokenOverrides: { root: { 'th-radius': '4px' }, dark: { 'th-bg': '#050505' } },
+    tokenOverridesRef: { dark: './src/theme/dark-overrides.css' },
     strictTokens: true,
   },
 }]
@@ -107,7 +108,10 @@ wanted.
 
 `tokenOverrides.root` goes into the mode-independent values of its theme,
 `tokenOverrides.<mode>` — into its mode; a mode outside the set is `unknown-mode`.
-With `strictTokens: true` an override of a token present neither in the theme data
+`tokenOverridesRef.<scope>` takes the same values from a CSS file — a path from the
+application root, a URL or `{ url, selector?, strict? }`, one flat block as with
+`tokensRef`; the file goes into the same scope, and literal `tokenOverrides` of the
+scope win. With `strictTokens: true` an override of a token present neither in the theme data
 nor in component tokens is dropped, and the report gets `override-skipped`. The
 values of one theme never touch another.
 

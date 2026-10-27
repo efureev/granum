@@ -5,7 +5,7 @@
  * Node-only. Всё ниже (CSS, JS, токены, отчёт) читает только `PreparedApp`.
  */
 import type { GranumConfig } from '../config'
-import type { GranumComponentThemeTokens, GranumProvider, GranumProviderInput, GranumThemeData } from '../contract'
+import type { GranumComponentThemeTokens, GranumProvider, GranumProviderInput, GranumThemeData, GranumTokenRef } from '../contract'
 import type { ProviderNode, ThemeCatalogNode } from '../core/providerNode'
 import type { GranumResolution } from '../core/resolve'
 import type { ComponentSelection } from '../core/resolveSelection'
@@ -218,49 +218,65 @@ export async function scanProviderInputs(inputs: readonly GranumProviderInput[],
 }
 
 /**
- * `modes.define[*].tokensRef` → литеральные `tokens`: относительный путь
- * считается от корня приложения; литеральные `tokens` важнее файла.
+ * Токены CSS-файла приложения. Относительный путь считается от корня
+ * приложения; `scope` — режим или область для сообщения об ошибке.
+ */
+function readAppTokenRef(input: GranumTokenRef | string, root: string, scope: string): Readonly<Record<string, string>> {
+  const ref = typeof input === 'string' ? { url: input } : input
+  const url = /^[a-z]+:/i.test(ref.url) ? ref.url : pathToFileURL(resolvePath(root, ref.url)).href
+  try {
+    // Файл — один плоский блок: без `selector` второй блок молча пропал бы, а
+    // первый попавшийся выдавался бы за весь файл.
+    if (ref.selector === undefined && ref.strict !== false) {
+      const blocks = parseCssTokenBlocks(url)
+      if (blocks.length > 1) {
+        throw new TokenParseError(
+          `${ref.url} has ${blocks.length} token blocks (${blocks.map(b => JSON.stringify(b.selector)).join(', ')}); a token file holds one flat block — or name the block with 'selector'.`,
+          ref.url,
+          'multiple-blocks',
+          blocks.map(b => b.selector),
+        )
+      }
+    }
+    return tokenSetFromCssSync(url, {
+      ...(ref.selector !== undefined ? { selector: ref.selector } : {}),
+      ...(ref.strict !== undefined ? { strict: ref.strict } : {}),
+    }).tokens
+  }
+  catch (cause) {
+    throw new TokenRefError(APP_THEME_SOURCE, scope, undefined, ref.url, { cause })
+  }
+}
+
+/**
+ * `modes.define[*].tokensRef` и `modes.tokenOverridesRef` → литеральные
+ * `tokens` и `tokenOverrides`: литеральные значения важнее файла.
  */
 export function materializeAppModes(modes: GranumThemeModes | undefined, root: string): GranumThemeModes | undefined {
-  if (!modes?.define)
+  if (!modes?.define && !modes?.tokenOverridesRef)
     return modes
   let changed = false
-  const define: Record<string, GranumModeDefinition> = {}
-  for (const [name, definition] of Object.entries(modes.define)) {
-    if (!definition.tokensRef) {
-      define[name] = definition
-      continue
-    }
-    changed = true
-    const ref = typeof definition.tokensRef === 'string' ? { url: definition.tokensRef } : definition.tokensRef
-    const url = /^[a-z]+:/i.test(ref.url) ? ref.url : pathToFileURL(resolvePath(root, ref.url)).href
-    let parsed
-    try {
-      // Файл режима — один плоский блок: без `selector` второй блок молча
-      // пропал бы, а первый попавшийся выдавался бы за весь файл.
-      if (ref.selector === undefined && ref.strict !== false) {
-        const blocks = parseCssTokenBlocks(url)
-        if (blocks.length > 1) {
-          throw new TokenParseError(
-            `${ref.url} has ${blocks.length} token blocks (${blocks.map(b => JSON.stringify(b.selector)).join(', ')}); a mode file holds one flat block — or name the block with 'selector'.`,
-            ref.url,
-            'multiple-blocks',
-            blocks.map(b => b.selector),
-          )
-        }
+  let define = modes.define
+  if (modes.define) {
+    const out: Record<string, GranumModeDefinition> = {}
+    for (const [name, definition] of Object.entries(modes.define)) {
+      if (!definition.tokensRef) {
+        out[name] = definition
+        continue
       }
-      parsed = tokenSetFromCssSync(url, {
-        ...(ref.selector !== undefined ? { selector: ref.selector } : {}),
-        ...(ref.strict !== undefined ? { strict: ref.strict } : {}),
-      })
+      changed = true
+      const { tokensRef, ...rest } = definition
+      out[name] = { ...rest, tokens: { ...readAppTokenRef(tokensRef, root, name), ...definition.tokens } }
     }
-    catch (cause) {
-      throw new TokenRefError(APP_THEME_SOURCE, name, undefined, ref.url, { cause })
-    }
-    const { tokensRef: _dropped, ...rest } = definition
-    define[name] = { ...rest, tokens: { ...parsed.tokens, ...definition.tokens } }
+    define = out
   }
-  return changed ? { ...modes, define } : modes
+  if (!modes.tokenOverridesRef)
+    return changed && define ? { ...modes, define } : modes
+  const { tokenOverridesRef, ...rest } = modes
+  const tokenOverrides: Record<string, Readonly<Record<string, string>>> = { ...modes.tokenOverrides }
+  for (const [scope, ref] of Object.entries(tokenOverridesRef))
+    tokenOverrides[scope] = { ...readAppTokenRef(ref, root, scope), ...modes.tokenOverrides?.[scope] }
+  return { ...rest, ...(define ? { define } : {}), tokenOverrides }
 }
 
 /** Записи `themes` с материализованными `tokensRef` режимов; без файлов — как есть. */
