@@ -214,7 +214,7 @@ INV-THEME-4, INV-THEME-11…15. Нормативная часть написан
 | 12.3 Документы: `usage-in-apps`, `themes-and-tokens`, `troubleshooting`, `measuring-weight` ru/en; `MIGRATION.md` «From 3.11 to 3.12»; пакетный `SPEC.md` | `check:docs`, `check:spec` |
 | 12.4 Релиз `3.12.0` обоих пакетов | CHANGELOG, тег |
 
-## Этап 13 — Файл поверх значений и точки входа для Node (S)
+## Этап 13 — Файл поверх значений и точки входа для Node (S) — выполнен 2026-10-27
 
 Требования — `spec.md` A-29, C-13, T-7 (файл `tokenOverridesRef`) и B-4, B-16 (точка входа
 `env: 'node'`).
